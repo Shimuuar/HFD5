@@ -1,0 +1,23 @@
+Cabal-Version:  2.2
+Name:           oka-db-lmdb
+Version:        0.1
+Synopsis:       Low level warppers for HDF5 library
+Description:
+
+
+License:        BSD-3-Clause
+License-File:   LICENSE
+Author:         Aleksey Khudyakov <alexey.skladnoy@gmail.com>
+Maintainer:     Aleksey Khudyakov <alexey.skladnoy@gmail.com>
+Category:       Data
+Build-Type:     Simple
+
+Library
+  Ghc-options:      -Wall -O2
+  Default-Language: Haskell2010
+  hs-source-dirs:   src
+  extra-libraries:  hdf5
+  --
+  Build-Depends:    base         >=4.12 && <5
+  Exposed-modules:
+        HDF5.C

@@ -1,0 +1,24 @@
+Cabal-Version:  2.2
+Name:           HDF5-test
+Version:        0.1
+Synopsis:       Package for testing HDF5 binding
+Description:
+
+
+License:        BSD-3-Clause
+License-File:   LICENSE
+Author:         Aleksey Khudyakov <alexey.skladnoy@gmail.com>
+Maintainer:     Aleksey Khudyakov <alexey.skladnoy@gmail.com>
+Category:       Data
+Build-Type:     Simple
+
+Library
+  Ghc-options:      -Wall -O2
+  Default-Language: Haskell2010
+  hs-source-dirs:   .
+  extra-libraries:  hdf5
+  --
+  Build-Depends:    base         >=4.12 && <5
+                  , HDF5-direct
+  Exposed-modules:
+        HDF5Test

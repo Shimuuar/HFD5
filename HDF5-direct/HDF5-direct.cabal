@@ -21,3 +21,5 @@ Library
   Build-Depends:    base         >=4.12 && <5
   Exposed-modules:
         HDF5.C
+        HDF5.C.Types
+        HDF5.C.T

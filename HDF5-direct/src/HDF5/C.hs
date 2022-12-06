@@ -6,15 +6,8 @@
 {-# LANGUAGE ViewPatterns             #-}
 -- |
 module HDF5.C
-  ( -- * Wrappers
-    HID(..)
-  , HTri(..)
-  , pattern HTrue
-  , pattern HFalse
-  , pattern HFail
-  , HErr(..)
-  , pattern HOK
-  , pattern HErrored
+  ( -- * Data types
+    module HDF5.C.Types
     -- * Properties API
     -- ** Constants
   , h5p_DEFAULT
@@ -38,68 +31,14 @@ module HDF5.C
   , h5d_open2
   , h5d_close
   , h5d_get_type
-  , h5t_NATIVE_CHAR
-  , h5t_NATIVE_SCHAR
-  , h5t_NATIVE_UCHAR
-  , h5t_NATIVE_SHORT
-  , h5t_NATIVE_USHORT
-  , h5t_NATIVE_INT
-  , h5t_NATIVE_UINT
-  , h5t_NATIVE_LONG
-  , h5t_NATIVE_ULONG
-  , h5t_NATIVE_LLONG
-  , h5t_NATIVE_ULLONG
-  , h5t_NATIVE_FLOAT
-  , h5t_NATIVE_DOUBLE
-  , h5t_NATIVE_LDOUBLE
-  , h5t_NATIVE_B8
-  , h5t_NATIVE_B16
-  , h5t_NATIVE_B32
-  , h5t_NATIVE_B64
-  , h5t_NATIVE_OPAQUE
-  , h5t_NATIVE_HADDR
-  , h5t_NATIVE_HSIZE
-  , h5t_NATIVE_HSSIZE
-  , h5t_NATIVE_HERR
-  , h5t_NATIVE_HBOOL
+    -- * Datatypes API
+  , module HDF5.C.T
   ) where
 
-import Data.Int
 import Foreign.C
-import GHC.Generics (Generic)
 
-----------------------------------------------------------------
--- Newtype wrappers
-----------------------------------------------------------------
-
--- | Type of IDs to return to users
-newtype HID = HID Int64
-  deriving stock (Show,Eq,Ord,Generic)
-
--- | Three-valued Boolean type. Functions that return htri_t however
---   return zero (false), positive (true), or negative (failure).
-newtype HTri = HTri CInt
-  deriving stock (Show,Eq,Ord,Generic)
-
-pattern HTrue, HFalse, HFail :: HTri
-pattern HFalse = HTri 0
-pattern HTrue  <- HTri ((>0) -> True)
-pattern HFail  <- HTri ((<0) -> True)
-{-# COMPLETE HTrue, HFalse, HFail #-}
-
--- | Status return values. Failed integer functions in HDF5 result
---   almost always in a negative value (unsigned failing functions
---   sometimes return zero for failure) while successful return is
---   non-negative (often zero). The negative failure value is most
---   commonly -1, but don't bet on it.
-newtype HErr = HErr CInt
-  deriving stock (Show,Eq,Ord,Generic)
-
-pattern HErrored, HOK :: HErr
-pattern HErrored <- HErr ((<0)  -> True)
-pattern HOK      <- HErr ((>=0) -> True)
-{-# COMPLETE HErrored, HOK #-}
-
+import HDF5.C.Types
+import HDF5.C.T
 
 ----------------------------------------------------------------
 -- Constants
@@ -330,81 +269,3 @@ herr_t  H5Dgather (hid_t src_space_id, const void *src_buf, hid_t type_id, size_
 herr_t  H5Dextend (hid_t dset_id, const hsize_t size[])
 herr_t  H5Dvlen_reclaim (hid_t type_id, hid_t space_id, hid_t dxpl_id, void *buf)
 -}
-
-
-----------------------------------------------------------------
--- Types API
-----------------------------------------------------------------
-
--- | C-style char
-foreign import capi "hdf5.h value H5T_NATIVE_CHAR" h5t_NATIVE_CHAR :: HID
-
--- | C-style signed char
-foreign import capi "hdf5.h value H5T_NATIVE_SCHAR" h5t_NATIVE_SCHAR :: HID
-
--- | C-style unsigned signed char
-foreign import capi "hdf5.h value H5T_NATIVE_UCHAR" h5t_NATIVE_UCHAR :: HID
-
--- | C-style short
-foreign import capi "hdf5.h value H5T_NATIVE_SHORT" h5t_NATIVE_SHORT :: HID
-
--- | C-style unsigned short
-foreign import capi "hdf5.h value H5T_NATIVE_USHORT" h5t_NATIVE_USHORT :: HID
-
--- | C-style int
-foreign import capi "hdf5.h value H5T_NATIVE_INT" h5t_NATIVE_INT :: HID
-
--- | C-style unsigned int
-foreign import capi "hdf5.h value H5T_NATIVE_UINT" h5t_NATIVE_UINT :: HID
-
--- | C-style long
-foreign import capi "hdf5.h value H5T_NATIVE_LONG" h5t_NATIVE_LONG :: HID
-
--- | C-style unsigned long
-foreign import capi "hdf5.h value H5T_NATIVE_ULONG" h5t_NATIVE_ULONG :: HID
-
--- | C-style long long
-foreign import capi "hdf5.h value H5T_NATIVE_LLONG" h5t_NATIVE_LLONG :: HID
-
--- | C-style unsigned long long
-foreign import capi "hdf5.h value H5T_NATIVE_ULLONG" h5t_NATIVE_ULLONG :: HID
-
--- | C-style float
-foreign import capi "hdf5.h value H5T_NATIVE_FLOAT" h5t_NATIVE_FLOAT :: HID
-
--- | C-style double
-foreign import capi "hdf5.h value H5T_NATIVE_DOUBLE" h5t_NATIVE_DOUBLE :: HID
-
--- | C-style long double
-foreign import capi "hdf5.h value H5T_NATIVE_LDOUBLE" h5t_NATIVE_LDOUBLE :: HID
-
--- | 8-bit bitfield based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_B8" h5t_NATIVE_B8 :: HID
-
--- | 16-bit bitfield based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_B16" h5t_NATIVE_B16 :: HID
-
--- | 32-bit bitfield based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_B32" h5t_NATIVE_B32 :: HID
-
--- | 64-bit bitfield based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_B64" h5t_NATIVE_B64 :: HID
-
--- | opaque unit based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_OPAQUE" h5t_NATIVE_OPAQUE :: HID
-
--- | address type based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_HADDR" h5t_NATIVE_HADDR :: HID
-
--- | size type based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_HSIZE" h5t_NATIVE_HSIZE :: HID
-
--- | signed size type based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_HSSIZE" h5t_NATIVE_HSSIZE :: HID
-
--- | error code type based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_HERR" h5t_NATIVE_HERR :: HID
-
--- | Boolean type based on native types
-foreign import capi "hdf5.h value H5T_NATIVE_HBOOL" h5t_NATIVE_HBOOL :: HID
-

@@ -10,6 +10,7 @@ pkgs.mkShell {
     pkgs.pkg-config
   ];
   shellHook = ''
+    export LD_LIBRARY_PATH=${pkgs.hdf5}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
     taskset -pc 0-1000 $$
     '';
 }

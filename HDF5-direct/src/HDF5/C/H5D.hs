@@ -2,7 +2,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 -- |
 -- API for datasets
-module HDF5.C.D
+module HDF5.C.H5D
   ( -- * Functions
     h5d_open2
   , h5d_close

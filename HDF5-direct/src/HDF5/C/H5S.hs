@@ -2,7 +2,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 -- |
 -- API for dataspaces
-module HDF5.C.S
+module HDF5.C.H5S
   ( -- * Functions
     h5s_close
   ) where

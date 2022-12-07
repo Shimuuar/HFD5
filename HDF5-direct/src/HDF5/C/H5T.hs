@@ -2,7 +2,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 -- |
 -- Datatypes API for HDF5.
-module HDF5.C.T
+module HDF5.C.H5T
   ( -- * Constants
     h5t_NATIVE_CHAR
   , h5t_NATIVE_SCHAR

@@ -29,6 +29,7 @@ module HDF5.C.T
   , h5t_NATIVE_HERR
   , h5t_NATIVE_HBOOL
     -- * Functions
+  , h5t_close
   , h5t_get_size
   ) where
 
@@ -118,6 +119,16 @@ foreign import capi "hdf5.h value H5T_NATIVE_HBOOL" h5t_NATIVE_HBOOL :: HID
 ----------------------------------------------------------------
 
 
+-- | @H5Tclose@ releases the datatype dtype_id. Further access through
+--   this datatype identifier is illegal. Failure to release a
+--   datatype with this call will result in resource leaks.
+--
+--   Returns a non-negative value if successful; otherwise returns a
+--   negative value.
+foreign import capi "hdf5.h H5Tclose" h5t_close
+  :: HID     -- ^ Datatype identifier
+  -> IO HErr
+
 -- | @H5Tget_size@ returns the size of a datatype in bytes.
 --
 --   * For atomic datatypes, array datatypes, compound datatypes, and
@@ -141,7 +152,6 @@ foreign import capi "hdf5.h H5Tget_size" h5t_get_size
 
 hid_t       H5Tcreate (H5T_class_t type, size_t size)
 hid_t       H5Tcopy (hid_t type_id)
-herr_t      H5Tclose (hid_t type_id)
 herr_t      H5Tclose_async (hid_t type_id, hid_t es_id)
 htri_t      H5Tequal (hid_t type1_id, hid_t type2_id)
 herr_t      H5Tlock (hid_t type_id)

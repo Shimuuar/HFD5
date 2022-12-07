@@ -5,9 +5,14 @@
 module HDF5.C.H5S
   ( -- * Functions
     h5s_close
+  , h5s_is_simple
+  , h5s_get_simple_extent_ndims
+  , h5s_get_simple_extent_npoints
+  , h5s_get_simple_extent_dims
   ) where
 
 import Foreign.C
+import Foreign.Ptr
 import HDF5.C.Types
 
 
@@ -24,6 +29,41 @@ import HDF5.C.Types
 foreign import capi "hdf5.h H5Sclose" h5s_close
   :: HID     -- ^ Dataspace identifier
   -> IO HErr
+
+-- | @H5Sis_simple@ determines whether or not a dataspace is a simple dataspace.
+--
+--   Returns zero (false), a positive (true) or a negative (failure) value.
+foreign import capi "hdf5.h H5Sis_simple" h5s_is_simple
+  :: HID
+  -> IO HTri
+
+-- | Returns the number of dimensions in the dataspace if successful;
+--   otherwise returns a negative value.
+foreign import capi "hdf5.h H5Sget_simple_extent_ndims" h5s_get_simple_extent_ndims
+  :: HID    -- ^ Space ID 
+  -> IO CInt
+
+-- | @H5Sget_simple_extent_dims@ returns the size and maximum sizes of
+--   each dimension of a dataspace space_id through the dims and maxdims
+--   parameters.
+--
+--   Returns the number of dimensions in the dataspace if successful;
+--   otherwise returns a negative value.
+foreign import capi "hdf5.h H5Sget_simple_extent_dims" h5s_get_simple_extent_dims
+  :: HID       -- ^ Space ID
+  -> Ptr HSize -- ^ @[out]@ Pointer to array to store the size of each dimension
+  -> Ptr HSize -- ^ @[out]@ Pointer to array to store the maximum size of each dimension
+  -> IO CInt
+
+-- | @H5Sget_simple_extent_npoints@ determines the number of elements
+--   in a dataspace space_id. For example, a simple 3-dimensional
+--   dataspace with dimensions 2, 3, and 4 would have 24 elements.
+--
+--   Returns the number of elements in the dataspace if successful;
+--   otherwise returns a negative value.
+foreign import capi "hdf5.h H5Sget_simple_extent_npoints" h5s_get_simple_extent_npoints
+  :: HID       -- ^ Space ID
+  -> IO HSSize
 
 
 {-
@@ -44,12 +84,8 @@ herr_t       H5Sget_select_hyper_blocklist (hid_t spaceid, hsize_t startblock, h
 hssize_t     H5Sget_select_hyper_nblocks (hid_t spaceid)
 hssize_t     H5Sget_select_npoints (hid_t spaceid)
 H5S_sel_type H5Sget_select_type (hid_t spaceid)
-int          H5Sget_simple_extent_dims (hid_t space_id, hsize_t dims[], hsize_t maxdims[])
-int          H5Sget_simple_extent_ndims (hid_t space_id)
-hssize_t     H5Sget_simple_extent_npoints (hid_t space_id)
 H5S_class_t  H5Sget_simple_extent_type (hid_t space_id)
 htri_t       H5Sis_regular_hyperslab (hid_t spaceid)
-htri_t       H5Sis_simple (hid_t space_id)
 herr_t       H5Smodify_select (hid_t space1_id, H5S_seloper_t op, hid_t space2_id)
 herr_t       H5Soffset_simple (hid_t space_id, const hssize_t *offset)
 herr_t       H5Ssel_iter_close (hid_t sel_iter_id)

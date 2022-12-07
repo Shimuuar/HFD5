@@ -22,8 +22,6 @@ module HDF5.C
   , module HDF5.C.H5S
   ) where
 
-import Foreign.C
-
 import HDF5.C.Types
 import HDF5.C.H5T
 import HDF5.C.H5D

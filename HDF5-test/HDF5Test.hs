@@ -7,6 +7,8 @@ module HDF5Test where
 import Control.Exception
 import Control.Monad
 import Foreign.C.String
+import Foreign.Marshal
+import Foreign.Storable
 
 import HDF5.C qualified as C
 
@@ -74,7 +76,25 @@ foo = do
     print hid
     withDataset hid "dset1" $ \dset -> do
       print dset
-      print =<< C.h5d_get_type dset
+      ty  <- C.h5d_get_type dset
+      spc <- C.h5d_get_space dset
+      sz  <- C.h5t_get_size ty
+      --
+      print ty
+      print sz
+      print =<< C.h5t_get_class ty
+      print =<< C.h5t_get_order ty
+      print =<< C.h5t_get_precision ty
+      print =<< C.h5t_get_sign ty
+      print spc
+      print =<< C.h5s_get_simple_extent_ndims spc
+      alloca $ \p1 -> alloca $ \p2 -> do
+        print =<< C.h5s_get_simple_extent_dims spc p1 p2
+        print =<< peek p1
+        print =<< peek p2
+      --
+      C.h5t_close ty
+      C.h5s_close spc
       print "---"
       print C.h5t_NATIVE_SCHAR
       print C.h5t_NATIVE_UCHAR
@@ -84,5 +104,6 @@ foo = do
       print C.h5t_NATIVE_UINT
       print C.h5t_NATIVE_LONG
       print C.h5t_NATIVE_ULONG
+    
 
   return ()

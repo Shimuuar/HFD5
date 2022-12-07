@@ -7,6 +7,7 @@ module HDF5.C.H5D
     h5d_open2
   , h5d_close
   , h5d_get_type
+  , h5d_get_space
   ) where
 
 import Foreign.C
@@ -54,12 +55,24 @@ foreign import capi "hdf5.h H5Dget_type" h5d_get_type
   -> IO HID
 
 
+-- | @H5Dget_space@ makes a copy of the dataspace of the dataset
+--   specified by @dset_id@. The function returns an identifier for the
+--   new copy of the dataspace.
+--
+--   A dataspace identifier returned from this function should be 
+--   released with 'h5s_close' when the identifier is no longer needed
+--   so that resource leaks will not occur.
+--
+--   Returns a dataspace identifier if successful; otherwise returns H5I_INVALID_HID
+foreign import capi "hdf5.h H5Dget_space" h5d_get_space
+  :: HID    -- ^ Dataset identifier
+  -> IO HID
+
 {-
 hid_t   H5Dcreate2 (hid_t loc_id, const char *name, hid_t type_id, hid_t space_id, hid_t lcpl_id, hid_t dcpl_id, hid_t dapl_id)
 hid_t   H5Dcreate_anon (hid_t loc_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id)
 hid_t   H5Dopen1 (hid_t loc_id, const char *name)
 hid_t   H5Dopen2 (hid_t loc_id, const char *name, hid_t dapl_id)
-hid_t   H5Dget_space (hid_t dset_id)
 herr_t  H5Dget_space_status (hid_t dset_id, H5D_space_status_t *allocation)
 hid_t   H5Dget_create_plist (hid_t dset_id)
 hid_t   H5Dget_access_plist (hid_t dset_id)

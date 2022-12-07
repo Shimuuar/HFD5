@@ -80,12 +80,14 @@ foo = do
       spc <- C.h5d_get_space dset
       sz  <- C.h5t_get_size ty
       --
+      putStrLn "---- TYPE ----"
       print ty
       print sz
       print =<< C.h5t_get_class ty
       print =<< C.h5t_get_order ty
       print =<< C.h5t_get_precision ty
       print =<< C.h5t_get_sign ty
+      putStrLn "---- SPACE ----"
       print spc
       print =<< C.h5s_get_simple_extent_ndims spc
       alloca $ \p1 -> alloca $ \p2 -> do
@@ -95,15 +97,16 @@ foo = do
       --
       C.h5t_close ty
       C.h5s_close spc
-      print "---"
-      print C.h5t_NATIVE_SCHAR
-      print C.h5t_NATIVE_UCHAR
-      print C.h5t_NATIVE_SHORT
-      print C.h5t_NATIVE_USHORT
-      print C.h5t_NATIVE_INT
-      print C.h5t_NATIVE_UINT
-      print C.h5t_NATIVE_LONG
-      print C.h5t_NATIVE_ULONG
+      return ()
+      -- print "---"
+      -- print C.h5t_NATIVE_SCHAR
+      -- print C.h5t_NATIVE_UCHAR
+      -- print C.h5t_NATIVE_SHORT
+      -- print C.h5t_NATIVE_USHORT
+      -- print C.h5t_NATIVE_INT
+      -- print C.h5t_NATIVE_UINT
+      -- print C.h5t_NATIVE_LONG
+      -- print C.h5t_NATIVE_ULONG
     
 
   return ()

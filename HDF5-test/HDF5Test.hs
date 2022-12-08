@@ -1,14 +1,20 @@
 {-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE TypeApplications    #-}
 -- |
 module HDF5Test where
 
 import Control.Exception
 import Control.Monad
+import Control.Monad.Trans.Cont
+
+import Data.Int
 import Foreign.C.String
 import Foreign.Marshal
 import Foreign.Storable
+import Foreign.Ptr
+import Foreign.Marshal.Array
 
 import HDF5.C qualified as C
 
@@ -94,7 +100,16 @@ foo = do
         print =<< C.h5s_get_simple_extent_dims spc p1 p2
         print =<< peek p1
         print =<< peek p2
-      --
+      -- DATA
+      allocaArray @Int32 100 $ \buf -> do
+        C.h5d_read dset
+          C.h5t_NATIVE_INT
+          C.h5s_ALL
+          C.h5s_ALL
+          C.h5p_DEFAULT
+          (castPtr buf)
+        print =<< peekArray 100 buf
+      -- --
       C.h5t_close ty
       C.h5s_close spc
       return ()
@@ -109,4 +124,17 @@ foo = do
       -- print C.h5t_NATIVE_ULONG
     
 
+  return ()
+
+----------------------------------------------------------------
+
+cd :: String -> ContT r IO String
+cd s = ContT $ bracket (s <$ putStrLn (">>> "++s)) (\_ -> putStrLn ("<<< "++s))
+
+bar :: IO ()
+bar = evalContT $ do
+  cd "A"
+  cd "B"
+  resetT $ cd " C" >> cd " D"
+  cd "E"
   return ()

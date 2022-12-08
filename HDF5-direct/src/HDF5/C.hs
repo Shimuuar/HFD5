@@ -12,6 +12,7 @@ module HDF5.C
     -- ** Constants
   , h5p_DEFAULT
   , h5i_INVALID_HID
+  , h5s_ALL
     -- * File API
   , module HDF5.C.H5F
     -- * Dataset API
@@ -35,3 +36,4 @@ import HDF5.C.H5F
 
 foreign import capi "hdf5.h value H5P_DEFAULT"        h5p_DEFAULT     :: HID
 foreign import capi "hdf5.h value H5I_INVALID_HID"    h5i_INVALID_HID :: HID
+foreign import capi "hdf5.h value H5S_ALL"            h5s_ALL         :: HID

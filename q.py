@@ -10,6 +10,7 @@ with h5py.File("/run/user/1000/tst.hdf5", "w") as f:
     dset = f.create_dataset("dset1", (100,), dtype='i')
     dset[12] = 12
     dset[10] = -11
+    dset[14] = 256*256
 #    print(dset)
 #    print(dset[:])
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE TypeFamilies        #-}
 -- |
 -- Data types for working with HDF5 files
@@ -7,14 +8,21 @@ module HDF5.HL.Types
   ( -- * Files and groups
     File(..)
   , OpenMode(..)
+  , Dataset(..)
+    -- * Data types
+  , Type(..)
+  , Sign(..)
+  , Class(..)
     -- * Exceptions
   , HDF5Error(..)
     -- * Type classes
   , Closable(..)
   , close
+  , Directory(..)
   ) where
 
 import Control.Monad.IO.Class
+import Data.Coerce
 import Foreign.C.Types
 import HDF5.C qualified as C
 import HDF5.HL.CCall
@@ -32,6 +40,9 @@ class Closable a where
 close :: (Closable a, MonadIO m) => a -> m ()
 close = liftIO . closeIO
 
+class Directory a where
+  directoryHID :: a -> C.HID
+
 
 ----------------------------------------------------------------
 -- Files, groups, datasets
@@ -43,6 +54,13 @@ newtype File = File C.HID
 
 instance Closable File where
   closeIO (File hid) = convertHErr "Unable to close file" $ C.h5f_close hid
+instance Directory File where
+  directoryHID = coerce
+-- newtype Group = Group C.HID
+--   deriving stock (Show,Eq,Ord)
+
+-- instance Closable Group where
+--   closeIO (Group hid) = convertHErr "Unable to close group" $ C.h5g_close hid
 
 data OpenMode
   = OpenRO
@@ -53,3 +71,83 @@ instance HDF5Param OpenMode where
   type CParam OpenMode = CUInt
   toCParam OpenRO = C.h5f_ACC_RDONLY
   toCParam OpenRW = C.h5f_ACC_RDWR
+
+
+newtype Dataset = Dataset C.HID
+  deriving stock (Show,Eq,Ord)
+
+instance Closable Dataset where
+  closeIO (Dataset hid) = convertHErr "Unable to close dataset" $ C.h5d_close hid
+
+
+----------------------------------------------------------------
+-- 
+----------------------------------------------------------------
+-- Data types
+----------------------------------------------------------------
+
+-- | Representation of HDF5's data type
+data Type
+  = Integral !Sign !Word
+  deriving stock (Show,Eq,Ord)
+
+-- | Whether integral value is signed or not
+data Sign
+  = Signed
+  | Unsigned
+  deriving stock (Show,Eq,Ord)
+
+instance HDF5Enum Sign where
+  type CEnum Sign = C.H5TSign
+  toCEnum Signed   = C.H5T_SGN_2
+  toCEnum Unsigned = C.H5T_SGN_NONE
+  fromCEnum = \case
+    C.H5T_SGN_2    -> Just Signed
+    C.H5T_SGN_NONE -> Just Unsigned
+    _              -> Nothing
+
+-- | Class of type
+data Class
+  = NoClass
+  | Integer
+  | Float
+  | Time
+  | String
+  | BitField
+  | Opaque
+  | Compound
+  | Reference
+  | Enum
+  | Vlen
+  | Array
+  deriving stock (Show,Eq,Ord)
+
+instance HDF5Enum Class where
+  type CEnum Class = C.H5TClass
+  toCEnum = \case
+    NoClass   -> C.H5T_NO_CLASS
+    Integer   -> C.H5T_INTEGER
+    Float     -> C.H5T_FLOAT
+    Time      -> C.H5T_TIME
+    String    -> C.H5T_STRING
+    BitField  -> C.H5T_BITFIELD
+    Opaque    -> C.H5T_OPAQUE
+    Compound  -> C.H5T_COMPOUND
+    Reference -> C.H5T_REFERENCE
+    Enum      -> C.H5T_ENUM
+    Vlen      -> C.H5T_VLEN
+    Array     -> C.H5T_ARRAY
+  fromCEnum = \case
+    C.H5T_NO_CLASS  -> Just NoClass
+    C.H5T_INTEGER   -> Just Integer    
+    C.H5T_FLOAT     -> Just Float      
+    C.H5T_TIME      -> Just Time       
+    C.H5T_STRING    -> Just String     
+    C.H5T_BITFIELD  -> Just BitField   
+    C.H5T_OPAQUE    -> Just Opaque     
+    C.H5T_COMPOUND  -> Just Compound   
+    C.H5T_REFERENCE -> Just Reference  
+    C.H5T_ENUM      -> Just Enum       
+    C.H5T_VLEN      -> Just Vlen       
+    C.H5T_ARRAY     -> Just Array      
+    _               -> Nothing

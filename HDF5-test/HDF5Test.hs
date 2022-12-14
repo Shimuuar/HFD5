@@ -24,33 +24,16 @@ import HDF5.HL.Types
 
 type HID = C.HID
 
-----------------------------------------------------------------
-
-openDataset :: HID -> String -> IO HID
-openDataset hid path = do
-  withCString path $ \c_path -> do
-    r <- C.h5d_open2 hid c_path C.h5p_DEFAULT
-    when (r == C.h5i_INVALID_HID)
-      $ throwIO $ HDF5Error $ "Cannot open dataset " ++ path
-    pure r
-    
-closeDataset :: HID -> IO ()
-closeDataset hid = C.h5d_close hid >>= \case
-  C.HErrored -> throwIO $ HDF5Error "Cannot close dataset"
-  _          -> pure ()
-
-withDataset :: HID -> String -> (HID -> IO a) -> IO a
-withDataset hid path = bracket (openDataset hid path) closeDataset
 
 
 ----------------------------------------------------------------
 
 foo :: IO ()
 foo = do
-  withFile "/run/user/1000/tst.hdf5" OpenRO $ \(File hid) -> do
-    print hid
-    withDataset hid "dset1" $ \dset -> do
+  withFile "/run/user/1000/tst.hdf5" OpenRO $ \hdf -> do
+    withDataset hdf "dset1" $ \dd@(Dataset dset) -> do
       print dset
+      print =<< datasetType dd
       ty  <- C.h5d_get_type dset
       spc <- C.h5d_get_space dset
       sz  <- C.h5t_get_size ty
@@ -78,7 +61,34 @@ foo = do
           C.h5p_DEFAULT
           (castPtr buf)
         print =<< peekArray 100 buf
-      -- --
+      -- 2
+      allocaArray @Int64 100 $ \buf -> do
+        C.h5d_read dset
+          C.h5t_NATIVE_LONG
+          C.h5s_ALL
+          C.h5s_ALL
+          C.h5p_DEFAULT
+          (castPtr buf)
+        print =<< peekArray 100 buf
+      -- 3
+      allocaArray @Int16 100 $ \buf -> do
+        C.h5d_read dset
+          C.h5t_NATIVE_SHORT
+          C.h5s_ALL
+          C.h5s_ALL
+          C.h5p_DEFAULT
+          (castPtr buf)
+        print =<< peekArray 100 buf
+      -- 3
+      allocaArray @Int8 100 $ \buf -> do
+        C.h5d_read dset
+          C.h5t_NATIVE_SCHAR
+          C.h5s_ALL
+          C.h5s_ALL
+          C.h5p_DEFAULT
+          (castPtr buf)
+        print =<< peekArray 100 buf
+      --
       C.h5t_close ty
       C.h5s_close spc
       return ()

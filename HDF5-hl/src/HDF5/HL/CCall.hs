@@ -23,7 +23,7 @@ convertHErr msg io = io >>= \case
 -- | Conversion to and from corresponding C enumeration
 class HDF5Enum a where
   type CEnum a
-  fromCEnum :: CEnum a -> a
+  fromCEnum :: CEnum a -> Maybe a
   toCEnum   :: a -> CEnum a
 
 -- | Type class for values which could be converted to C

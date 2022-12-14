@@ -19,6 +19,7 @@ module HDF5.HL
   , Dim(..)
   , Extent(..)
   , getDataspace
+  , getDataspaceDim
 
   , Element(..)
   , read
@@ -34,11 +35,13 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Catch
 import Data.Coerce
+import Data.Vector.Storable     qualified as VS
 import Control.Monad.Trans.Cont
 import Foreign.C.String
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.Marshal
+import Foreign.ForeignPtr
 import Data.Int
 import Data.Word
 import HDF5.HL.CCall
@@ -108,12 +111,23 @@ data Dim = Dim
 
 newtype Extent = Extent [Dim]
   deriving stock (Show,Eq,Ord)
-  
+
+getDataspaceDim
+  :: (MonadIO m)
+  => Dataset
+  -> m Int
+getDataspaceDim (Dataset hid) = liftIO $ evalContT $ do
+  spc   <- usingDataspace (C.h5d_get_space hid)
+  ndim  <- liftIO $ fromIntegral <$> C.h5s_get_simple_extent_ndims spc
+  if | ndim < 0  -> error "Can't get dimensions"
+     | otherwise -> pure ndim
+
+
 getDataspace
   :: (MonadIO m)
   => Dataset
   -> m Extent
-getDataspace (Dataset hid) = liftIO $ evalContT $ do 
+getDataspace (Dataset hid) = liftIO $ evalContT $ do
   spc   <- usingDataspace (C.h5d_get_space hid)
   ndim  <- liftIO $ fromIntegral <$> C.h5s_get_simple_extent_ndims spc
   if | ndim < 0  -> error "getDataspace: Cannot obtain dataspace dimension"
@@ -142,7 +156,8 @@ class Element a where
   peekH5   :: Ptr a -> IO a
   pokeH5   :: Ptr a -> a -> IO ()
 
-newtype StoreHDF5 a = StoreHDF5 a
+newtype StoreHDF5 a = StoreHDF5 { unStoreHDF5 :: a }
+  deriving stock (Show)
 
 instance Element a => Storable (StoreHDF5 a) where
   sizeOf    _ = sizeOfH5 @a
@@ -150,18 +165,37 @@ instance Element a => Storable (StoreHDF5 a) where
   peek        = coerce (peekH5 @a)
   poke        = coerce (pokeH5 @a)
 
-
-
+readBuffer
+  :: forall a m. (Element a, MonadIO m)
+  => Dataset
+  -> m (VS.Vector (StoreHDF5 a))
+readBuffer (Dataset hid) = liftIO $ evalContT $ do
+  spc <- usingDataspace (C.h5d_get_space hid)
+  tid <- usingType (typeH5 @a)
+  liftIO $ mask_ $ do
+    n   <- C.h5s_get_simple_extent_npoints spc
+    buf <- mallocForeignPtrArray (fromIntegral n)
+    withForeignPtr buf $ \p -> do
+      convertHErr "FIXME: read" $ C.h5d_read hid tid
+        C.h5s_ALL
+        C.h5s_ALL
+        C.h5p_DEFAULT
+        (castPtr p)
+      pure $ VS.unsafeFromForeignPtr0 buf (fromIntegral n)
 
 -- | Data type which could be serailized to HDF5 dataset
 class Serialize a where
   readFromDataset :: Dataset -> IO a
 
+read :: (Serialize a, MonadIO m) => Dataset -> m a
+read = liftIO . readFromDataset
 
-read :: (MonadIO m) => Dataset -> m ()
-read = undefined
 
-
+instance Element a => Serialize [a] where
+  readFromDataset dset = do
+    n <- getDataspaceDim dset
+    when (n /= 1) $ error "Invalid dimention"
+    fmap unStoreHDF5 . VS.toList <$> readBuffer dset
 ----------------------------------------------------------------
 -- Using
 ----------------------------------------------------------------
@@ -172,7 +206,16 @@ usingDataspace io = ContT $ bracket
       when (hid == C.h5i_INVALID_HID) $ throwIO $ HDF5Error "Cannot open dataspace"
       pure hid
   ) C.h5s_close
-  
+
+usingType :: Type -> ContT r IO C.HID
+usingType ty = ContT $ \cnt -> bracket
+  (makeType ty)
+  (\case
+      TyBuiltin _   -> pure ()
+      TyMade    tid -> convertHErr "FIXME" $ C.h5t_close tid)
+  (\case
+      TyBuiltin tid -> cnt tid
+      TyMade    tid -> cnt tid)
 
 ----------------------------------------------------------------
 -- Boilerplate
@@ -185,17 +228,17 @@ instance Element Int8 where
   pokeH5   = poke
 instance Element Int16 where
   typeH5   = Integral Signed 16
-  sizeOfH5 = 1
+  sizeOfH5 = 2
   peekH5   = peek
   pokeH5   = poke
 instance Element Int32 where
   typeH5   = Integral Signed 32
-  sizeOfH5 = 1
+  sizeOfH5 = 4
   peekH5   = peek
   pokeH5   = poke
 instance Element Int64 where
   typeH5   = Integral Signed 64
-  sizeOfH5 = 1
+  sizeOfH5 = 8
   peekH5   = peek
   pokeH5   = poke
 
@@ -206,16 +249,16 @@ instance Element Word8 where
   pokeH5   = poke
 instance Element Word16 where
   typeH5   = Integral Unsigned 16
-  sizeOfH5 = 1
+  sizeOfH5 = 2
   peekH5   = peek
   pokeH5   = poke
 instance Element Word32 where
   typeH5   = Integral Unsigned 32
-  sizeOfH5 = 1
+  sizeOfH5 = 4
   peekH5   = peek
   pokeH5   = poke
 instance Element Word64 where
   typeH5   = Integral Unsigned 64
-  sizeOfH5 = 1
+  sizeOfH5 = 8
   peekH5   = peek
   pokeH5   = poke

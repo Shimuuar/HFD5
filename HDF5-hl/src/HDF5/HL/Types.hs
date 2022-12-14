@@ -163,17 +163,17 @@ instance HDF5Enum Class where
 
 data TypeHID
   = TyBuiltin !C.HID
-  | TyIO      !(IO C.HID)
+  | TyMade    !C.HID
   
-makeType :: Type -> TypeHID
+makeType :: Type -> IO TypeHID
 makeType = \case
-  Integral Signed   8  -> TyBuiltin C.h5t_NATIVE_SCHAR
-  Integral Signed   16 -> TyBuiltin C.h5t_NATIVE_SHORT
-  Integral Signed   32 -> TyBuiltin C.h5t_NATIVE_INT
-  Integral Signed   64 -> TyBuiltin C.h5t_NATIVE_LONG
-  Integral Unsigned 8  -> TyBuiltin C.h5t_NATIVE_UCHAR
-  Integral Unsigned 16 -> TyBuiltin C.h5t_NATIVE_USHORT
-  Integral Unsigned 32 -> TyBuiltin C.h5t_NATIVE_UINT
-  Integral Unsigned 64 -> TyBuiltin C.h5t_NATIVE_ULONG
+  Integral Signed   8  -> pure $ TyBuiltin C.h5t_NATIVE_SCHAR
+  Integral Signed   16 -> pure $ TyBuiltin C.h5t_NATIVE_SHORT
+  Integral Signed   32 -> pure $ TyBuiltin C.h5t_NATIVE_INT
+  Integral Signed   64 -> pure $ TyBuiltin C.h5t_NATIVE_LONG
+  Integral Unsigned 8  -> pure $ TyBuiltin C.h5t_NATIVE_UCHAR
+  Integral Unsigned 16 -> pure $ TyBuiltin C.h5t_NATIVE_USHORT
+  Integral Unsigned 32 -> pure $ TyBuiltin C.h5t_NATIVE_UINT
+  Integral Unsigned 64 -> pure $ TyBuiltin C.h5t_NATIVE_ULONG
   -- FIXME:
   Integral _ _ -> error "Weird width integral types are not supported"

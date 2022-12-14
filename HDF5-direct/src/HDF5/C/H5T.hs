@@ -1,11 +1,43 @@
 
 {-# LANGUAGE CApiFFI                  #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE PatternSynonyms          #-}
+{-# LANGUAGE ViewPatterns             #-}
 -- |
 -- Datatypes API for HDF5.
 module HDF5.C.H5T
-  ( -- * Constants
-    h5t_NATIVE_CHAR
+  ( -- * Enumeration
+    -- ** Classes of types
+    H5TClass(..)
+  , pattern H5T_NO_CLASS
+  , pattern H5T_INTEGER
+  , pattern H5T_FLOAT
+  , pattern H5T_TIME
+  , pattern H5T_STRING
+  , pattern H5T_BITFIELD
+  , pattern H5T_OPAQUE
+  , pattern H5T_COMPOUND
+  , pattern H5T_REFERENCE
+  , pattern H5T_ENUM
+  , pattern H5T_VLEN
+  , pattern H5T_ARRAY
+  , pattern H5T_NCLASSES
+    -- ** Byte order
+  , H5TOrder(..)
+  , pattern H5T_ORDER_ERROR
+  , pattern H5T_ORDER_LE
+  , pattern H5T_ORDER_BE
+  , pattern H5T_ORDER_VAX
+  , pattern H5T_ORDER_MIXED
+  , pattern H5T_ORDER_NONE
+    -- ** Sign information
+  , H5TSign(..)
+  , pattern H5T_SGN_ERROR
+  , pattern H5T_SGN_NONE
+  , pattern H5T_SGN_2
+  , pattern H5T_NSGN
+    -- * Constants
+  , h5t_NATIVE_CHAR
   , h5t_NATIVE_SCHAR
   , h5t_NATIVE_UCHAR
   , h5t_NATIVE_SHORT
@@ -41,6 +73,132 @@ module HDF5.C.H5T
 
 import Foreign.C
 import HDF5.C.Types
+
+----------------------------------------------------------------
+-- Enumerations
+----------------------------------------------------------------
+
+newtype H5TClass = H5TClass CInt
+  deriving (Show,Eq,Ord)
+
+foreign import capi "hdf5.h value H5T_NO_CLASS"  h5t_NO_CLASS  :: H5TClass
+foreign import capi "hdf5.h value H5T_INTEGER"   h5t_INTEGER   :: H5TClass
+foreign import capi "hdf5.h value H5T_FLOAT"     h5t_FLOAT     :: H5TClass
+foreign import capi "hdf5.h value H5T_TIME"      h5t_TIME      :: H5TClass
+foreign import capi "hdf5.h value H5T_STRING"    h5t_STRING    :: H5TClass
+foreign import capi "hdf5.h value H5T_BITFIELD"  h5t_BITFIELD  :: H5TClass
+foreign import capi "hdf5.h value H5T_OPAQUE"    h5t_OPAQUE    :: H5TClass
+foreign import capi "hdf5.h value H5T_COMPOUND"  h5t_COMPOUND  :: H5TClass
+foreign import capi "hdf5.h value H5T_REFERENCE" h5t_REFERENCE :: H5TClass
+foreign import capi "hdf5.h value H5T_ENUM"      h5t_ENUM      :: H5TClass
+foreign import capi "hdf5.h value H5T_VLEN"      h5t_VLEN      :: H5TClass
+foreign import capi "hdf5.h value H5T_ARRAY"     h5t_ARRAY     :: H5TClass
+foreign import capi "hdf5.h value H5T_NCLASSES"  h5t_NCLASSES  :: H5TClass
+
+pattern H5T_NO_CLASS :: H5TClass
+pattern H5T_NO_CLASS <- ((==h5t_NO_CLASS) -> True) where H5T_NO_CLASS = h5t_NO_CLASS
+
+pattern H5T_INTEGER :: H5TClass
+pattern H5T_INTEGER <- ((==h5t_INTEGER) -> True) where H5T_INTEGER = h5t_INTEGER  
+
+pattern H5T_FLOAT :: H5TClass
+pattern H5T_FLOAT <- ((==h5t_FLOAT) -> True) where H5T_FLOAT = h5t_FLOAT  
+
+pattern H5T_TIME :: H5TClass
+pattern H5T_TIME <- ((==h5t_TIME) -> True) where H5T_TIME = h5t_TIME  
+
+pattern H5T_STRING :: H5TClass
+pattern H5T_STRING <- ((==h5t_STRING) -> True) where H5T_STRING = h5t_STRING  
+
+pattern H5T_BITFIELD :: H5TClass
+pattern H5T_BITFIELD <- ((==h5t_BITFIELD) -> True) where H5T_BITFIELD = h5t_BITFIELD  
+
+pattern H5T_OPAQUE :: H5TClass
+pattern H5T_OPAQUE <- ((==h5t_OPAQUE) -> True) where H5T_OPAQUE = h5t_OPAQUE  
+
+pattern H5T_COMPOUND :: H5TClass
+pattern H5T_COMPOUND <- ((==h5t_COMPOUND) -> True) where H5T_COMPOUND = h5t_COMPOUND  
+
+pattern H5T_REFERENCE :: H5TClass
+pattern H5T_REFERENCE <- ((==h5t_REFERENCE) -> True) where H5T_REFERENCE = h5t_REFERENCE  
+
+pattern H5T_ENUM :: H5TClass
+pattern H5T_ENUM <- ((==h5t_ENUM) -> True) where H5T_ENUM = h5t_ENUM  
+
+pattern H5T_VLEN :: H5TClass
+pattern H5T_VLEN <- ((==h5t_VLEN) -> True) where H5T_VLEN = h5t_VLEN  
+
+pattern H5T_ARRAY :: H5TClass
+pattern H5T_ARRAY <- ((==h5t_ARRAY) -> True) where H5T_ARRAY = h5t_ARRAY  
+
+pattern H5T_NCLASSES :: H5TClass
+pattern H5T_NCLASSES <- ((==h5t_NCLASSES) -> True) where H5T_NCLASSES = h5t_NCLASSES  
+
+
+----------------------------------------
+
+-- | Byte order for data type
+newtype H5TOrder = H5TOrder CInt
+  deriving (Show,Eq,Ord)
+
+foreign import capi "hdf5.h value H5T_ORDER_ERROR" h5t_ORDER_ERROR :: H5TOrder
+foreign import capi "hdf5.h value H5T_ORDER_LE"    h5t_ORDER_LE    :: H5TOrder
+foreign import capi "hdf5.h value H5T_ORDER_BE"    h5t_ORDER_BE    :: H5TOrder
+foreign import capi "hdf5.h value H5T_ORDER_VAX"   h5t_ORDER_VAX   :: H5TOrder
+foreign import capi "hdf5.h value H5T_ORDER_MIXED" h5t_ORDER_MIXED :: H5TOrder
+foreign import capi "hdf5.h value H5T_ORDER_NONE"  h5t_ORDER_NONE  :: H5TOrder
+
+-- | Error
+pattern H5T_ORDER_ERROR :: H5TOrder
+pattern H5T_ORDER_ERROR <- ((==h5t_ORDER_ERROR) -> True) where H5T_ORDER_ERROR = h5t_ORDER_ERROR
+
+-- | Little endian
+pattern H5T_ORDER_LE :: H5TOrder
+pattern H5T_ORDER_LE <- ((==h5t_ORDER_LE) -> True) where H5T_ORDER_LE = h5t_ORDER_LE
+
+-- | Big endian
+pattern H5T_ORDER_BE :: H5TOrder
+pattern H5T_ORDER_BE <- ((==h5t_ORDER_BE) -> True) where H5T_ORDER_BE = h5t_ORDER_BE
+
+-- | VAX mixed endian
+pattern H5T_ORDER_VAX :: H5TOrder
+pattern H5T_ORDER_VAX <- ((==h5t_ORDER_VAX) -> True) where H5T_ORDER_VAX = h5t_ORDER_VAX
+
+-- | Compound type with mixed member orders
+pattern H5T_ORDER_MIXED :: H5TOrder
+pattern H5T_ORDER_MIXED <- ((==h5t_ORDER_MIXED) -> True) where H5T_ORDER_MIXED = h5t_ORDER_MIXED
+
+-- | no particular order (strings, bits,..)
+pattern H5T_ORDER_NONE :: H5TOrder
+pattern H5T_ORDER_NONE <- ((==h5t_ORDER_NONE) -> True) where H5T_ORDER_NONE = h5t_ORDER_NONE
+
+----------------------------------------
+
+-- | Byte order for data type
+newtype H5TSign = H5TSign CInt
+  deriving (Show,Eq,Ord)
+
+
+foreign import capi "hdf5.h value H5T_SGN_ERROR" h5t_SGN_ERROR :: H5TSign
+foreign import capi "hdf5.h value H5T_SGN_NONE"  h5t_SGN_NONE  :: H5TSign
+foreign import capi "hdf5.h value H5T_SGN_2"     h5t_SGN_2     :: H5TSign
+foreign import capi "hdf5.h value H5T_NSGN"      h5t_NSGN      :: H5TSign
+
+-- | Error
+pattern H5T_SGN_ERROR :: H5TSign
+pattern H5T_SGN_ERROR <- ((==h5t_SGN_ERROR) -> True) where H5T_SGN_ERROR = h5t_SGN_ERROR
+
+-- | this is an unsigned type
+pattern H5T_SGN_NONE :: H5TSign
+pattern H5T_SGN_NONE <- ((==h5t_SGN_NONE) -> True) where H5T_SGN_NONE = h5t_SGN_NONE
+
+-- | Two's complement
+pattern H5T_SGN_2 :: H5TSign
+pattern H5T_SGN_2 <- ((==h5t_SGN_2) -> True) where H5T_SGN_2 = h5t_SGN_2
+
+pattern H5T_NSGN :: H5TSign
+pattern H5T_NSGN <- ((==h5t_NSGN) -> True) where H5T_NSGN = h5t_NSGN
+
 
 
 ----------------------------------------------------------------

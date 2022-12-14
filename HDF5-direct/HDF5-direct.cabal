@@ -22,7 +22,6 @@ Library
   Exposed-modules:
         HDF5.C
         HDF5.C.Types
-        HDF5.C.TypesC
         HDF5.C.H5D
         HDF5.C.H5F
         HDF5.C.H5S

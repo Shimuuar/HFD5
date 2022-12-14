@@ -11,6 +11,7 @@ pkgs.mkShell {
   buildInputs = [
     pkgs.hdf5
     pkgs.ghc
+    pkgs.haskellPackages.cabal-install
     pkgs.pkg-config
     #
     pyp

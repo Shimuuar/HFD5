@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes  #-}
 {-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
@@ -19,6 +20,9 @@ module HDF5.HL.Types
   , Closable(..)
   , close
   , Directory(..)
+   --
+  , TypeHID(..)
+  , makeType
   ) where
 
 import Control.Monad.IO.Class
@@ -81,12 +85,12 @@ instance Closable Dataset where
 
 
 ----------------------------------------------------------------
--- 
-----------------------------------------------------------------
 -- Data types
 ----------------------------------------------------------------
 
--- | Representation of HDF5's data type
+-- | Representation of HDF5's data type.
+--
+--   Here we 
 data Type
   = Integral !Sign !Word
   deriving stock (Show,Eq,Ord)
@@ -151,3 +155,25 @@ instance HDF5Enum Class where
     C.H5T_VLEN      -> Just Vlen       
     C.H5T_ARRAY     -> Just Array      
     _               -> Nothing
+
+
+----------------------------------------------------------------
+-- Type casts and relations
+----------------------------------------------------------------
+
+data TypeHID
+  = TyBuiltin !C.HID
+  | TyIO      !(IO C.HID)
+  
+makeType :: Type -> TypeHID
+makeType = \case
+  Integral Signed   8  -> TyBuiltin C.h5t_NATIVE_SCHAR
+  Integral Signed   16 -> TyBuiltin C.h5t_NATIVE_SHORT
+  Integral Signed   32 -> TyBuiltin C.h5t_NATIVE_INT
+  Integral Signed   64 -> TyBuiltin C.h5t_NATIVE_LONG
+  Integral Unsigned 8  -> TyBuiltin C.h5t_NATIVE_UCHAR
+  Integral Unsigned 16 -> TyBuiltin C.h5t_NATIVE_USHORT
+  Integral Unsigned 32 -> TyBuiltin C.h5t_NATIVE_UINT
+  Integral Unsigned 64 -> TyBuiltin C.h5t_NATIVE_ULONG
+  -- FIXME:
+  Integral _ _ -> error "Weird width integral types are not supported"

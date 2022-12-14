@@ -19,7 +19,7 @@ import Foreign.Marshal.Array
 import HDF5.C qualified as C
 import HDF5.HL
 import HDF5.HL.Types
-
+import HDF5.HL.CCall
 ----------------------------------------------------------------
 
 type HID = C.HID
@@ -34,6 +34,7 @@ foo = do
     withDataset hdf "dset1" $ \dd@(Dataset dset) -> do
       print dset
       print =<< datasetType dd
+      print =<< getDataspace dd
       ty  <- C.h5d_get_type dset
       spc <- C.h5d_get_space dset
       sz  <- C.h5t_get_size ty
@@ -105,15 +106,28 @@ foo = do
 
   return ()
 
+
 ----------------------------------------------------------------
 
-cd :: String -> ContT r IO String
-cd s = ContT $ bracket (s <$ putStrLn (">>> "++s)) (\_ -> putStrLn ("<<< "++s))
-
-bar :: IO ()
-bar = evalContT $ do
-  cd "A"
-  cd "B"
-  resetT $ cd " C" >> cd " D"
-  cd "E"
+tyty :: IO ()
+tyty = do
+  arr <- alloca @C.HSize $ \dims -> do
+    poke dims 12
+    C.h5t_array_create C.h5t_NATIVE_FLOAT 1 dims
+  arr2 <- alloca @C.HSize $ \dims -> do
+    poke dims 133
+    C.h5t_array_create arr 1 dims
+  print =<< C.h5t_close arr
+  --
+  print =<< (fromCEnum @Class <$> C.h5t_get_class arr2)
+  ty <- C.h5t_get_super arr2
+  print =<< (fromCEnum @Class <$> C.h5t_get_class ty)
+  tyty <- C.h5t_get_super ty
+  print =<< (fromCEnum @Class <$> C.h5t_get_class tyty)
+  --
+  print =<< C.h5t_close tyty
+  print =<< C.h5t_close ty
+  print =<< C.h5t_close arr2
   return ()
+
+----------------------------------------------------------------

@@ -21,8 +21,8 @@ Library
                   , HDF5-direct
                   , transformers
                   , exceptions
+                  , vector       >=0.13
   Exposed-modules:
         HDF5.HL.Types
         HDF5.HL
-  Other-modules:
         HDF5.HL.CCall

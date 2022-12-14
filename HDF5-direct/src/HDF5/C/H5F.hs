@@ -111,7 +111,7 @@ foreign import capi "hdf5.h H5Freopen" h5f_reopen
 --   group identifier, or shared datatype identifier), the file will
 --   be fully closed and access will end.
 foreign import capi "hdf5.h H5Fclose" h5f_close
-  :: HID -- | File identifier
+  :: HID     -- ^ File identifier
   -> IO HErr
 
 -- | Deletes an HDF5 file filename with a file access property list

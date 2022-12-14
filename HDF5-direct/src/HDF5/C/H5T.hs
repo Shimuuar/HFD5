@@ -69,9 +69,15 @@ module HDF5.C.H5T
   , h5t_get_order
   , h5t_get_precision  
   , h5t_get_sign
+  , h5t_get_super
+    -- ** Array types
+  , h5t_array_create
+  , h5t_get_array_ndims
+  , h5t_get_array_dims
   ) where
 
 import Foreign.C
+import Foreign.Ptr
 import HDF5.C.Types
 
 ----------------------------------------------------------------
@@ -346,12 +352,61 @@ foreign import capi "hdf5.h H5Tget_order" h5t_get_order
 --
 --   Returns the number of significant bits if successful; otherwise 0
 foreign import capi "hdf5.h H5Tget_precision" h5t_get_precision
-  :: HID -- ^ Datatype identifier
+  :: HID        -- ^ Datatype identifier
   -> IO CSize
 
 foreign import capi "hdf5.h H5Tget_sign" h5t_get_sign
-  :: HID -- ^ Datatype identifier
+  :: HID        -- ^ Datatype identifier
   -> IO H5TSign
+
+-- | @H5Tget_super@ returns the base datatype from which the datatype
+--   type_id is derived. In the case of an enumeration type, the
+--   return value is an integer type.
+--
+--   The datatype identifier returned by this function must be
+--   released with @H5Tclose@ when the identifier is no longer needed
+--   so that resource leaks will not develop.
+--
+--   Returns a datatype identifier if successful; otherwise returns
+--   @H5I_INVALID_HID@.
+foreign import capi "hdf5.h H5Tget_super" h5t_get_super
+  :: HID     -- ^ Datatype identifier
+  -> IO HID
+
+-- | @H5Tarray_create2@ creates a new array datatype object.
+--
+--   @base_id@ is the datatype of every element of the array, i.e., of
+--   the number at each position in the array.
+--
+--   @ndims@ is the number of dimensions and the size of each
+--   dimension is specified in the array dim. The value of rank is
+--   currently limited to @H5S_MAX_RANK@ and must be greater than 0
+--   (zero). All dimension sizes specified in dim must be greater than
+--   0 (zero).
+--
+--   Returns a array datatype identifier if successful; otherwise
+--   returns @H5I_INVALID_HID@.
+foreign import capi "hdf5.h H5Tarray_create2" h5t_array_create
+  :: HID       -- ^ @base_id@
+  -> CUInt     -- ^ @ndims@
+  -> Ptr HSize -- ^ @dim@
+  -> IO HID
+
+-- | Returns the non-negative number of dimensions of the array type
+--   if successful; otherwise returns a negative value.
+foreign import capi "hdf5.h H5Tget_array_ndims" h5t_get_array_ndims
+  :: HID     -- ^ Type ID
+  -> IO CInt
+
+-- | @H5Tget_array_dims2@ returns the sizes of the dimensions of the
+--   specified array datatype object in the array dims.
+--
+--   Returns the non-negative number of dimensions of the array type
+--   if successful; otherwise returns a negative value.
+foreign import capi "hdf5.h H5Tget_array_dims2" h5t_get_array_dims
+  :: HID       -- ^ Type ID
+  -> Ptr HSize -- ^ @[out]@ Sizes of array dimensions
+  -> IO CInt
 
 {-
 hid_t       H5Tcreate (H5T_class_t type, size_t size)
@@ -370,7 +425,6 @@ herr_t      H5Tencode (hid_t obj_id, void *buf, size_t *nalloc)
 hid_t       H5Tdecode (const void *buf)
 herr_t      H5Tflush (hid_t type_id)
 herr_t      H5Trefresh (hid_t type_id)
-hid_t       H5Tget_super (hid_t type)
 htri_t      H5Tdetect_class (hid_t type_id, H5T_class_t cls)
 hid_t       H5Tget_native_type (hid_t type_id, H5T_direction_t direction)
 herr_t      H5Tset_size (hid_t type_id, size_t size)

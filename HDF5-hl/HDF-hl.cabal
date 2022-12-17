@@ -25,4 +25,5 @@ Library
   Exposed-modules:
         HDF5.HL.Types
         HDF5.HL
-        HDF5.HL.CCall
+        HDF5.HL.Internal.CCall
+        HDF5.HL.Internal.Enum

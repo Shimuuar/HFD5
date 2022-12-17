@@ -3,10 +3,24 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE TypeFamilies        #-}
 -- |
-module HDF5.HL.CCall where
+-- Utilities for calling C functions
+module HDF5.HL.Internal.CCall
+  ( -- * Exceptions
+    HDF5Error(..)
+    -- ** Calling C functions
+  , convertHErr
+    -- * Internal type classes
+  , HDF5Param(..)
+  , HDF5Enum(..)
+  ) where
 
 import Control.Exception
 import HDF5.C            qualified as C
+
+
+----------------------------------------------------------------
+-- Exceptions
+----------------------------------------------------------------
 
 -- | Error during HDF5 call
 data HDF5Error = HDF5Error String
@@ -14,7 +28,12 @@ data HDF5Error = HDF5Error String
 
 instance Exception HDF5Error
 
-convertHErr :: String -> IO C.HErr -> IO ()
+-- | Convert C error code to haskell exception
+convertHErr
+  :: String    -- ^ Error message in case of failure
+  -> IO C.HErr -- ^ Function to call
+  -> IO ()
+-- FIXME: We need to extract full error stack from exception
 convertHErr msg io = io >>= \case
   C.HErrored -> throwIO $ HDF5Error msg
   C.HOK      -> pure ()

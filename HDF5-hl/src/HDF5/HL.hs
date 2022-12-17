@@ -44,7 +44,7 @@ import Foreign.Marshal
 import Foreign.ForeignPtr
 import Data.Int
 import Data.Word
-import HDF5.HL.CCall
+import HDF5.HL.Internal.CCall
 import HDF5.HL.Types
 import HDF5.C                  qualified as C
 import Prelude hiding (read)
@@ -146,7 +146,7 @@ getDataspace (Dataset hid) = liftIO $ evalContT $ do
 
 
 ----------------------------------------------------------------
--- Reading objects from dataset
+-- Type class for elements
 ----------------------------------------------------------------
 
 -- | Data type which could be used as
@@ -165,6 +165,11 @@ instance Element a => Storable (StoreHDF5 a) where
   peek        = coerce (peekH5 @a)
   poke        = coerce (pokeH5 @a)
 
+
+----------------------------------------------------------------
+-- Primitives for reading from dataset
+----------------------------------------------------------------
+
 readBuffer
   :: forall a m. (Element a, MonadIO m)
   => Dataset
@@ -182,6 +187,11 @@ readBuffer (Dataset hid) = liftIO $ evalContT $ do
         C.h5p_DEFAULT
         (castPtr p)
       pure $ VS.unsafeFromForeignPtr0 buf (fromIntegral n)
+
+
+----------------------------------------------------------------
+-- Type class for datasets
+----------------------------------------------------------------
 
 -- | Data type which could be serailized to HDF5 dataset
 class Serialize a where

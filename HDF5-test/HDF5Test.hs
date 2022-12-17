@@ -19,7 +19,7 @@ import Foreign.Marshal.Array
 import HDF5.C qualified as C
 import HDF5.HL as H5
 import HDF5.HL.Types
-import HDF5.HL.CCall
+import HDF5.HL.Internal.CCall
 ----------------------------------------------------------------
 
 type HID = C.HID
@@ -30,13 +30,14 @@ type HID = C.HID
 
 foo :: IO ()
 foo = do
-  withFile "/run/user/1080/tst.hdf5" OpenRO $ \hdf -> do
+  ty <- withFile "/run/user/1000/tst.hdf5" OpenRO $ \hdf -> do
     withDataset hdf "dset1" $ \dd@(Dataset dset) -> do
       print dd
       print =<< datasetType dd
       print =<< H5.read @[Int64] dd
       -- print =<< getDataspace dd
-      -- ty  <- C.h5d_get_type dset
+      ty  <- C.h5d_get_type dset
+      pure ty
       -- spc <- C.h5d_get_space dset
       -- sz  <- C.h5t_get_size ty
       -- --
@@ -103,8 +104,8 @@ foo = do
       -- -- print C.h5t_NATIVE_UINT
       -- -- print C.h5t_NATIVE_LONG
       -- -- print C.h5t_NATIVE_ULONG
-    
-
+  print ty
+  print =<< C.h5t_close ty
   return ()
 
 

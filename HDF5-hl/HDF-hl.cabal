@@ -23,7 +23,10 @@ Library
                   , exceptions
                   , vector       >=0.13
   Exposed-modules:
-        HDF5.HL.Types
         HDF5.HL
+        HDF5.HL.Types
+        HDF5.HL.TyHDF
         HDF5.HL.Internal.CCall
         HDF5.HL.Internal.Enum
+        HDF5.HL.Internal.TyHDF
+        HDF5.HL.Internal.Class

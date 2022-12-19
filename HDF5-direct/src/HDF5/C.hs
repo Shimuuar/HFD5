@@ -21,6 +21,8 @@ module HDF5.C
   , module HDF5.C.H5T
     -- * Dataspace API
   , module HDF5.C.H5S
+    -- * High level API
+  , module HDF5.C.H5LT
   ) where
 
 import HDF5.C.Types
@@ -28,7 +30,7 @@ import HDF5.C.H5T
 import HDF5.C.H5D
 import HDF5.C.H5S
 import HDF5.C.H5F
-
+import HDF5.C.H5LT
 
 ----------------------------------------------------------------
 -- Constants

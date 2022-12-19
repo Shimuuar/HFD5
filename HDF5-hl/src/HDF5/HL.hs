@@ -34,7 +34,7 @@ import Control.Exception      (throwIO)
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Catch
-import Data.Coerce
+-- import Data.Coerce
 import Data.Vector.Storable     qualified as VS
 import Control.Monad.Trans.Cont
 import Foreign.C.String
@@ -45,6 +45,7 @@ import Foreign.ForeignPtr
 import Data.Int
 import Data.Word
 import HDF5.HL.Internal.CCall
+import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Types
 import HDF5.C                  qualified as C
 import Prelude hiding (read)
@@ -68,11 +69,11 @@ withFile path mode = bracket (open path mode) close
 
 -- | Open dataset
 dataset
-  :: (MonadIO m, Directory dir)
+  :: (MonadIO m, IsDirectory dir)
   => dir      -- ^ Root
   -> FilePath -- ^ Path relative to root
   -> m Dataset
-dataset (directoryHID -> hid) path = liftIO $ do
+dataset (getHID -> hid) path = liftIO $ do
   withCString path $ \c_path -> do
     r <- C.h5d_open2 hid c_path C.h5p_DEFAULT
     when (r == C.h5i_INVALID_HID)
@@ -80,7 +81,7 @@ dataset (directoryHID -> hid) path = liftIO $ do
     pure $ Dataset r
 
 withDataset
-  :: (MonadMask m, MonadIO m, Directory dir)
+  :: (MonadMask m, MonadIO m, IsDirectory dir)
   => dir      -- ^ Root
   -> FilePath -- ^ Path relative to root
   -> (Dataset -> m a)
@@ -92,16 +93,7 @@ datasetType
   :: (MonadIO m)
   => Dataset
   -> m Type
-datasetType (Dataset hid) = liftIO $ do
-  bracket (C.h5d_get_type hid) C.h5t_close $ \ty -> do
-    (fromCEnum <$> C.h5t_get_class ty) >>= \case
-      Just Integer -> do
-        -- FIXME: error handling
-        Just sign <- fromCEnum <$> C.h5t_get_sign ty
-        sz   <- C.h5t_get_precision ty
-        pure $ Integral sign (fromIntegral sz)
-      Just c       -> error $ "Cannot handle type " ++ show c
-      Nothing      -> error "Undecodable type"
+datasetType (Dataset hid) = liftIO $ unsafeNewType $ C.h5d_get_type hid
 
 data Dim = Dim
   { dimSize    :: !Int64
@@ -149,21 +141,11 @@ getDataspace (Dataset hid) = liftIO $ evalContT $ do
 -- Type class for elements
 ----------------------------------------------------------------
 
--- | Data type which could be used as
-class Element a where
-  typeH5   :: Type
-  sizeOfH5 :: Int
-  peekH5   :: Ptr a -> IO a
-  pokeH5   :: Ptr a -> a -> IO ()
+-- | Data type which corresponds to some HDF data type and could read
+--   from buffer using 'Storable'. 
+class Storable a => Element a where
+  typeH5 :: Type
 
-newtype StoreHDF5 a = StoreHDF5 { unStoreHDF5 :: a }
-  deriving stock (Show)
-
-instance Element a => Storable (StoreHDF5 a) where
-  sizeOf    _ = sizeOfH5 @a
-  alignment _ = 1
-  peek        = coerce (peekH5 @a)
-  poke        = coerce (pokeH5 @a)
 
 
 ----------------------------------------------------------------
@@ -173,10 +155,10 @@ instance Element a => Storable (StoreHDF5 a) where
 readBuffer
   :: forall a m. (Element a, MonadIO m)
   => Dataset
-  -> m (VS.Vector (StoreHDF5 a))
+  -> m (VS.Vector a)
 readBuffer (Dataset hid) = liftIO $ evalContT $ do
   spc <- usingDataspace (C.h5d_get_space hid)
-  tid <- usingType (typeH5 @a)
+  tid <- ContT $ withType $ typeH5 @a
   liftIO $ mask_ $ do
     n   <- C.h5s_get_simple_extent_npoints spc
     buf <- mallocForeignPtrArray (fromIntegral n)
@@ -205,7 +187,8 @@ instance Element a => Serialize [a] where
   readFromDataset dset = do
     n <- getDataspaceDim dset
     when (n /= 1) $ error "Invalid dimention"
-    fmap unStoreHDF5 . VS.toList <$> readBuffer dset
+    VS.toList <$> readBuffer dset
+    
 ----------------------------------------------------------------
 -- Using
 ----------------------------------------------------------------
@@ -217,58 +200,19 @@ usingDataspace io = ContT $ bracket
       pure hid
   ) C.h5s_close
 
-usingType :: Type -> ContT r IO C.HID
-usingType ty = ContT $ \cnt -> bracket
-  (makeType ty)
-  (\case
-      TyBuiltin _   -> pure ()
-      TyMade    tid -> convertHErr "FIXME" $ C.h5t_close tid)
-  (\case
-      TyBuiltin tid -> cnt tid
-      TyMade    tid -> cnt tid)
 
 ----------------------------------------------------------------
 -- Boilerplate
 ----------------------------------------------------------------
 
-instance Element Int8 where
-  typeH5   = Integral Signed 8
-  sizeOfH5 = 1
-  peekH5   = peek
-  pokeH5   = poke
-instance Element Int16 where
-  typeH5   = Integral Signed 16
-  sizeOfH5 = 2
-  peekH5   = peek
-  pokeH5   = poke
-instance Element Int32 where
-  typeH5   = Integral Signed 32
-  sizeOfH5 = 4
-  peekH5   = peek
-  pokeH5   = poke
-instance Element Int64 where
-  typeH5   = Integral Signed 64
-  sizeOfH5 = 8
-  peekH5   = peek
-  pokeH5   = poke
+instance Element Int8   where typeH5 = Native C.h5t_NATIVE_SCHAR
+instance Element Int16  where typeH5 = Native C.h5t_NATIVE_SHORT
+instance Element Int32  where typeH5 = Native C.h5t_NATIVE_INT
+instance Element Int64  where typeH5 = Native C.h5t_NATIVE_LONG
+instance Element Word8  where typeH5 = Native C.h5t_NATIVE_UCHAR
+instance Element Word16 where typeH5 = Native C.h5t_NATIVE_USHORT
+instance Element Word32 where typeH5 = Native C.h5t_NATIVE_UINT
+instance Element Word64 where typeH5 = Native C.h5t_NATIVE_ULONG
 
-instance Element Word8 where
-  typeH5   = Integral Unsigned 8
-  sizeOfH5 = 1
-  peekH5   = peek
-  pokeH5   = poke
-instance Element Word16 where
-  typeH5   = Integral Unsigned 16
-  sizeOfH5 = 2
-  peekH5   = peek
-  pokeH5   = poke
-instance Element Word32 where
-  typeH5   = Integral Unsigned 32
-  sizeOfH5 = 4
-  peekH5   = peek
-  pokeH5   = poke
-instance Element Word64 where
-  typeH5   = Integral Unsigned 64
-  sizeOfH5 = 8
-  peekH5   = peek
-  pokeH5   = poke
+instance Element Float  where typeH5 = Native C.h5t_NATIVE_FLOAT
+instance Element Double where typeH5 = Native C.h5t_NATIVE_DOUBLE

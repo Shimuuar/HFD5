@@ -32,12 +32,12 @@ foo :: IO ()
 foo = do
   ty <- withFile "/run/user/1000/tst.hdf5" OpenRO $ \hdf -> do
     withDataset hdf "dset1" $ \dd@(Dataset dset) -> do
-      print dd
-      print =<< datasetType dd
+      -- print dd
+      print =<< H5.datasetType  dd
+      print =<< H5.getDataspace dd
       print =<< H5.read @[Int64] dd
-      -- print =<< getDataspace dd
-      ty  <- C.h5d_get_type dset
-      pure ty
+      -- ty  <- C.h5d_get_type dset
+      pure ()
       -- spc <- C.h5d_get_space dset
       -- sz  <- C.h5t_get_size ty
       -- --
@@ -104,8 +104,6 @@ foo = do
       -- -- print C.h5t_NATIVE_UINT
       -- -- print C.h5t_NATIVE_LONG
       -- -- print C.h5t_NATIVE_ULONG
-  print ty
-  print =<< C.h5t_close ty
   return ()
 
 

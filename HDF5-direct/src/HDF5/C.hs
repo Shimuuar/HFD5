@@ -13,6 +13,8 @@ module HDF5.C
   , h5p_DEFAULT
   , h5i_INVALID_HID
   , h5s_ALL
+    -- * Attributes API
+  , module HDF5.C.H5A
     -- * File API
   , module HDF5.C.H5F
     -- * Dataset API
@@ -26,6 +28,7 @@ module HDF5.C
   ) where
 
 import HDF5.C.Types
+import HDF5.C.H5A
 import HDF5.C.H5T
 import HDF5.C.H5D
 import HDF5.C.H5S

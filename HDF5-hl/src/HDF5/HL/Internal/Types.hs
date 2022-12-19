@@ -26,6 +26,7 @@ module HDF5.HL.Internal.Types
   , castObj
   , castObj'
   , IsDirectory
+  , HasAttrs
   , HasData(..)
   , getType
   , getDataspace
@@ -77,8 +78,11 @@ castObj' a | getTag @a == getTag @b = unsafeFromHID $ getHID a
   
 -- | HDF5 entities that could be used in context where group is
 --   expected: groups, files (root group is used).
-class IsObject a => IsDirectory a where
+class IsObject a => IsDirectory a
 
+-- | Objects which could have attributes attached, such as files and groups
+class IsObject a => HasAttrs a
+  
 -- | HDF5 entities which contains data that could be 
 class IsObject a => HasData a where
   getTypeIO      :: a -> IO Type
@@ -135,33 +139,48 @@ instance IsObject File where
   getHID        = coerce
   unsafeFromHID = coerce
   getTag        = TagFile
+
 instance IsDirectory File
+
+----------------
 
 instance IsObject Group where
   getHID        = coerce
   unsafeFromHID = coerce
   getTag        = TagGroup
+
 instance IsDirectory Group
+instance HasAttrs    Group
+
+----------------
 
 instance IsObject Dataset where
   getHID        = coerce
   unsafeFromHID = coerce
   getTag        = TagDataset
+
 instance HasData Dataset where
   getTypeIO (Dataset hid) = unsafeNewType $ do
     checkINV "Cannot read type from dataset" =<< C.h5d_get_type hid
   getDataspaceIO (Dataset hid) = Dataspace <$> do
     checkINV "Cannot read dataspace from dataset" =<< C.h5d_get_space hid
 
+instance HasAttrs Dataset
+
+----------------
+
 instance IsObject Attribute where
   getHID        = coerce
   unsafeFromHID = coerce
   getTag        = TagAttribute
+
 instance HasData Attribute where
   getTypeIO (Attribute hid) = unsafeNewType $ do
     checkINV "Cannot read type from attribute" =<< C.h5a_get_type hid
   getDataspaceIO (Attribute hid) = Dataspace <$> do
     checkINV "Cannot read dataspace from dataset" =<< C.h5a_get_space hid
+
+----------------
 
 instance IsObject Dataspace where
   getHID        = coerce
@@ -179,11 +198,6 @@ instance Closable Attribute where
 instance Closable Dataspace where
   closeIO (Dataspace hid) = convertHErr "Unable to close dataspace" $ C.h5s_close hid
 
-
-checkINV :: String -> C.HID -> IO C.HID
-checkINV msg hid
-  | hid == C.h5i_INVALID_HID = throwIO $ HDF5Error msg
-  | otherwise                = pure hid
 
 -- instance Closable Group where
 --   closeIO (Group hid) = convertHErr "Unable to close group" $ C.h5g_close hid

@@ -44,6 +44,21 @@ foo = do
       print =<< H5.dim dd
       print =<< H5.extent dd
       print =<< H5.read @[Double] dd
+
+      Just a1 <- H5.openAttr dd "a1"
+      Just a2 <- H5.openAttr dd "a2"
+      Just a3 <- H5.openAttr dd "a3"
+      pure ()
+      print =<< H5.getType a1
+      print =<< H5.extent  a1
+      --
+      print =<< H5.getType a2
+      print =<< H5.extent  a2
+      --
+      print =<< H5.getType a3
+      print =<< H5.dim     a3
+      print =<< H5.extent  a3
+      
       -- print a3
   --
   pure ()

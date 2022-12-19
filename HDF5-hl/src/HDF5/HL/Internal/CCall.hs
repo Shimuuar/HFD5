@@ -10,6 +10,7 @@ module HDF5.HL.Internal.CCall
   , ObjTag(..)
     -- ** Calling C functions
   , convertHErr
+  , checkINV
     -- * Internal type classes
   , HDF5Param(..)
   , HDF5Enum(..)
@@ -50,6 +51,16 @@ convertHErr msg io = io >>= \case
   C.HErrored -> throwIO $ HDF5Error msg
   C.HOK      -> pure ()
 
+-- | Check that HID is not invalid
+checkINV :: String -> C.HID -> IO C.HID
+checkINV msg hid
+  | hid == C.h5i_INVALID_HID = throwIO $ HDF5Error msg
+  | otherwise                = pure hid
+
+
+----------------------------------------------------------------
+-- Enumerations and constants
+----------------------------------------------------------------
 
 -- | Conversion to and from corresponding C enumeration
 class HDF5Enum a where

@@ -15,6 +15,8 @@ module HDF5.HL
   , withFile
   , dataset
   , withDataset
+  , openAttr
+  , withAttr
     -- * Datasets
   , Dataset
     -- ** Properties
@@ -41,6 +43,7 @@ module HDF5.HL
   , HasData(..)
   , getType
   , getDataspace
+  , HasAttrs
     -- ** Closing objects
   , Closable(..)
   , close
@@ -103,6 +106,26 @@ withDataset
   -> m a
 withDataset dir path = bracket (dataset dir path) close
 
+openAttr
+  :: (MonadIO m, HasAttrs a)
+  => a      -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> m (Maybe Attribute)
+openAttr (getHID -> hid) path = liftIO $ do
+  withCString path $ \c_str -> do
+    C.h5a_exists hid c_str >>= \case
+      C.HFalse -> pure Nothing
+      C.HTrue  -> Just . Attribute
+              <$> (checkINV "Cannot open attribute" =<< C.h5a_open hid c_str C.h5p_DEFAULT)
+      C.HFail  -> throwIO $ HDF5Error "Cannot check existence of attribute"
+
+withAttr
+  :: (MonadMask m, MonadIO m, HasAttrs a)
+  => a      -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> (Maybe Attribute -> m b)
+  -> m b
+withAttr a path = bracket (openAttr a path) (mapM_ close)
 
 ----------------------------------------------------------------
 -- Dataspace API

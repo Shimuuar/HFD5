@@ -7,6 +7,7 @@
 module HDF5.HL.Internal.CCall
   ( -- * Exceptions
     HDF5Error(..)
+  , ObjTag(..)
     -- ** Calling C functions
   , convertHErr
     -- * Internal type classes
@@ -22,8 +23,19 @@ import HDF5.C            qualified as C
 -- Exceptions
 ----------------------------------------------------------------
 
+-- | Runtime for
+data ObjTag
+  = TagFile
+  | TagGroup
+  | TagDataset
+  | TagAttribute
+  | TagDataspace
+  deriving (Show,Eq,Ord)
+
 -- | Error during HDF5 call
-data HDF5Error = HDF5Error String
+data HDF5Error
+  = HDF5Error String
+  | CastError !ObjTag !ObjTag
   deriving stock Show
 
 instance Exception HDF5Error

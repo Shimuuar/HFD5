@@ -8,24 +8,40 @@
 {-# LANGUAGE MultiWayIf          #-}
 -- |
 module HDF5.HL
-  ( -- * File API (H5F)
+  ( 
+    -- * File and groups API
     File
   , open
   , withFile
-    -- * Dataset API
   , dataset
   , withDataset
-  , datasetType
+    -- * Datasets
+  , Dataset
+    -- ** Properties
   , Dim(..)
   , Extent(..)
-  , getDataspace
-  , getDataspaceDim
-
+  , dim
+  , extent
+    -- ** Reading and writing
   , Element(..)
+  , readBuffer
   , read
+    -- ** Dataspaces
+  , Dataspace
+  , dataspaceDim
+  , dataspaceExt
+    -- ** Attributes
+  , Attribute
     -- * Error handling
   , HDF5Error(..)
     -- * Type classes
+    -- ** HDF objects
+  , IsObject
+  , IsDirectory
+  , HasData(..)
+  , getType
+  , getDataspace
+    -- ** Closing objects
   , Closable(..)
   , close
   ) where
@@ -46,9 +62,9 @@ import Data.Int
 import Data.Word
 import HDF5.HL.Internal.CCall
 import HDF5.HL.Internal.TyHDF
-import HDF5.HL.Types
+import HDF5.HL.Internal.Types
 import HDF5.C                  qualified as C
-import Prelude hiding (read)
+import Prelude hiding (read,readIO)
 
 -- | Open HDF5 file
 open :: MonadIO m => FilePath -> OpenMode -> m File
@@ -65,7 +81,6 @@ withFile
   -> (File -> m a)
   -> m a
 withFile path mode = bracket (open path mode) close
-
 
 -- | Open dataset
 dataset
@@ -88,53 +103,44 @@ withDataset
   -> m a
 withDataset dir path = bracket (dataset dir path) close
 
--- | Return type associated with dataset
-datasetType
+
+----------------------------------------------------------------
+-- Dataspace API
+----------------------------------------------------------------
+
+dim :: (HasData a, MonadIO m) => a -> m Int
+dim = dataspaceDim <=< getDataspace
+
+extent :: (HasData a, MonadIO m) => a -> m Extent
+extent = dataspaceExt <=< getDataspace
+
+dataspaceDim
   :: (MonadIO m)
-  => Dataset
-  -> m Type
-datasetType (Dataset hid) = liftIO $ unsafeNewType $ C.h5d_get_type hid
-
-data Dim = Dim
-  { dimSize    :: !Int64
-  , dimMaxSize :: !Int64
-  }
-  deriving stock (Show,Eq,Ord)
-
-newtype Extent = Extent [Dim]
-  deriving stock (Show,Eq,Ord)
-
-getDataspaceDim
-  :: (MonadIO m)
-  => Dataset
+  => Dataspace
   -> m Int
-getDataspaceDim (Dataset hid) = liftIO $ evalContT $ do
-  spc   <- usingDataspace (C.h5d_get_space hid)
-  ndim  <- liftIO $ fromIntegral <$> C.h5s_get_simple_extent_ndims spc
+dataspaceDim (Dataspace hid) = liftIO $ do
+  ndim <- fromIntegral <$> C.h5s_get_simple_extent_ndims hid
   if | ndim < 0  -> error "Can't get dimensions"
      | otherwise -> pure ndim
 
-
-getDataspace
+dataspaceExt
   :: (MonadIO m)
-  => Dataset
+  => Dataspace
   -> m Extent
-getDataspace (Dataset hid) = liftIO $ evalContT $ do
-  spc   <- usingDataspace (C.h5d_get_space hid)
-  ndim  <- liftIO $ fromIntegral <$> C.h5s_get_simple_extent_ndims spc
+dataspaceExt (Dataspace hid) = liftIO $ do
+  ndim <- fromIntegral <$> C.h5s_get_simple_extent_ndims hid
   if | ndim < 0  -> error "getDataspace: Cannot obtain dataspace dimension"
      | ndim == 0 -> pure (Extent [])
-     | otherwise -> do
+     | otherwise -> evalContT $ do
          p_dim <- ContT $ allocaArray ndim
          p_max <- ContT $ allocaArray ndim
          liftIO $ do
-           _ <- C.h5s_get_simple_extent_dims spc p_dim p_max
+           _ <- C.h5s_get_simple_extent_dims hid p_dim p_max
            Extent <$> sequence
              [ Dim <$> (fromIntegral <$> peekElemOff p_dim i)
                    <*> (fromIntegral <$> peekElemOff p_max i)
              | i <- [0 .. ndim-1]
              ]
-
 
 
 ----------------------------------------------------------------
@@ -156,9 +162,9 @@ readBuffer
   :: forall a m. (Element a, MonadIO m)
   => Dataset
   -> m (VS.Vector a)
-readBuffer (Dataset hid) = liftIO $ evalContT $ do
-  spc <- usingDataspace (C.h5d_get_space hid)
-  tid <- ContT $ withType $ typeH5 @a
+readBuffer dset@(Dataset hid) = liftIO $ evalContT $ do
+  Dataspace spc <- ContT $ bracket (getDataspaceIO dset) close
+  tid           <- ContT $ withType $ typeH5 @a
   liftIO $ mask_ $ do
     n   <- C.h5s_get_simple_extent_npoints spc
     buf <- mallocForeignPtrArray (fromIntegral n)
@@ -177,28 +183,29 @@ readBuffer (Dataset hid) = liftIO $ evalContT $ do
 
 -- | Data type which could be serailized to HDF5 dataset
 class Serialize a where
-  readFromDataset :: Dataset -> IO a
+  readIO :: IsObject d => d -> IO a
 
 read :: (Serialize a, MonadIO m) => Dataset -> m a
-read = liftIO . readFromDataset
-
+read = liftIO . readIO
 
 instance Element a => Serialize [a] where
-  readFromDataset dset = do
-    n <- getDataspaceDim dset
+  readIO (castObj' -> dset) = do
+    n <- dim dset
     when (n /= 1) $ error "Invalid dimention"
     VS.toList <$> readBuffer dset
+
+instance Element a => Serialize (VS.Vector a) where
+  readIO (castObj' -> dset) = do
+    n <- dim dset
+    when (n /= 1) $ error "Invalid dimention"
+    readBuffer dset
+
+
     
 ----------------------------------------------------------------
 -- Using
 ----------------------------------------------------------------
 
-usingDataspace :: IO C.HID -> ContT r IO C.HID
-usingDataspace io = ContT $ bracket
-  (do hid <- io
-      when (hid == C.h5i_INVALID_HID) $ throwIO $ HDF5Error "Cannot open dataspace"
-      pure hid
-  ) C.h5s_close
 
 
 ----------------------------------------------------------------

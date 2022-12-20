@@ -36,6 +36,7 @@ import Control.Exception
 import Control.Monad.IO.Class
 import Data.Coerce
 import Data.Int
+import Foreign.Ptr
 import HDF5.C qualified as C
 import HDF5.HL.Internal.CCall
 import HDF5.HL.Internal.Enum
@@ -85,9 +86,16 @@ class IsObject a => HasAttrs a
   
 -- | HDF5 entities which contains data that could be 
 class IsObject a => HasData a where
+  -- | Get type of object
   getTypeIO      :: a -> IO Type
+  -- | Get dataspace associated with object
   getDataspaceIO :: a -> IO Dataspace
-
+  -- | Read all content of object
+  unsafeReadAll  :: a      -- ^ Object handle
+                 -> Type   -- ^ Type of in-memory elements 
+                 -> Ptr () -- ^ Buffer to read to
+                 -> IO ()
+  
 getType :: (HasData a, MonadIO m) => a -> m Type
 getType = liftIO . getTypeIO
 
@@ -164,6 +172,12 @@ instance HasData Dataset where
     checkINV "Cannot read type from dataset" =<< C.h5d_get_type hid
   getDataspaceIO (Dataset hid) = Dataspace <$> do
     checkINV "Cannot read dataspace from dataset" =<< C.h5d_get_space hid
+  unsafeReadAll (Dataset hid) ty buf = withType ty $ \tid ->
+    convertHErr "Reading from dataset failed" $ C.h5d_read hid tid
+      C.h5s_ALL
+      C.h5s_ALL
+      C.h5p_DEFAULT
+      (castPtr buf)
 
 instance HasAttrs Dataset
 
@@ -179,7 +193,9 @@ instance HasData Attribute where
     checkINV "Cannot read type from attribute" =<< C.h5a_get_type hid
   getDataspaceIO (Attribute hid) = Dataspace <$> do
     checkINV "Cannot read dataspace from dataset" =<< C.h5a_get_space hid
-
+  unsafeReadAll (Attribute hid) ty buf = withType ty $ \tid ->
+    convertHErr "Reading from attribute failed" $
+      C.h5a_read hid tid (castPtr buf)
 ----------------
 
 instance IsObject Dataspace where

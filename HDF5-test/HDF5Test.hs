@@ -51,14 +51,17 @@ foo = do
       pure ()
       print =<< H5.getType a1
       print =<< H5.extent  a1
+      print =<< readScalar @Int32 a1
       --
       print =<< H5.getType a2
       print =<< H5.extent  a2
+      print =<< readScalar @Double a2
       --
       print =<< H5.getType a3
       print =<< H5.dim     a3
       print =<< H5.extent  a3
-      
+      print =<< H5.read @[Double] a3
+      print =<< H5.read @[Int32] a3
       -- print a3
   --
   pure ()

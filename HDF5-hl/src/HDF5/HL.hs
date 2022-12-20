@@ -1,11 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DefaultSignatures   #-}
+{-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DerivingStrategies  #-}
-{-# LANGUAGE ViewPatterns        #-}
 {-# LANGUAGE MultiWayIf          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE ViewPatterns        #-}
 -- |
 module HDF5.HL
   ( 
@@ -26,7 +27,12 @@ module HDF5.HL
   , extent
     -- ** Reading and writing
   , Element(..)
-  , readBuffer
+  , readScalar
+  , basicReadBuffer
+  , basicReadScalar
+  , SerializeDSet(..)
+  , Serialize(..)
+  , readDSet
   , read
     -- ** Dataspaces
   , Dataspace
@@ -181,47 +187,72 @@ class Storable a => Element a where
 -- Primitives for reading from dataset
 ----------------------------------------------------------------
 
-readBuffer
-  :: forall a m. (Element a, MonadIO m)
-  => Dataset
-  -> m (VS.Vector a)
-readBuffer dset@(Dataset hid) = liftIO $ evalContT $ do
-  Dataspace spc <- ContT $ bracket (getDataspaceIO dset) close
-  tid           <- ContT $ withType $ typeH5 @a
-  liftIO $ mask_ $ do
-    n   <- C.h5s_get_simple_extent_npoints spc
-    buf <- mallocForeignPtrArray (fromIntegral n)
-    withForeignPtr buf $ \p -> do
-      convertHErr "FIXME: read" $ C.h5d_read hid tid
-        C.h5s_ALL
-        C.h5s_ALL
-        C.h5p_DEFAULT
-        (castPtr p)
-      pure $ VS.unsafeFromForeignPtr0 buf (fromIntegral n)
+
+readScalar :: (Element a, HasData d, MonadIO m) => d -> m a
+readScalar d = liftIO $
+  bracket (getDataspaceIO d) closeIO (basicReadScalar d)
+
+basicReadScalar
+  :: forall a d. (Element a, HasData d)
+  => d
+  -> Dataspace
+  -> IO a
+basicReadScalar dset (Dataspace spc) = do
+  nd <- C.h5s_get_simple_extent_ndims spc
+  when (nd /= 0) $ throwIO $ HDF5Error "Scalar could only be read from scalar datasets"
+  alloca $ \p -> do
+    unsafeReadAll dset (typeH5 @a) (castPtr p)
+    peek p
+
+basicReadBuffer
+  :: forall a d. (Element a, HasData d)
+  => d
+  -> Dataspace
+  -> IO (VS.Vector a)
+basicReadBuffer dset (Dataspace spc) = do
+  n   <- C.h5s_get_simple_extent_npoints spc
+  buf <- mallocForeignPtrArray (fromIntegral n)
+  withForeignPtr buf $ \p -> do
+    unsafeReadAll dset (typeH5 @a) (castPtr p)
+    pure $! VS.unsafeFromForeignPtr0 buf (fromIntegral n)
 
 
 ----------------------------------------------------------------
 -- Type class for datasets
 ----------------------------------------------------------------
 
--- | Data type which could be serailized to HDF5 dataset
-class Serialize a where
-  readIO :: IsObject d => d -> IO a
+-- | Data type which could be serialized to HDF5 dataset. 
+class SerializeDSet a where
+  -- | Read object using object itself and dataspace associated with
+  --   it. This method shouldn't be called directly
+  basicReadDSet :: Dataset -> Dataspace -> IO a
+  default basicReadDSet :: (Serialize a) => Dataset -> Dataspace -> IO a
+  basicReadDSet = basicRead
 
-read :: (Serialize a, MonadIO m) => Dataset -> m a
-read = liftIO . readIO
+-- | More restrictive version which could be used for both 
+class SerializeDSet a => Serialize a where
+  basicRead :: HasData d => d -> Dataspace -> IO a
 
-instance Element a => Serialize [a] where
-  readIO (castObj' -> dset) = do
-    n <- dim dset
+readDSet :: (SerializeDSet a, MonadIO m) => Dataset -> m a
+readDSet d = liftIO $ bracket (getDataspaceIO d) closeIO (basicReadDSet d)
+
+read :: (Serialize a, HasData d, MonadIO m) => d -> m a
+read d = liftIO $ bracket (getDataspaceIO d) closeIO (basicRead d)
+
+
+instance Element a => SerializeDSet [a]
+instance Element a => Serialize     [a] where
+  basicRead dset spc = do
+    n <- dataspaceDim spc
     when (n /= 1) $ error "Invalid dimention"
-    VS.toList <$> readBuffer dset
+    VS.toList <$> basicReadBuffer dset spc
 
-instance Element a => Serialize (VS.Vector a) where
-  readIO (castObj' -> dset) = do
-    n <- dim dset
+instance Element a => SerializeDSet (VS.Vector a)
+instance Element a => Serialize     (VS.Vector a) where
+  basicRead dset spc = do
+    n <- dataspaceDim spc
     when (n /= 1) $ error "Invalid dimention"
-    readBuffer dset
+    basicReadBuffer dset spc
 
 
     

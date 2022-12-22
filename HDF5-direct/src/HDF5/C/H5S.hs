@@ -3,8 +3,16 @@
 -- |
 -- API for dataspaces
 module HDF5.C.H5S
-  ( -- * Functions
-    h5s_close
+  ( -- * Enumerations
+    H5SClass(..)
+  , h5s_NO_CLASS
+  , h5s_SCALAR
+  , h5s_SIMPLE
+  , h5s_NULL
+    -- * Functions
+  , h5s_close
+  , h5s_create
+  , h5s_create_simple
   , h5s_is_simple
   , h5s_get_simple_extent_ndims
   , h5s_get_simple_extent_npoints
@@ -14,6 +22,27 @@ module HDF5.C.H5S
 import Foreign.C
 import Foreign.Ptr
 import HDF5.C.Types
+
+
+----------------------------------------------------------------
+-- Enumerations
+----------------------------------------------------------------
+
+-- | Types of dataspaces
+newtype H5SClass = H5SClass CInt
+  deriving (Show,Eq,Ord)
+
+-- | Error
+foreign import capi "hdf5.h value H5S_NO_CLASS" h5s_NO_CLASS :: H5SClass
+
+-- | Singleton (scalar)
+foreign import capi "hdf5.h value H5S_SCALAR" h5s_SCALAR :: H5SClass
+
+-- | Regular grid
+foreign import capi "hdf5.h value H5S_SIMPLE" h5s_SIMPLE :: H5SClass
+
+-- | Empty set
+foreign import capi "hdf5.h value H5S_NULL" h5s_NULL :: H5SClass
 
 
 ----------------------------------------------------------------
@@ -30,6 +59,56 @@ foreign import capi "hdf5.h H5Sclose" h5s_close
   :: HID     -- ^ Dataspace identifier
   -> IO HErr
 
+-- | Creates a new dataspace of a specified type.
+--
+--   A scalar dataspace, H5S_SCALAR, has a single element, though that
+--   element may be of a complex datatype, such as a compound or array
+--   datatype. By convention, the rank of a scalar dataspace is always
+--   0 (zero); think of it geometrically as a single, dimensionless
+--   point, though that point can be complex.
+--
+--   A simple dataspace, H5S_SIMPLE, consists of a regular array of elements.
+--
+--   A null dataspace, H5S_NULL, has no data elements.
+--
+--   The dataspace identifier returned by this function can be
+--   released with H5Sclose() so that resource leaks will not occur.
+foreign import capi "hdf5.h H5Screate" h5s_create
+  :: H5SClass -- ^ Type of dataspace to be created
+  -> IO HID
+
+-- | Creates a new simple dataspace and opens it for access.
+--
+--   @rank@ is the number of dimensions used in the dataspace.
+--
+--   @dims@ is a one-dimensional array of size rank specifying the size
+--   of each dimension of the dataset. maxdims is an array of the same
+--   size specifying the upper limit on the size of each dimension.
+--
+--   Any element of dims can be 0 (zero). Note that no data can be
+--   written to a dataset if the size of any dimension of its current
+--   dataspace is 0. This is sometimes a useful initial state for a
+--   dataset.
+--
+--   @maxdims@ may be the null pointer, in which case the upper limit
+--   is the same as dims. Otherwise, no element of maxdims should be
+--   smaller than the corresponding element of dims.
+--
+--   If an element of maxdims is @H5S_UNLIMITED@, the maximum size of
+--   the corresponding dimension is unlimited.
+--
+--   Any dataset with an unlimited dimension must also be chunked; see
+--   @H5Pset_chunk@. Similarly, a dataset must be chunked if dims does
+--   not equal maxdims.
+--
+--   The dataspace identifier returned from this function must be
+--   released with @H5Sclose@ or resource leaks will occur.
+foreign import capi "hdf5.h H5Screate_simple" h5s_create_simple
+  :: CInt      -- ^ @rank@ Number of dimensions of dataspace
+  -> Ptr HSize -- ^ @dims@ Array specifying the size of each dimension
+  -> Ptr HSize -- ^ @maxdims@ Array specifying the maximum size of each dimension
+  -> IO HID
+
 -- | @H5Sis_simple@ determines whether or not a dataspace is a simple dataspace.
 --
 --   Returns zero (false), a positive (true) or a negative (failure) value.
@@ -40,7 +119,7 @@ foreign import capi "hdf5.h H5Sis_simple" h5s_is_simple
 -- | Returns the number of dimensions in the dataspace if successful;
 --   otherwise returns a negative value.
 foreign import capi "hdf5.h H5Sget_simple_extent_ndims" h5s_get_simple_extent_ndims
-  :: HID    -- ^ Space ID 
+  :: HID    -- ^ Space ID
   -> IO CInt
 
 -- | @H5Sget_simple_extent_dims@ returns the size and maximum sizes of
@@ -70,8 +149,6 @@ foreign import capi "hdf5.h H5Sget_simple_extent_npoints" h5s_get_simple_extent_
 hid_t        H5Scombine_hyperslab (hid_t space_id, H5S_seloper_t op, const hsize_t start[], const h
 hid_t        H5Scombine_select (hid_t space1_id, H5S_seloper_t op, hid_t space2_id)
 hid_t        H5Scopy (hid_t space_id)
-hid_t        H5Screate (H5S_class_t type)
-hid_t        H5Screate_simple (int rank, const hsize_t dims[], const hsize_t maxdims[])
 hid_t        H5Sdecode (const void *buf)
 herr_t       H5Sencode2 (hid_t obj_id, void *buf, size_t *nalloc, hid_t fapl)
 herr_t       H5Sextent_copy (hid_t dst_id, hid_t src_id)

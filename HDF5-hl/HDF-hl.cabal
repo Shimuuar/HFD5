@@ -29,4 +29,5 @@ Library
         HDF5.HL.Internal.CCall
         HDF5.HL.Internal.Enum
         HDF5.HL.Internal.TyHDF
+        HDF5.HL.Internal.Dataspace
         HDF5.HL.Internal.Types

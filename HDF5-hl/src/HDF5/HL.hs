@@ -1,11 +1,13 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DefaultSignatures   #-}
 {-# LANGUAGE DerivingStrategies  #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE MultiWayIf          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE ViewPatterns        #-}
 -- |
 module HDF5.HL
@@ -34,6 +36,7 @@ module HDF5.HL
   , Serialize(..)
   , readDSet
   , read
+  , write
     -- ** Dataspaces
   , Dataspace
   , dataspaceDim
@@ -72,6 +75,7 @@ import Data.Word
 import HDF5.HL.Internal.CCall
 import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Internal.Types
+import HDF5.HL.Internal.Dataspace
 import HDF5.C                  qualified as C
 import Prelude hiding (read,readIO)
 
@@ -222,16 +226,27 @@ basicReadBuffer dset (Dataspace spc) = do
 ----------------------------------------------------------------
 
 -- | Data type which could be serialized to HDF5 dataset. 
-class SerializeDSet a where
+class Element (ElementOf a) => SerializeDSet a where
+  type ElementOf a
   -- | Read object using object itself and dataspace associated with
   --   it. This method shouldn't be called directly
   basicReadDSet :: Dataset -> Dataspace -> IO a
   default basicReadDSet :: (Serialize a) => Dataset -> Dataspace -> IO a
   basicReadDSet = basicRead
+  -- | Write object to HDF5 file. At this point dataset is already
+  --   created with correct dataspace.
+  basicWriteDSet :: a -> Dataset -> IO ()  
+  default basicWriteDSet :: (Serialize a) => a -> Dataset -> IO ()
+  basicWriteDSet = basicWrite
+  -- | Rank of underlying array
+  rank :: a -> Int
+  -- | Compute dimensions of an array
+  getExtent :: Monoid m => (Int -> m) -> a -> m
 
 -- | More restrictive version which could be used for both 
 class SerializeDSet a => Serialize a where
-  basicRead :: HasData d => d -> Dataspace -> IO a
+  basicRead  :: HasData d => d -> Dataspace -> IO a
+  basicWrite :: HasData d => a -> d -> IO ()
 
 readDSet :: (SerializeDSet a, MonadIO m) => Dataset -> m a
 readDSet d = liftIO $ bracket (getDataspaceIO d) closeIO (basicReadDSet d)
@@ -239,20 +254,48 @@ readDSet d = liftIO $ bracket (getDataspaceIO d) closeIO (basicReadDSet d)
 read :: (Serialize a, HasData d, MonadIO m) => d -> m a
 read d = liftIO $ bracket (getDataspaceIO d) closeIO (basicRead d)
 
+-- writeDSet :: (SerializeDSet a, MonadIO m) => a -> m ()
+-- writeDSet d = liftIO $ bracket (getDataspaceIO d) closeIO (basicReadDSet d)
 
-instance Element a => SerializeDSet [a]
+write
+  :: forall a dir m.
+     (SerializeDSet a, IsDirectory dir, MonadIO m)
+  => dir -> FilePath -> a -> m ()
+write (getHID -> dir) path a = liftIO $ evalContT $ do
+  c_path <- ContT $ withCString path
+  space  <- ContT $ withDSpace (rank a) $ getExtent putDimension a
+  tid    <- ContT $ withType (typeH5 @(ElementOf a))
+  -- FIXME: Variant which returns Dataset
+  dset   <- ContT $ bracket
+    ( checkINV "Unable to create dataset"
+    =<< C.h5d_create dir c_path tid (getHID space)
+        C.h5p_DEFAULT
+        C.h5p_DEFAULT
+        C.h5p_DEFAULT
+    ) C.h5d_close
+  liftIO $ basicWriteDSet a (Dataset dset) 
+
+instance Element a => SerializeDSet [a] where
+  type ElementOf [a] = a
+  rank      _ = 1
+  getExtent f = f . length
 instance Element a => Serialize     [a] where
-  basicRead dset spc = do
-    n <- dataspaceDim spc
-    when (n /= 1) $ error "Invalid dimention"
-    VS.toList <$> basicReadBuffer dset spc
+  basicRead dset spc = VS.toList <$> basicRead dset spc
+  basicWrite xs dset = basicWrite (VS.fromList xs) dset
 
-instance Element a => SerializeDSet (VS.Vector a)
+
+instance Element a => SerializeDSet (VS.Vector a) where
+  type ElementOf (VS.Vector a) = a
+  rank      _ = 1
+  getExtent f = f . VS.length
 instance Element a => Serialize     (VS.Vector a) where
   basicRead dset spc = do
     n <- dataspaceDim spc
     when (n /= 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
+  basicWrite xs dset = do
+    VS.unsafeWith xs $ \ptr -> 
+      unsafeWriteAll dset (typeH5 @a) (castPtr ptr)
 
 
     

@@ -66,6 +66,12 @@ foo = do
   --
   pure ()
 
+
+woo :: IO ()
+woo = do
+  withFile "/run/user/1000/tst.hdf5" OpenRW $ \hdf -> do
+    H5.write hdf "ddd" [1 .. 100::Int32]
+
 ----------------------------------------------------------------
 
 -- tyty :: IO ()

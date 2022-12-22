@@ -14,9 +14,6 @@ module HDF5.HL.Internal.Types
   , Dataset(..)
   , Attribute(..)
   , Dataspace(..)
-    -- * Dimensions
-  , Dim(..)
-  , Extent(..)
     -- * Exceptions
   , HDF5Error(..)
     -- * Type classes
@@ -35,7 +32,6 @@ module HDF5.HL.Internal.Types
 import Control.Exception
 import Control.Monad.IO.Class
 import Data.Coerce
-import Data.Int
 import Foreign.Ptr
 import HDF5.C qualified as C
 import HDF5.HL.Internal.CCall
@@ -95,6 +91,12 @@ class IsObject a => HasData a where
                  -> Type   -- ^ Type of in-memory elements 
                  -> Ptr () -- ^ Buffer to read to
                  -> IO ()
+  -- | Write full dataset at once
+  unsafeWriteAll :: a      -- ^ Object handle
+                 -> Type   -- ^ Type of in-memory elements
+                 -> Ptr () -- ^ Buffer with data
+                 -> IO ()
+                 
   
 getType :: (HasData a, MonadIO m) => a -> m Type
 getType = liftIO . getTypeIO
@@ -102,19 +104,6 @@ getType = liftIO . getTypeIO
 getDataspace :: (HasData a, MonadIO m) => a -> m Dataspace
 getDataspace = liftIO . getDataspaceIO
 
-
-----------------------------------------------------------------
--- Dimensions
-----------------------------------------------------------------
-
-data Dim = Dim
-  { dimSize    :: !Int64
-  , dimMaxSize :: !Int64
-  }
-  deriving stock (Show,Eq,Ord)
-
-newtype Extent = Extent [Dim]
-  deriving stock (Show,Eq,Ord)
 
 
 ----------------------------------------------------------------
@@ -178,6 +167,12 @@ instance HasData Dataset where
       C.h5s_ALL
       C.h5p_DEFAULT
       (castPtr buf)
+  unsafeWriteAll (Dataset hid) ty buf = withType ty $ \tid ->
+    convertHErr "Reading to dataset failed" $ C.h5d_write hid tid
+      C.h5s_ALL
+      C.h5s_ALL
+      C.h5p_DEFAULT
+      buf
 
 instance HasAttrs Dataset
 
@@ -196,6 +191,10 @@ instance HasData Attribute where
   unsafeReadAll (Attribute hid) ty buf = withType ty $ \tid ->
     convertHErr "Reading from attribute failed" $
       C.h5a_read hid tid (castPtr buf)
+  unsafeWriteAll (Attribute hid) ty buf = withType ty $ \tid ->
+    convertHErr "Writing of attribute failed" $
+      C.h5a_write hid tid (castPtr buf)
+
 ----------------
 
 instance IsObject Dataspace where

@@ -382,6 +382,12 @@ deriving via SerializeAsScalar Word32 instance SerializeDSet Word32
 deriving via SerializeAsScalar Word32 instance Serialize     Word32
 deriving via SerializeAsScalar Word64 instance SerializeDSet Word64
 deriving via SerializeAsScalar Word64 instance Serialize     Word64
+
+deriving via SerializeAsScalar Int  instance SerializeDSet Int
+deriving via SerializeAsScalar Int  instance Serialize     Int
+deriving via SerializeAsScalar Word instance SerializeDSet Word
+deriving via SerializeAsScalar Word instance Serialize     Word
+
 deriving via SerializeAsScalar Float  instance SerializeDSet Float
 deriving via SerializeAsScalar Float  instance Serialize     Float
 deriving via SerializeAsScalar Double instance SerializeDSet Double

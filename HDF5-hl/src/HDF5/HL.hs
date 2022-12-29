@@ -82,7 +82,10 @@ import Control.Monad.Catch
 -- import Data.Coerce
 import Data.Bits                   (finiteBitSize)
 import Data.Functor.Identity
+import Data.Vector                 qualified as V
 import Data.Vector.Storable        qualified as VS
+import Data.Vector.Unboxed         qualified as VU
+import Data.Vector.Generic         qualified as VG
 import Data.Vector.Fixed           qualified as F
 import Data.Vector.Fixed.Unboxed   qualified as FU
 import Data.Vector.Fixed.Boxed     qualified as FB
@@ -226,7 +229,8 @@ createAttr dir path a = liftIO $ evalContT $ do
           C.h5p_DEFAULT
           C.h5p_DEFAULT)
     C.h5a_close
-  liftIO $ basicWrite a (Attribute attr)
+  liftIO $ basicWrite (Attribute attr) a
+
 
 ----------------------------------------------------------------
 -- Type class for elements
@@ -276,8 +280,8 @@ class Element (ElementOf a) => SerializeDSet a where
   basicReadDSet = basicRead
   -- | Write object to HDF5 file. At this point dataset is already
   --   created with correct dataspace.
-  basicWriteDSet :: a -> Dataset -> IO ()
-  default basicWriteDSet :: (Serialize a) => a -> Dataset -> IO ()
+  basicWriteDSet :: Dataset -> a -> IO ()
+  default basicWriteDSet :: (Serialize a) => Dataset -> a -> IO ()
   basicWriteDSet = basicWrite
   -- | Rank of underlying array
   getRank :: a -> Int
@@ -287,7 +291,7 @@ class Element (ElementOf a) => SerializeDSet a where
 -- | More restrictive version which could be used for both
 class SerializeDSet a => Serialize a where
   basicRead  :: HasData d => d -> Dataspace -> IO a
-  basicWrite :: HasData d => a -> d -> IO ()
+  basicWrite :: HasData d => d -> a -> IO ()
 
 -- | Values which could be serialized as set of attributes
 class SerializeAttr a where
@@ -338,7 +342,7 @@ writeAt (getHID -> dir) path a = liftIO $ evalContT $ do
         C.h5p_DEFAULT
         C.h5p_DEFAULT
     ) C.h5d_close
-  liftIO $ basicWriteDSet a (Dataset dset)
+  liftIO $ basicWriteDSet (Dataset dset) a
 
 
 ----------------------------------------------------------------
@@ -350,8 +354,25 @@ instance Element a => SerializeDSet [a] where
   getRank   _ = 1
   getExtent f = f . length
 instance Element a => Serialize     [a] where
-  basicRead dset spc = VS.toList <$> basicRead dset spc
-  basicWrite xs dset = basicWrite (VS.fromList xs) dset
+  basicRead  dset spc = VS.toList <$> basicRead dset spc
+  basicWrite dset xs  = basicWrite dset (VS.fromList xs)
+
+instance (Element a, VU.Unbox a) => SerializeDSet (VU.Vector a) where
+  type ElementOf (VU.Vector a) = a
+  getRank   _ = 1
+  getExtent f = f . VU.length
+instance (Element a, VU.Unbox a) => Serialize (VU.Vector a) where
+  basicRead  dset spc = VG.convert <$> basicRead @(VS.Vector a) dset spc
+  basicWrite dset xs  = basicWrite dset (VG.convert xs :: VS.Vector a)
+
+instance (Element a) => SerializeDSet (V.Vector a) where
+  type ElementOf (V.Vector a) = a
+  getRank   _ = 1
+  getExtent f = f . V.length
+instance (Element a) => Serialize (V.Vector a) where
+  basicRead  dset spc = VG.convert <$> basicRead @(VS.Vector a) dset spc
+  basicWrite dset xs  = basicWrite dset (VG.convert xs :: VS.Vector a)
+
 
 instance Element a => SerializeDSet (VS.Vector a) where
   type ElementOf (VS.Vector a) = a
@@ -362,9 +383,11 @@ instance Element a => Serialize     (VS.Vector a) where
     n <- dataspaceDim spc
     when (n /= 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
-  basicWrite xs dset = do
+  basicWrite dset xs = do
     VS.unsafeWith xs $ \ptr ->
       unsafeWriteAll dset (typeH5 @a) (castPtr ptr)
+
+
 
 deriving via SerializeAsScalar Int8   instance SerializeDSet Int8
 deriving via SerializeAsScalar Int8   instance Serialize     Int8
@@ -427,8 +450,8 @@ instance Element a => SerializeDSet (SerializeAsScalar a) where
   getExtent _ _ = mempty
 
 instance Element a => Serialize (SerializeAsScalar a) where
-  basicRead dset spc = basicReadScalar dset spc
-  basicWrite a dset = do
+  basicRead  dset spc = basicReadScalar dset spc
+  basicWrite dset a   = do
     alloca $ \p -> do poke p a
                       unsafeWriteAll dset (typeH5 @a) (castPtr p)
 

@@ -35,6 +35,7 @@ module HDF5.HL
   , Element(..)
   , SerializeDSet(..)
   , Serialize(..)
+  , SerializeAttr(..)
   , readDSet
   , read
   , readAt
@@ -284,6 +285,11 @@ class Element (ElementOf a) => SerializeDSet a where
 class SerializeDSet a => Serialize a where
   basicRead  :: HasData d => d -> Dataspace -> IO a
   basicWrite :: HasData d => a -> d -> IO ()
+
+-- | Values which could be serialized as set of attributes
+class SerializeAttr a where
+  readAttr  :: HasAttrs d => d -> IO a
+  writeAttr :: HasAttrs d => d -> a -> IO ()
 
 -- | Read data from already opened dataset. This function work
 --   specifically with datasets and can use its attributes. Use 'read'

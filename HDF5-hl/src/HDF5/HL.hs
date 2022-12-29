@@ -79,12 +79,11 @@ import HDF5.HL.Internal.Dataspace
 import HDF5.C                  qualified as C
 import Prelude hiding (read,readIO)
 
--- | Open HDF5 file
+-- | Open HDF5 file. File must be closed by call to 'close'.
 open :: MonadIO m => FilePath -> OpenMode -> m File
 open path mode = liftIO $ withCString path $ \c_path -> do
-  hid <- C.h5f_open c_path (toCParam mode) C.h5p_DEFAULT
-  when (hid == C.h5i_INVALID_HID)
-    $ throwIO $ HDF5Error $ "Cannot open file " ++ path
+  hid <- checkINV ("Cannot open file " ++ path)
+     =<< C.h5f_open c_path (toCParam mode) C.h5p_DEFAULT
   pure $ File hid
 
 withFile
@@ -235,7 +234,7 @@ class Element (ElementOf a) => SerializeDSet a where
   basicReadDSet = basicRead
   -- | Write object to HDF5 file. At this point dataset is already
   --   created with correct dataspace.
-  basicWriteDSet :: a -> Dataset -> IO ()  
+  basicWriteDSet :: a -> Dataset -> IO ()
   default basicWriteDSet :: (Serialize a) => a -> Dataset -> IO ()
   basicWriteDSet = basicWrite
   -- | Rank of underlying array
@@ -243,14 +242,18 @@ class Element (ElementOf a) => SerializeDSet a where
   -- | Compute dimensions of an array
   getExtent :: Monoid m => (Int -> m) -> a -> m
 
--- | More restrictive version which could be used for both 
+-- | More restrictive version which could be used for both
 class SerializeDSet a => Serialize a where
   basicRead  :: HasData d => d -> Dataspace -> IO a
   basicWrite :: HasData d => a -> d -> IO ()
 
+-- | Read data from already opened dataset. This function work
+--   specifically with datasets and can use its attributes. Use 'read'
+--   to be able to read from attributes as well.
 readDSet :: (SerializeDSet a, MonadIO m) => Dataset -> m a
 readDSet d = liftIO $ bracket (getDataspaceIO d) closeIO (basicReadDSet d)
 
+-- | Read value from already opened dataset or attribute.
 read :: (Serialize a, HasData d, MonadIO m) => d -> m a
 read d = liftIO $ bracket (getDataspaceIO d) closeIO (basicRead d)
 
@@ -273,7 +276,7 @@ write (getHID -> dir) path a = liftIO $ evalContT $ do
         C.h5p_DEFAULT
         C.h5p_DEFAULT
     ) C.h5d_close
-  liftIO $ basicWriteDSet a (Dataset dset) 
+  liftIO $ basicWriteDSet a (Dataset dset)
 
 instance Element a => SerializeDSet [a] where
   type ElementOf [a] = a
@@ -294,7 +297,7 @@ instance Element a => Serialize     (VS.Vector a) where
     when (n /= 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
   basicWrite xs dset = do
-    VS.unsafeWith xs $ \ptr -> 
+    VS.unsafeWith xs $ \ptr ->
       unsafeWriteAll dset (typeH5 @a) (castPtr ptr)
 
 

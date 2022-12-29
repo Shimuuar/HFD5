@@ -4,6 +4,7 @@
 -- Attributes API
 module HDF5.C.H5A
   ( h5a_open
+  , h5a_create
   , h5a_close
   , h5a_read
   , h5a_write
@@ -23,16 +24,34 @@ import HDF5.C.Types
 --
 --   The attribute identifier returned by this function must be
 --   released with @H5Aclose@ or resource leaks will develop.
---
---   Returns an attribute identifier if successful; otherwise returns
---   a negative value.
 foreign import capi "hdf5.h H5Aopen" h5a_open
   :: HID     -- ^ @obj_id@ Location identifier. The identifier may be
              --   that of a file, group, dataset, or named datatype.
   -> CString -- ^ Name of attribute to open
   -> HID     -- ^ Attribute access property list identifier. parameter
              --   is currently not used; specify H5P_DEFAULT.
-  -> IO HID
+  -> IO HID  -- ^ Returns an attribute identifier if successful;
+             --   otherwise returns a negative value.
+
+-- | @H5Acreate2@ creates an attribute, attr_name, which is attached
+--   to the object specified by the identifier @loc_id@.
+--
+--   The attribute name, @attr_name@, must be unique for the object.
+--
+--   Tht attribute is created with the specified datatype and
+--   dataspace, @type_id@ and @space_id@.
+--
+--   The acpl parameter is currently not used; specify H5P_DEFAULT.
+
+foreign import capi "hdf5.h H5Acreate2" h5a_create
+  :: HID     -- ^ @loc_id@ Location identifier. The identifier may be that of a file, group, dataset, or named datatype.
+  -> CString -- ^ @attr_name@ Name of attribute
+  -> HID     -- ^ @type_id@ Attribute datatype identifier
+  -> HID     -- ^ @space_id@ Dataspace identifier
+  -> HID     -- ^ @acpl_id@ Attribute creation property list identifier
+  -> HID     -- ^ @aapl_id@ Attribute access property list identifier
+  -> IO HID  -- ^ Returns an attribute identifier if successful;
+             --   otherwise returns a negative value.
 
 -- | Closes the specified attribute.
 foreign import capi "hdf5.h H5Aclose" h5a_close
@@ -91,7 +110,6 @@ foreign import capi "hdf5.h H5Aget_space" h5a_get_space
             --   successful; otherwise returns a negative value.
 
 {-
-hid_t 	H5Acreate2 (hid_t loc_id, const char *attr_name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id)
 hid_t 	H5Acreate_by_name (hid_t loc_id, const char *obj_name, const char *attr_name, hid_t type_id, hid_t space_id, hid_t acpl_id, hid_t aapl_id, hid_t lapl_id)
 herr_t 	H5Adelete (hid_t loc_id, const char *attr_name)
 herr_t 	H5Adelete_by_idx (hid_t loc_id, const char *obj_name, H5_index_t idx_type, H5_iter_order_t order, hsize_t n, hid_t lapl_id)

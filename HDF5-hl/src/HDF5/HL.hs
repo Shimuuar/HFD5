@@ -70,7 +70,12 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Catch
 -- import Data.Coerce
-import Data.Vector.Storable     qualified as VS
+import Data.Vector.Storable        qualified as VS
+import Data.Vector.Fixed           qualified as F
+import Data.Vector.Fixed.Unboxed   qualified as FU
+import Data.Vector.Fixed.Boxed     qualified as FB
+import Data.Vector.Fixed.Storable  qualified as FS
+import Data.Vector.Fixed.Primitive qualified as FP
 import Control.Monad.Trans.Cont
 import Foreign.C.String
 import Foreign.Ptr
@@ -83,7 +88,7 @@ import HDF5.HL.Internal.CCall
 import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Dataspace
-import HDF5.C                  qualified as C
+import HDF5.C                      qualified as C
 import Prelude hiding (read,readIO)
 
 -- | Open HDF5 file. File must be closed by call to 'close'.
@@ -359,6 +364,27 @@ deriving via SerializeAsScalar Float  instance Serialize     Float
 deriving via SerializeAsScalar Double instance SerializeDSet Double
 deriving via SerializeAsScalar Double instance Serialize     Double
 
+deriving via SerializeAsScalar (FB.Vec n a)
+    instance (F.Arity n, Element a) => Serialize (FB.Vec n a)
+deriving via SerializeAsScalar (FB.Vec n a)
+    instance (F.Arity n, Element a) => SerializeDSet (FB.Vec n a)
+
+deriving via SerializeAsScalar (FU.Vec n a)
+    instance (F.Arity n, Element a, FU.Unbox n a) => Serialize (FU.Vec n a)
+deriving via SerializeAsScalar (FU.Vec n a)
+    instance (F.Arity n, Element a, FU.Unbox n a) => SerializeDSet (FU.Vec n a)
+
+deriving via SerializeAsScalar (FS.Vec n a)
+    instance (F.Arity n, Element a) => Serialize (FS.Vec n a)
+deriving via SerializeAsScalar (FS.Vec n a)
+    instance (F.Arity n, Element a) => SerializeDSet (FS.Vec n a)
+
+deriving via SerializeAsScalar (FP.Vec n a)
+    instance (F.Arity n, Element a, FP.Prim a) => Serialize (FP.Vec n a)
+deriving via SerializeAsScalar (FP.Vec n a)
+    instance (F.Arity n, Element a, FP.Prim a) => SerializeDSet (FP.Vec n a)
+
+
 newtype SerializeAsScalar a = SerializeAsScalar a
   deriving newtype (Storable, Element)
 
@@ -372,12 +398,6 @@ instance Element a => Serialize (SerializeAsScalar a) where
   basicWrite a dset = do
     alloca $ \p -> do poke p a
                       unsafeWriteAll dset (typeH5 @a) (castPtr p)
-
-
-----------------------------------------------------------------
--- Using
-----------------------------------------------------------------
-
 
 
 ----------------------------------------------------------------
@@ -395,3 +415,13 @@ instance Element Word64 where typeH5 = tyU64
 
 instance Element Float  where typeH5 = tyF32
 instance Element Double where typeH5 = tyF64
+
+instance (Element a, F.Arity n) => Element (FB.Vec n a) where
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
+instance (Element a, F.Arity n, FU.Unbox n a) => Element (FU.Vec n a) where
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FU.Vec n a)]
+instance (Element a, F.Arity n) => Element (FS.Vec n a) where
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FS.Vec n a)]
+instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FP.Vec n a)]
+

@@ -22,5 +22,7 @@ Library
                   , HDF5-direct
                   , HDF5-hl
                   , transformers
+                  , vector
+                  , fixed-vector
   Exposed-modules:
         HDF5Test

@@ -10,6 +10,8 @@ import Control.Monad
 import Control.Monad.Trans.Cont
 
 import Data.Int
+import Data.Vector.Fixed           qualified as F
+import Data.Vector.Fixed.Unboxed   qualified as FU
 import Foreign.C.String
 import Foreign.Marshal
 import Foreign.Storable
@@ -76,8 +78,9 @@ woo = do
   withFile "/run/user/1000/tst.hdf5" OpenRW $ \hdf -> do
     H5.writeAt hdf "ddd" [1 .. 100::Int32]
     H5.withDataset hdf "ddd" $ \dset -> do
-      createAttr dset "a1" (1 :: Float)
+      createAttr dset "a1"    (1 :: Float)
       createAttr dset "a2/aa" (1.222 :: Float)
+      createAttr dset "vec"   (F.mk3 1 3 4 :: FU.Vec3 Double)
 
 ----------------------------------------------------------------
 

@@ -384,14 +384,14 @@ instance Element a => Serialize (SerializeAsScalar a) where
 -- Boilerplate
 ----------------------------------------------------------------
 
-instance Element Int8   where typeH5 = Native C.h5t_NATIVE_SCHAR
-instance Element Int16  where typeH5 = Native C.h5t_NATIVE_SHORT
-instance Element Int32  where typeH5 = Native C.h5t_NATIVE_INT
-instance Element Int64  where typeH5 = Native C.h5t_NATIVE_LONG
-instance Element Word8  where typeH5 = Native C.h5t_NATIVE_UCHAR
-instance Element Word16 where typeH5 = Native C.h5t_NATIVE_USHORT
-instance Element Word32 where typeH5 = Native C.h5t_NATIVE_UINT
-instance Element Word64 where typeH5 = Native C.h5t_NATIVE_ULONG
+instance Element Int8   where typeH5 = tyI8
+instance Element Int16  where typeH5 = tyI16
+instance Element Int32  where typeH5 = tyI32
+instance Element Int64  where typeH5 = tyI64
+instance Element Word8  where typeH5 = tyU8
+instance Element Word16 where typeH5 = tyU16
+instance Element Word32 where typeH5 = tyU32
+instance Element Word64 where typeH5 = tyU64
 
-instance Element Float  where typeH5 = Native C.h5t_NATIVE_FLOAT
-instance Element Double where typeH5 = Native C.h5t_NATIVE_DOUBLE
+instance Element Float  where typeH5 = tyF32
+instance Element Double where typeH5 = tyF64

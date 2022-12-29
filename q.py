@@ -18,7 +18,9 @@ with h5py.File("/run/user/1000/tst.hdf5", "w") as f:
     dset2.attrs['a1'] = 100
     dset2.attrs['a2'] = 1.2
     dset2.attrs['a3'] = np.asarray([1,2,3], dtype='f')
-#    print(dset)
+    #
+    dset3 = f.create_dataset("dset3", data=np.sqrt((np.linspace(-1,1) + 0j)))
+    print(dset3)
 #    print(dset[:])
 
 with h5py.File("/run/user/1000/tst.hdf5", "r") as f:

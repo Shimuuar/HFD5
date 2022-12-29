@@ -33,36 +33,40 @@ type HID = C.HID
 foo :: IO ()
 foo = do
   withFile "/run/user/1000/tst.hdf5" OpenRO $ \hdf -> do
-    withDataset hdf "dset1" $ \dd@(Dataset dset) -> do
-      print =<< H5.getType  dd
-      print =<< H5.dim dd
-      print =<< H5.extent dd
+    return ()
+    withDataset hdf "dset1" $ \dd -> do
+      print =<< H5.getType dd
+      print =<< H5.dim     dd
+      print =<< H5.extent  dd
       print =<< H5.read @[Int64] dd
+      return ()
     putStrLn "\n----------------"
-    withDataset hdf "dset2" $ \dd@(Dataset dset) -> do
+    withDataset hdf "dset2" $ \dd -> do
       print =<< H5.getType  dd
       print =<< H5.dim dd
       print =<< H5.extent dd
       print =<< H5.read @[Double] dd
-
       Just a1 <- H5.openAttr dd "a1"
-      Just a2 <- H5.openAttr dd "a2"
-      Just a3 <- H5.openAttr dd "a3"
+      -- Just a2 <- H5.openAttr dd "a2"
+      -- Just a3 <- H5.openAttr dd "a3"
       pure ()
-      print =<< H5.getType a1
-      print =<< H5.extent  a1
-      print =<< readScalar @Int32 a1
-      --
-      print =<< H5.getType a2
-      print =<< H5.extent  a2
-      print =<< readScalar @Double a2
-      --
-      print =<< H5.getType a3
-      print =<< H5.dim     a3
-      print =<< H5.extent  a3
-      print =<< H5.read @[Double] a3
-      print =<< H5.read @[Int32] a3
-      -- print a3
+      print =<< H5.getType     a1
+      print =<< H5.extent      a1
+      print =<< H5.read @Int32 a1
+    putStrLn "\n----------------"
+    withDataset hdf "dset3" $ \dd -> do
+      print =<< H5.getType dd
+    --   --
+    --   print =<< H5.getType a2
+    --   print =<< H5.extent  a2
+    --   print =<< readScalar @Double a2
+    --   --
+    --   print =<< H5.getType a3
+    --   print =<< H5.dim     a3
+    --   print =<< H5.extent  a3
+    --   print =<< H5.read @[Double] a3
+    --   print =<< H5.read @[Int32] a3
+    --   -- print a3
   --
   pure ()
 
@@ -70,7 +74,10 @@ foo = do
 woo :: IO ()
 woo = do
   withFile "/run/user/1000/tst.hdf5" OpenRW $ \hdf -> do
-    H5.write hdf "ddd" [1 .. 100::Int32]
+    H5.writeAt hdf "ddd" [1 .. 100::Int32]
+    H5.withDataset hdf "ddd" $ \dset -> do
+      createAttr dset "a1" (1 :: Float)
+      createAttr dset "a2/aa" (1.222 :: Float)
 
 ----------------------------------------------------------------
 

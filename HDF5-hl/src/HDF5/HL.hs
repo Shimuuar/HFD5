@@ -1,25 +1,28 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DefaultSignatures   #-}
-{-# LANGUAGE DerivingStrategies  #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE MultiWayIf          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE AllowAmbiguousTypes        #-}
+{-# LANGUAGE DefaultSignatures          #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE DerivingVia                #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImportQualifiedPost        #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiWayIf                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE ViewPatterns               #-}
 -- |
 module HDF5.HL
-  ( 
+  (
     -- * File and groups API
     File
+  , OpenMode(..)
   , open
   , withFile
-  , dataset
+  , openDataset
   , withDataset
-  , openAttr
-  , withAttr
     -- * Datasets
   , Dataset
     -- ** Properties
@@ -29,20 +32,24 @@ module HDF5.HL
   , extent
     -- ** Reading and writing
   , Element(..)
-  , readScalar
-  , basicReadBuffer
-  , basicReadScalar
   , SerializeDSet(..)
   , Serialize(..)
   , readDSet
   , read
-  , write
+  , readAt
+  , writeAt
+    -- ** Attributes
+  , Attribute
+  , openAttr
+  , createAttr
+  , withAttr
+    -- ** Low-level API
+  , basicReadBuffer
+  , basicReadScalar
     -- ** Dataspaces
   , Dataspace
   , dataspaceDim
   , dataspaceExt
-    -- ** Attributes
-  , Attribute
     -- * Error handling
   , HDF5Error(..)
     -- * Type classes
@@ -86,55 +93,36 @@ open path mode = liftIO $ withCString path $ \c_path -> do
      =<< C.h5f_open c_path (toCParam mode) C.h5p_DEFAULT
   pure $ File hid
 
+-- | Open file and pass handle to continuation. It will be closed when
+--   continuation finish execution normally or abnormally
 withFile
   :: (MonadMask m, MonadIO m)
-  => FilePath -- ^ File path
-  -> OpenMode
-  -> (File -> m a)
-  -> m a
+  => FilePath -> OpenMode -> (File -> m a) -> m a
 withFile path mode = bracket (open path mode) close
 
--- | Open dataset
-dataset
+-- | Open dataset in given location
+openDataset
   :: (MonadIO m, IsDirectory dir)
   => dir      -- ^ Root
   -> FilePath -- ^ Path relative to root
   -> m Dataset
-dataset (getHID -> hid) path = liftIO $ do
+openDataset (getHID -> hid) path = liftIO $ do
   withCString path $ \c_path -> do
     r <- C.h5d_open2 hid c_path C.h5p_DEFAULT
     when (r == C.h5i_INVALID_HID)
       $ throwIO $ HDF5Error $ "Cannot open dataset " ++ path
     pure $ Dataset r
 
+-- | Open dataset and pass handle to continuation. Dataset will be
+--   closed when continuation finish execution normally or with an
+--   exception.
 withDataset
   :: (MonadMask m, MonadIO m, IsDirectory dir)
   => dir      -- ^ Root
   -> FilePath -- ^ Path relative to root
   -> (Dataset -> m a)
   -> m a
-withDataset dir path = bracket (dataset dir path) close
-
-openAttr
-  :: (MonadIO m, HasAttrs a)
-  => a      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> m (Maybe Attribute)
-openAttr (getHID -> hid) path = liftIO $ do
-  withCString path $ \c_str -> do
-    C.h5a_exists hid c_str >>= \case
-      C.HFalse -> pure Nothing
-      C.HTrue  -> Just . Attribute
-              <$> (checkINV "Cannot open attribute" =<< C.h5a_open hid c_str C.h5p_DEFAULT)
-      C.HFail  -> throwIO $ HDF5Error "Cannot check existence of attribute"
-
-withAttr
-  :: (MonadMask m, MonadIO m, HasAttrs a)
-  => a      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> (Maybe Attribute -> m b)
-  -> m b
-withAttr a path = bracket (openAttr a path) (mapM_ close)
+withDataset dir path = bracket (openDataset dir path) close
 
 ----------------------------------------------------------------
 -- Dataspace API
@@ -174,26 +162,63 @@ dataspaceExt (Dataspace hid) = liftIO $ do
              | i <- [0 .. ndim-1]
              ]
 
+----------------------------------------------------------------
+-- Attributes
+----------------------------------------------------------------
+
+-- | Open attribute of object. It could be either dataset or
+--   group. Returns @Nothing@ if such attribute does not exists
+openAttr
+  :: (MonadIO m, HasAttrs a)
+  => a      -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> m (Maybe Attribute)
+openAttr (getHID -> hid) path = liftIO $ do
+  withCString path $ \c_str -> do
+    C.h5a_exists hid c_str >>= \case
+      C.HFalse -> pure Nothing
+      C.HTrue  -> Just . Attribute
+              <$> (checkINV "Cannot open attribute" =<< C.h5a_open hid c_str C.h5p_DEFAULT)
+      C.HFail  -> throwIO $ HDF5Error "Cannot check existence of attribute"
+
+-- | Open attribute of given group or dataset and pass handle to
+--   continuation. It'll be closed when continuation finish
+--   execution normally or with an exception.
+withAttr
+  :: (MonadMask m, MonadIO m, HasAttrs a)
+  => a      -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> (Maybe Attribute -> m b)
+  -> m b
+withAttr a path = bracket (openAttr a path) (mapM_ close)
+
+-- | Create attribute
+createAttr
+  :: forall a dir m. (Serialize a, HasAttrs dir, MonadIO m)
+  => dir    -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> a      -- ^ Value to store in attribute
+  -> m ()
+createAttr dir path a = liftIO $ evalContT $ do
+  c_path <- ContT $ withCString path
+  space  <- ContT $ withDSpace (getRank a) $ getExtent putDimension a
+  tid    <- ContT $ withType (typeH5 @(ElementOf a))
+  attr   <- ContT $ bracket
+    (checkINV "Cannot create attribute"
+    =<< C.h5a_create (getHID dir) c_path tid (getHID space)
+          C.h5p_DEFAULT
+          C.h5p_DEFAULT)
+    C.h5a_close
+  liftIO $ basicWrite a (Attribute attr)
 
 ----------------------------------------------------------------
 -- Type class for elements
 ----------------------------------------------------------------
 
 -- | Data type which corresponds to some HDF data type and could read
---   from buffer using 'Storable'. 
+--   from buffer using 'Storable'.
 class Storable a => Element a where
   typeH5 :: Type
-
-
-
-----------------------------------------------------------------
--- Primitives for reading from dataset
-----------------------------------------------------------------
-
-
-readScalar :: (Element a, HasData d, MonadIO m) => d -> m a
-readScalar d = liftIO $
-  bracket (getDataspaceIO d) closeIO (basicReadScalar d)
 
 basicReadScalar
   :: forall a d. (Element a, HasData d)
@@ -224,7 +249,7 @@ basicReadBuffer dset (Dataspace spc) = do
 -- Type class for datasets
 ----------------------------------------------------------------
 
--- | Data type which could be serialized to HDF5 dataset. 
+-- | Data type which could be serialized to HDF5 dataset.
 class Element (ElementOf a) => SerializeDSet a where
   type ElementOf a
   -- | Read object using object itself and dataspace associated with
@@ -238,7 +263,7 @@ class Element (ElementOf a) => SerializeDSet a where
   default basicWriteDSet :: (Serialize a) => a -> Dataset -> IO ()
   basicWriteDSet = basicWrite
   -- | Rank of underlying array
-  rank :: a -> Int
+  getRank :: a -> Int
   -- | Compute dimensions of an array
   getExtent :: Monoid m => (Int -> m) -> a -> m
 
@@ -257,16 +282,25 @@ readDSet d = liftIO $ bracket (getDataspaceIO d) closeIO (basicReadDSet d)
 read :: (Serialize a, HasData d, MonadIO m) => d -> m a
 read d = liftIO $ bracket (getDataspaceIO d) closeIO (basicRead d)
 
--- writeDSet :: (SerializeDSet a, MonadIO m) => a -> m ()
--- writeDSet d = liftIO $ bracket (getDataspaceIO d) closeIO (basicReadDSet d)
+-- | Open dataset and read it using 'readDSet'.
+readAt
+  :: (SerializeDSet a, IsDirectory dir, MonadIO m)
+  => dir      -- ^ File (root will be used) or group
+  -> FilePath -- ^ Path to dataset
+  -> m a
+readAt dir path = liftIO $ withDataset dir path readDSet
 
-write
+-- | Write dataset to HDF5 file.
+writeAt
   :: forall a dir m.
      (SerializeDSet a, IsDirectory dir, MonadIO m)
-  => dir -> FilePath -> a -> m ()
-write (getHID -> dir) path a = liftIO $ evalContT $ do
+  => dir      -- ^ File (root will be used) or group
+  -> FilePath -- ^ Path to dataset
+  -> a        -- ^ Value to write
+  -> m ()
+writeAt (getHID -> dir) path a = liftIO $ evalContT $ do
   c_path <- ContT $ withCString path
-  space  <- ContT $ withDSpace (rank a) $ getExtent putDimension a
+  space  <- ContT $ withDSpace (getRank a) $ getExtent putDimension a
   tid    <- ContT $ withType (typeH5 @(ElementOf a))
   -- FIXME: Variant which returns Dataset
   dset   <- ContT $ bracket
@@ -278,18 +312,22 @@ write (getHID -> dir) path a = liftIO $ evalContT $ do
     ) C.h5d_close
   liftIO $ basicWriteDSet a (Dataset dset)
 
+
+----------------------------------------------------------------
+-- Serialize instances
+----------------------------------------------------------------
+
 instance Element a => SerializeDSet [a] where
   type ElementOf [a] = a
-  rank      _ = 1
+  getRank   _ = 1
   getExtent f = f . length
 instance Element a => Serialize     [a] where
   basicRead dset spc = VS.toList <$> basicRead dset spc
   basicWrite xs dset = basicWrite (VS.fromList xs) dset
 
-
 instance Element a => SerializeDSet (VS.Vector a) where
   type ElementOf (VS.Vector a) = a
-  rank      _ = 1
+  getRank   _ = 1
   getExtent f = f . VS.length
 instance Element a => Serialize     (VS.Vector a) where
   basicRead dset spc = do
@@ -300,8 +338,42 @@ instance Element a => Serialize     (VS.Vector a) where
     VS.unsafeWith xs $ \ptr ->
       unsafeWriteAll dset (typeH5 @a) (castPtr ptr)
 
+deriving via SerializeAsScalar Int8   instance SerializeDSet Int8
+deriving via SerializeAsScalar Int8   instance Serialize     Int8
+deriving via SerializeAsScalar Int16  instance SerializeDSet Int16
+deriving via SerializeAsScalar Int16  instance Serialize     Int16
+deriving via SerializeAsScalar Int32  instance SerializeDSet Int32
+deriving via SerializeAsScalar Int32  instance Serialize     Int32
+deriving via SerializeAsScalar Int64  instance SerializeDSet Int64
+deriving via SerializeAsScalar Int64  instance Serialize     Int64
+deriving via SerializeAsScalar Word8  instance SerializeDSet Word8
+deriving via SerializeAsScalar Word8  instance Serialize     Word8
+deriving via SerializeAsScalar Word16 instance SerializeDSet Word16
+deriving via SerializeAsScalar Word16 instance Serialize     Word16
+deriving via SerializeAsScalar Word32 instance SerializeDSet Word32
+deriving via SerializeAsScalar Word32 instance Serialize     Word32
+deriving via SerializeAsScalar Word64 instance SerializeDSet Word64
+deriving via SerializeAsScalar Word64 instance Serialize     Word64
+deriving via SerializeAsScalar Float  instance SerializeDSet Float
+deriving via SerializeAsScalar Float  instance Serialize     Float
+deriving via SerializeAsScalar Double instance SerializeDSet Double
+deriving via SerializeAsScalar Double instance Serialize     Double
 
-    
+newtype SerializeAsScalar a = SerializeAsScalar a
+  deriving newtype (Storable, Element)
+
+instance Element a => SerializeDSet (SerializeAsScalar a) where
+  type ElementOf (SerializeAsScalar a) = a
+  getRank   _   = 0
+  getExtent _ _ = mempty
+
+instance Element a => Serialize (SerializeAsScalar a) where
+  basicRead dset spc = basicReadScalar dset spc
+  basicWrite a dset = do
+    alloca $ \p -> do poke p a
+                      unsafeWriteAll dset (typeH5 @a) (castPtr p)
+
+
 ----------------------------------------------------------------
 -- Using
 ----------------------------------------------------------------

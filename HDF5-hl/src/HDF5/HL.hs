@@ -70,6 +70,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Catch
 -- import Data.Coerce
+import Data.Functor.Identity
 import Data.Vector.Storable        qualified as VS
 import Data.Vector.Fixed           qualified as F
 import Data.Vector.Fixed.Unboxed   qualified as FU
@@ -384,7 +385,11 @@ deriving via SerializeAsScalar (FP.Vec n a)
 deriving via SerializeAsScalar (FP.Vec n a)
     instance (F.Arity n, Element a, FP.Prim a) => SerializeDSet (FP.Vec n a)
 
+deriving newtype instance Serialize     a => Serialize     (Identity a)
+deriving newtype instance SerializeDSet a => SerializeDSet (Identity a)
 
+-- | Newtype wrapper for derivation of serialization instances as
+--   scalars.
 newtype SerializeAsScalar a = SerializeAsScalar a
   deriving newtype (Storable, Element)
 
@@ -425,3 +430,4 @@ instance (Element a, F.Arity n) => Element (FS.Vec n a) where
 instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
   typeH5 = Array (typeH5 @a) [F.length (undefined :: FP.Vec n a)]
 
+instance Element a => Element (Identity a) where typeH5 = typeH5 @a

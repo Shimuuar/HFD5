@@ -7,6 +7,7 @@
 {-# LANGUAGE ImportQualifiedPost        #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiWayIf                 #-}
+{-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeApplications           #-}
@@ -50,6 +51,12 @@ module HDF5.HL
   , Dataspace
   , dataspaceDim
   , dataspaceExt
+    -- * Data types
+  , Type
+  , tyI8, tyI16, tyI32, tyI64
+  , tyU8, tyU16, tyU32, tyU64
+  , tyF32, tyF64
+  , pattern Array
     -- * Error handling
   , HDF5Error(..)
     -- * Type classes

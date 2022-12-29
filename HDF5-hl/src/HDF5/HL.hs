@@ -80,6 +80,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Catch
 -- import Data.Coerce
+import Data.Bits                   (finiteBitSize)
 import Data.Functor.Identity
 import Data.Vector.Storable        qualified as VS
 import Data.Vector.Fixed           qualified as F
@@ -452,3 +453,13 @@ instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
   typeH5 = Array (typeH5 @a) [F.length (undefined :: FP.Vec n a)]
 
 instance Element a => Element (Identity a) where typeH5 = typeH5 @a
+
+instance Element Int where
+  typeH5 | wordSizeInBits == 64 = tyI64
+         | otherwise            = tyI32
+instance Element Word where
+  typeH5 | wordSizeInBits == 64 = tyU64
+         | otherwise            = tyU32
+
+wordSizeInBits :: Int
+wordSizeInBits = finiteBitSize (0 :: Word)

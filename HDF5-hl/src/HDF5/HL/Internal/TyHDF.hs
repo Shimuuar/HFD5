@@ -1,7 +1,9 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE MagicHash           #-}
 {-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE UnboxedTuples       #-}
 {-# LANGUAGE ViewPatterns        #-}
 -- |
 -- API for working with HDF5 data types. We treat them as immutable
@@ -86,8 +88,13 @@ withType :: Type -> (C.HID -> IO a) -> IO a
 withType (Native hid)     fun = fun hid
 withType (Type hid token) fun = IO $ \s ->
   case fun hid of
+#if MIN_VERSION_base(4,15,0)
     IO action# -> keepAlive# token s action#
-
+#else
+    IO action# -> case action# s of
+      (# s', a #) -> let s'' = touch# token s'
+                     in (# s'', a #)
+#endif
 
 ----------------------------------------------------------------
 --

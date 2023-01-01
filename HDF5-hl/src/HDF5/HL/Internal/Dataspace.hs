@@ -170,7 +170,7 @@ withDSpace
   -> IO a
 withDSpace dim action = case encodeExtent dim of
   Nothing  -> evalContT $ do
-    spc <- ContT $ bracket (C.h5s_create C.h5s_NULL) C.h5s_close
+    spc <- ContT $ bracket (C.h5s_create C.H5S_NULL) C.h5s_close
     liftIO $ action $ Dataspace spc
   Just fld -> evalContT $ do
     let DSpaceWriter write = fld putDimension

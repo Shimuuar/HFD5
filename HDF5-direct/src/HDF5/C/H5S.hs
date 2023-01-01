@@ -1,14 +1,16 @@
 {-# LANGUAGE CApiFFI                  #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE PatternSynonyms          #-}
+{-# LANGUAGE ViewPatterns             #-}
 -- |
 -- API for dataspaces
 module HDF5.C.H5S
   ( -- * Enumerations
     H5SClass(..)
-  , h5s_NO_CLASS
-  , h5s_SCALAR
-  , h5s_SIMPLE
-  , h5s_NULL
+  , pattern H5S_NO_CLASS
+  , pattern H5S_SCALAR
+  , pattern H5S_SIMPLE
+  , pattern H5S_NULL
     -- * Functions
   , h5s_close
   , h5s_create
@@ -33,17 +35,27 @@ import HDF5.C.Types
 newtype H5SClass = H5SClass CInt
   deriving (Show,Eq,Ord)
 
--- | Error
 foreign import capi "hdf5.h value H5S_NO_CLASS" h5s_NO_CLASS :: H5SClass
+foreign import capi "hdf5.h value H5S_SCALAR" h5s_SCALAR :: H5SClass
+foreign import capi "hdf5.h value H5S_SIMPLE" h5s_SIMPLE :: H5SClass
+foreign import capi "hdf5.h value H5S_NULL" h5s_NULL :: H5SClass
+
+-- | Error
+pattern H5S_NO_CLASS :: H5SClass
+pattern H5S_NO_CLASS <- ((==h5s_NO_CLASS) -> True) where H5S_NO_CLASS = h5s_NO_CLASS
 
 -- | Singleton (scalar)
-foreign import capi "hdf5.h value H5S_SCALAR" h5s_SCALAR :: H5SClass
+pattern H5S_SCALAR :: H5SClass
+pattern H5S_SCALAR <- ((==h5s_SCALAR) -> True) where H5S_SCALAR = h5s_SCALAR
 
 -- | Regular grid
-foreign import capi "hdf5.h value H5S_SIMPLE" h5s_SIMPLE :: H5SClass
+pattern H5S_SIMPLE :: H5SClass
+pattern H5S_SIMPLE <- ((==h5s_SIMPLE) -> True) where H5S_SIMPLE = h5s_SIMPLE
 
 -- | Empty set
-foreign import capi "hdf5.h value H5S_NULL" h5s_NULL :: H5SClass
+pattern H5S_NULL :: H5SClass
+pattern H5S_NULL <- ((==h5s_NULL) -> True) where H5S_NULL = h5s_NULL
+
 
 
 ----------------------------------------------------------------

@@ -14,6 +14,7 @@ module HDF5.C.H5S
   , h5s_create
   , h5s_create_simple
   , h5s_is_simple
+  , h5s_get_simple_extent_type
   , h5s_get_simple_extent_ndims
   , h5s_get_simple_extent_npoints
   , h5s_get_simple_extent_dims
@@ -141,8 +142,13 @@ foreign import capi "hdf5.h H5Sget_simple_extent_dims" h5s_get_simple_extent_dim
 --   Returns the number of elements in the dataspace if successful;
 --   otherwise returns a negative value.
 foreign import capi "hdf5.h H5Sget_simple_extent_npoints" h5s_get_simple_extent_npoints
-  :: HID       -- ^ Space ID
+  :: HID       -- ^ Dataspace identifier
   -> IO HSSize
+
+-- | Determines the current class of a dataspace.
+foreign import capi "hdf5.h H5Sget_simple_extent_type" h5s_get_simple_extent_type
+  :: HID         -- ^ Dataspace identifier
+  -> IO H5SClass -- ^ Returns a dataspace class name if successful; otherwise @H5S_NO_CLASS@ (-1).
 
 
 {-
@@ -161,7 +167,6 @@ herr_t       H5Sget_select_hyper_blocklist (hid_t spaceid, hsize_t startblock, h
 hssize_t     H5Sget_select_hyper_nblocks (hid_t spaceid)
 hssize_t     H5Sget_select_npoints (hid_t spaceid)
 H5S_sel_type H5Sget_select_type (hid_t spaceid)
-H5S_class_t  H5Sget_simple_extent_type (hid_t space_id)
 htri_t       H5Sis_regular_hyperslab (hid_t spaceid)
 herr_t       H5Smodify_select (hid_t space1_id, H5S_seloper_t op, hid_t space2_id)
 herr_t       H5Soffset_simple (hid_t space_id, const hssize_t *offset)

@@ -28,9 +28,11 @@ module HDF5.HL.Internal.Types
   , HasData(..)
   , getType
   , getDataspace
+  , withDataspace
   ) where
 
-import Control.Exception
+import Control.Exception      (throw)
+import Control.Monad.Catch
 import Control.Monad.IO.Class
 import Data.Coerce
 import Foreign.Ptr
@@ -105,6 +107,8 @@ getType = liftIO . getTypeIO
 getDataspace :: (HasData a, MonadIO m) => a -> m Dataspace
 getDataspace = liftIO . getDataspaceIO
 
+withDataspace :: (HasData a, MonadIO m, MonadMask m) => a -> (Dataspace -> m b) -> m b
+withDataspace a = bracket (getDataspace a) close
 
 
 ----------------------------------------------------------------

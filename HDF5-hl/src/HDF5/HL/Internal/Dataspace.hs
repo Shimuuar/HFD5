@@ -15,7 +15,7 @@ module HDF5.HL.Internal.Dataspace
   , ParserDim
   , parseDim
   , endOfExtent
-
+  , runParseFromDataspace
     -- * Helpers for working with datasets
   , DSpaceWriter
   , putDimension
@@ -29,6 +29,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Maybe
 import Data.Int
+import Data.Functor
 -- import Data.Monoid
 import Foreign.Marshal
 import Foreign.Ptr
@@ -73,9 +74,9 @@ class IsExtent a where
 
 
 newtype ParserDim m a = ParserDim
-  { _unParserDim :: forall s.
-                    (s -> m (Maybe (s, Dim))) -- Uncons (possibly monadic)
-                 -> (s -> m (Maybe (s, a)))   -- State monad with failure
+  { unParserDim :: forall s.
+                   (s -> m (Maybe (s, Dim))) -- Uncons (possibly monadic)
+                -> (s -> m (Maybe (s, a)))   -- State monad with failure
   }
   deriving Functor
 
@@ -99,6 +100,30 @@ endOfExtent = ParserDim $ \uncons s -> uncons s >>= \case
   Just _  -> pure Nothing
 
 
+runParseFromDataspace :: IsExtent a => Dataspace -> IO (Maybe a)
+runParseFromDataspace (getHID -> hid) =
+  C.h5s_get_simple_extent_type hid >>= \case
+    C.H5S_NULL   -> pure $ decodeNullExtent
+    C.H5S_SCALAR -> pure $ undefined
+    C.H5S_SIMPLE -> evalContT $ do
+      n_dim <- fmap fromIntegral
+             $ liftIO $ C.h5s_get_simple_extent_ndims hid
+      when (n_dim < 0) $ error "Cannot parse extent"
+      -- Allocate buffers
+      p_dim <- ContT $ allocaArray n_dim
+      p_max <- ContT $ allocaArray n_dim
+      liftIO $ do
+        do r <- C.h5s_get_simple_extent_dims hid p_dim p_max
+           when (r < 0) $ error "Cannot parse extent"
+        --
+        let uncons i | i >= n_dim = pure Nothing
+                     | otherwise  = do dim <- Dim <$> (fromIntegral <$> peekElemOff p_dim i)
+                                                  <*> (fromIntegral <$> peekElemOff p_max i)
+                                       pure $ Just (i+1, dim)
+        unParserDim decodeExtent uncons 0 <&> \case
+          Nothing    -> Nothing
+          Just (_,a) -> Just a
+    _ -> error "getDataspace: Cannot obtain dataspace dimension"
 
 
 instance IsExtent () where

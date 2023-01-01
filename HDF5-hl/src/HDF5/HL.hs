@@ -16,17 +16,22 @@
 {-# LANGUAGE ViewPatterns               #-}
 -- |
 module HDF5.HL
-  (
-    -- * File and groups API
+  ( -- * High level API
+    -- ** File operations
     File
   , OpenMode(..)
-  , open
-  , withFile
-  , openDataset
-  , withDataset
+  , openFile
+  , withOpenFile
+  , CreateMode(..)
+  , createFile
+  , withCreateFile
     -- * Datasets
   , Dataset
-    -- ** Properties
+  , openDataset
+  , createDataset
+  , withOpenDataset
+  , withCreateDataset
+    -- ** Dataspace
   , Dim(..)
   , Extent(..)
   , dim
@@ -35,18 +40,18 @@ module HDF5.HL
   , Element(..)
   , SerializeDSet(..)
   , Serialize(..)
-  , readDSet
+  , readDataset
   , read
   , readAt
   , writeAt
   , SerializeAttr(..)
-  , readAttr
-  , writeAttr
     -- ** Attributes
   , Attribute
   , openAttr
   , createAttr
   , withAttr
+  , readAttr
+  , writeAttr
     -- ** Low-level API
   , basicReadBuffer
   , basicReadScalar
@@ -106,25 +111,56 @@ import HDF5.HL.Internal.Dataspace
 import HDF5.C                      qualified as C
 import Prelude hiding (read,readIO)
 
--- | Open HDF5 file. File must be closed by call to 'close'.
-open :: MonadIO m => FilePath -> OpenMode -> m File
-open path mode = liftIO $ withCString path $ \c_path -> do
+
+----------------------------------------------------------------
+-- File API
+----------------------------------------------------------------
+
+-- | Open HDF5 file. This function will throw exception when file
+--   doesn't exists even if it's open for writing. Use 'createFile' to
+--   create new file. Returned handle must be closed using 'close'.
+openFile :: MonadIO m => FilePath -> OpenMode -> m File
+openFile path mode = liftIO $ withCString path $ \c_path -> do
   hid <- checkINV ("Cannot open file " ++ path)
      =<< C.h5f_open c_path (toCParam mode) C.h5p_DEFAULT
   pure $ File hid
 
--- | Open file and pass handle to continuation. It will be closed when
---   continuation finish execution normally or abnormally
-withFile
+-- | Open file using 'openFile' and pass handle to continuation. It
+--   will be closed when continuation finish execution normally or
+--   abnormally.
+withOpenFile
   :: (MonadMask m, MonadIO m)
   => FilePath -> OpenMode -> (File -> m a) -> m a
-withFile path mode = bracket (open path mode) close
+withOpenFile path mode = bracket (openFile path mode) close
 
--- | Open dataset in given location
+-- | Create new HDF5 file or replace existing file. Use 'openFile' to
+--   open existing file for modification. Returned handle must be
+--   closed using 'close'.
+createFile :: MonadIO m => FilePath -> CreateMode -> m File
+createFile path mode = liftIO $ withCString path $ \c_path -> do
+  hid <- checkINV ("Cannot create file " ++ path)
+     =<< C.h5f_create c_path (toCParam mode) C.h5p_DEFAULT C.h5p_DEFAULT
+  pure $ File hid
+
+-- | Create file using 'createFile' and pass handle to
+--   continuation. It will be closed when continuation finish
+--   execution normally or abnormally.
+withCreateFile
+  :: (MonadMask m, MonadIO m)
+  => FilePath -> CreateMode -> (File -> m a) -> m a
+withCreateFile path mode = bracket (createFile path mode) close
+
+
+----------------------------------------------------------------
+-- Dataset API
+----------------------------------------------------------------
+
+-- | Open existing dataset in given location. Returned 'Dataset' must
+--   be closed by call to close.
 openDataset
   :: (MonadIO m, IsDirectory dir)
-  => dir      -- ^ Root
-  -> FilePath -- ^ Path relative to root
+  => dir      -- ^ Location
+  -> FilePath -- ^ Path relative to location
   -> m Dataset
 openDataset (getHID -> hid) path = liftIO $ do
   withCString path $ \c_path -> do
@@ -133,16 +169,51 @@ openDataset (getHID -> hid) path = liftIO $ do
       $ throwIO $ HDF5Error $ "Cannot open dataset " ++ path
     pure $ Dataset r
 
+-- | Create new dataset at given location. Returned 'Dataset' must be
+--   closed by call to 'close'.
+createDataset
+  :: (MonadIO m, IsDirectory dir, IsExtent ext)
+  => dir      -- ^ Location
+  -> FilePath -- ^ Path relative to location
+  -> Type     -- ^ Element type
+  -> ext      -- ^ Dataspace, that is size of dataset
+  -> m Dataset
+createDataset (getHID -> hid) path ty ext = liftIO $ evalContT $ do
+  c_path <- ContT $ withCString path
+  space  <- ContT $ withDSpace  ext
+  tid    <- ContT $ withType    ty
+  liftIO $ fmap Dataset
+         $ checkINV "Unable to create dataset"
+       =<< C.h5d_create hid c_path tid (getHID space)
+           C.h5p_DEFAULT
+           C.h5p_DEFAULT
+           C.h5p_DEFAULT
+
 -- | Open dataset and pass handle to continuation. Dataset will be
 --   closed when continuation finish execution normally or with an
 --   exception.
-withDataset
+withOpenDataset
   :: (MonadMask m, MonadIO m, IsDirectory dir)
   => dir      -- ^ Root
   -> FilePath -- ^ Path relative to root
   -> (Dataset -> m a)
   -> m a
-withDataset dir path = bracket (openDataset dir path) close
+withOpenDataset dir path = bracket (openDataset dir path) close
+
+-- | Create new dataset at given location. Returned 'Dataset' must be
+--   closed by call to 'close'.
+withCreateDataset
+  :: (MonadIO m, MonadMask m, IsDirectory dir, IsExtent ext)
+  => dir      -- ^ Location
+  -> FilePath -- ^ Path relative to location
+  -> Type     -- ^ Element type
+  -> ext      -- ^ Dataspace, that is size of dataset
+  -> (Dataset -> m a)
+  -> m a
+withCreateDataset dir path ty ext = bracket
+  (createDataset dir path ty ext)
+  close
+
 
 ----------------------------------------------------------------
 -- Dataspace API
@@ -170,13 +241,13 @@ dataspaceExt
 dataspaceExt (Dataspace hid) = liftIO $ do
   ndim <- fromIntegral <$> C.h5s_get_simple_extent_ndims hid
   if | ndim < 0  -> error "getDataspace: Cannot obtain dataspace dimension"
-     | ndim == 0 -> pure (Extent [])
+     | ndim == 0 -> pure (Simple [])
      | otherwise -> evalContT $ do
          p_dim <- ContT $ allocaArray ndim
          p_max <- ContT $ allocaArray ndim
          liftIO $ do
            _ <- C.h5s_get_simple_extent_dims hid p_dim p_max
-           Extent <$> sequence
+           Simple <$> sequence
              [ Dim <$> (fromIntegral <$> peekElemOff p_dim i)
                    <*> (fromIntegral <$> peekElemOff p_max i)
              | i <- [0 .. ndim-1]
@@ -221,7 +292,7 @@ createAttr
   -> m ()
 createAttr dir path a = liftIO $ evalContT $ do
   c_path <- ContT $ withCString path
-  space  <- ContT $ withDSpace (getRank a) $ getExtent putDimension a
+  space  <- ContT $ withDSpace (getExtent a)
   tid    <- ContT $ withType (typeH5 @(ElementOf a))
   attr   <- ContT $ bracket
     (checkINV "Cannot create attribute"
@@ -271,8 +342,9 @@ basicReadBuffer dset (Dataspace spc) = do
 ----------------------------------------------------------------
 
 -- | Data type which could be serialized to HDF5 dataset.
-class Element (ElementOf a) => SerializeDSet a where
+class (Element (ElementOf a), IsExtent (ExtentOf a)) => SerializeDSet a where
   type ElementOf a
+  type ExtentOf  a
   -- | Read object using object itself and dataspace associated with
   --   it. This method shouldn't be called directly
   basicReadDSet :: Dataset -> Dataspace -> IO a
@@ -283,10 +355,8 @@ class Element (ElementOf a) => SerializeDSet a where
   basicWriteDSet :: Dataset -> a -> IO ()
   default basicWriteDSet :: (Serialize a) => Dataset -> a -> IO ()
   basicWriteDSet = basicWrite
-  -- | Rank of underlying array
-  getRank :: a -> Int
   -- | Compute dimensions of an array
-  getExtent :: Monoid m => (Int -> m) -> a -> m
+  getExtent :: a -> ExtentOf a
 
 -- | More restrictive version which could be used for both
 class SerializeDSet a => Serialize a where
@@ -307,8 +377,8 @@ writeAttr d = basicWriteAttr d ""
 -- | Read data from already opened dataset. This function work
 --   specifically with datasets and can use its attributes. Use 'read'
 --   to be able to read from attributes as well.
-readDSet :: (SerializeDSet a, MonadIO m) => Dataset -> m a
-readDSet d = liftIO $ bracket (getDataspaceIO d) closeIO (basicReadDSet d)
+readDataset :: (SerializeDSet a, MonadIO m) => Dataset -> m a
+readDataset d = liftIO $ bracket (getDataspaceIO d) closeIO (basicReadDSet d)
 
 -- | Read value from already opened dataset or attribute.
 read :: (Serialize a, HasData d, MonadIO m) => d -> m a
@@ -320,7 +390,7 @@ readAt
   => dir      -- ^ File (root will be used) or group
   -> FilePath -- ^ Path to dataset
   -> m a
-readAt dir path = liftIO $ withDataset dir path readDSet
+readAt dir path = liftIO $ withOpenDataset dir path readDataset
 
 -- | Write dataset to HDF5 file.
 writeAt
@@ -330,19 +400,11 @@ writeAt
   -> FilePath -- ^ Path to dataset
   -> a        -- ^ Value to write
   -> m ()
-writeAt (getHID -> dir) path a = liftIO $ evalContT $ do
-  c_path <- ContT $ withCString path
-  space  <- ContT $ withDSpace (getRank a) $ getExtent putDimension a
-  tid    <- ContT $ withType (typeH5 @(ElementOf a))
-  -- FIXME: Variant which returns Dataset
-  dset   <- ContT $ bracket
-    ( checkINV "Unable to create dataset"
-    =<< C.h5d_create dir c_path tid (getHID space)
-        C.h5p_DEFAULT
-        C.h5p_DEFAULT
-        C.h5p_DEFAULT
-    ) C.h5d_close
-  liftIO $ basicWriteDSet (Dataset dset) a
+writeAt dir path a
+  = liftIO
+  $ withCreateDataset dir path (typeH5 @(ElementOf a)) (getExtent a)
+  $ \dset -> basicWriteDSet dset a
+
 
 
 ----------------------------------------------------------------
@@ -351,24 +413,24 @@ writeAt (getHID -> dir) path a = liftIO $ evalContT $ do
 
 instance Element a => SerializeDSet [a] where
   type ElementOf [a] = a
-  getRank   _ = 1
-  getExtent f = f . length
+  type ExtentOf  [a] = Int
+  getExtent = length
 instance Element a => Serialize     [a] where
   basicRead  dset spc = VS.toList <$> basicRead dset spc
   basicWrite dset xs  = basicWrite dset (VS.fromList xs)
 
 instance (Element a, VU.Unbox a) => SerializeDSet (VU.Vector a) where
   type ElementOf (VU.Vector a) = a
-  getRank   _ = 1
-  getExtent f = f . VU.length
+  type ExtentOf  (VU.Vector a) = Int
+  getExtent = VU.length
 instance (Element a, VU.Unbox a) => Serialize (VU.Vector a) where
   basicRead  dset spc = VG.convert <$> basicRead @(VS.Vector a) dset spc
   basicWrite dset xs  = basicWrite dset (VG.convert xs :: VS.Vector a)
 
 instance (Element a) => SerializeDSet (V.Vector a) where
   type ElementOf (V.Vector a) = a
-  getRank   _ = 1
-  getExtent f = f . V.length
+  type ExtentOf  (V.Vector a) = Int
+  getExtent = V.length
 instance (Element a) => Serialize (V.Vector a) where
   basicRead  dset spc = VG.convert <$> basicRead @(VS.Vector a) dset spc
   basicWrite dset xs  = basicWrite dset (VG.convert xs :: VS.Vector a)
@@ -376,8 +438,8 @@ instance (Element a) => Serialize (V.Vector a) where
 
 instance Element a => SerializeDSet (VS.Vector a) where
   type ElementOf (VS.Vector a) = a
-  getRank   _ = 1
-  getExtent f = f . VS.length
+  type ExtentOf  (VS.Vector a) = Int
+  getExtent = VS.length
 instance Element a => Serialize     (VS.Vector a) where
   basicRead dset spc = do
     n <- dataspaceDim spc
@@ -446,8 +508,8 @@ newtype SerializeAsScalar a = SerializeAsScalar a
 
 instance Element a => SerializeDSet (SerializeAsScalar a) where
   type ElementOf (SerializeAsScalar a) = a
-  getRank   _   = 0
-  getExtent _ _ = mempty
+  type ExtentOf  (SerializeAsScalar a) = ()
+  getExtent _ = ()
 
 instance Element a => Serialize (SerializeAsScalar a) where
   basicRead  dset spc = basicReadScalar dset spc

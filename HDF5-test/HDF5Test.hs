@@ -34,7 +34,7 @@ type HID = C.HID
 
 foo :: IO ()
 foo = do
-  withFile "/run/user/1000/tst.hdf5" OpenRO $ \hdf -> do
+  withOpenFile "/run/user/1000/tst.hdf5" OpenRO $ \hdf -> do
     return ()
     withDataset hdf "dset1" $ \dd -> do
       print =<< H5.getType dd
@@ -75,7 +75,7 @@ foo = do
 
 woo :: IO ()
 woo = do
-  withFile "/run/user/1000/tst.hdf5" OpenRW $ \hdf -> do
+  withOpenFile "/run/user/1000/tst.hdf5" OpenRW $ \hdf -> do
     H5.writeAt hdf "ddd" [1 .. 100::Int32]
     H5.withDataset hdf "ddd" $ \dset -> do
       createAttr dset "a1"    (1 :: Float)
@@ -106,3 +106,22 @@ woo = do
 --   return ()
 
 ----------------------------------------------------------------
+yoyo :: IO ()
+yoyo = do
+  print ( "H5S_NO_CLASS", C.h5s_NO_CLASS)
+  print ( "H5S_SCALAR  ", C.h5s_SCALAR)
+  print ( "H5S_SIMPLE  ", C.h5s_SIMPLE)
+  print ( "H5S_NULL    ", C.h5s_NULL)
+  --
+  spc <- C.h5s_create_simple 0 nullPtr nullPtr
+  print spc
+  print =<< C.h5s_get_simple_extent_ndims spc
+  print =<< C.h5s_get_simple_extent_type  spc
+  --
+  ss <- C.h5s_create C.h5s_SCALAR
+  print ss
+  print =<< C.h5s_get_simple_extent_ndims ss
+  print =<< C.h5s_get_simple_extent_type  ss
+  
+  
+  return ()

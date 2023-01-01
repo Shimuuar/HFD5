@@ -34,7 +34,7 @@ module HDF5.HL
     -- ** Dataspace
   , Dim(..)
   , Extent(..)
-  , dim
+  , rank
   , extent
     -- ** Reading and writing
   , Element(..)
@@ -219,8 +219,8 @@ withCreateDataset dir path ty ext = bracket
 -- Dataspace API
 ----------------------------------------------------------------
 
-dim :: (HasData a, MonadIO m) => a -> m Int
-dim = dataspaceDim <=< getDataspace
+rank :: (HasData a, MonadIO m) => a -> m Int
+rank = dataspaceDim <=< getDataspace
 
 extent :: (HasData a, MonadIO m) => a -> m Extent
 extent = dataspaceExt <=< getDataspace

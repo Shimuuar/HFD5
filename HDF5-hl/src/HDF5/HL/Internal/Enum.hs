@@ -7,6 +7,7 @@
 module HDF5.HL.Internal.Enum
   ( -- * Enumerations
     OpenMode(..)
+  , CreateMode(..)
   , Sign(..)
   , Class(..)
   ) where
@@ -18,14 +19,26 @@ import HDF5.HL.Internal.CCall
 
 -- | Mode for opening files
 data OpenMode
-  = OpenRO -- ^ Open file in read-only mode
-  | OpenRW -- ^ Open file in read-write mode
+  = OpenRO -- ^ Open file in read-only mode.
+  | OpenRW -- ^ Open file in read-write mode.
   deriving stock (Show, Eq)
 
 instance HDF5Param OpenMode where
   type CParam OpenMode = CUInt
   toCParam OpenRO = C.h5f_ACC_RDONLY
   toCParam OpenRW = C.h5f_ACC_RDWR
+
+-- | Mode for opening files
+data CreateMode
+  = CreateTrunc -- ^ Truncate file, if it already exists, erasing all
+                --   data previously stored in the file
+  | CreateExcl  -- ^ Fail if file already exists
+  deriving stock (Show, Eq)
+
+instance HDF5Param CreateMode where
+  type CParam CreateMode = CUInt
+  toCParam CreateTrunc = C.h5f_ACC_TRUNC
+  toCParam CreateExcl  = C.h5f_ACC_EXCL
 
 
 -- | Whether integral value is signed or not

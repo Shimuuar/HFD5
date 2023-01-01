@@ -11,6 +11,7 @@ module HDF5.HL.Internal.Types
   ( -- * Files and groups
     File(..)
   , OpenMode(..)
+  , CreateMode(..)
   , Dataset(..)
   , Attribute(..)
   , Dataspace(..)

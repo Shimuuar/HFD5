@@ -23,9 +23,10 @@ module HDF5.HL.Internal.Dataspace
   ) where
 
 import Control.Applicative
-import Control.Exception
 import Control.Monad
+import Control.Monad.Catch
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Maybe
 import Data.Int
@@ -36,7 +37,8 @@ import Foreign.Ptr
 import Foreign.Storable
 
 import HDF5.HL.Internal.Types
-import HDF5.C qualified as C
+import HDF5.HL.Internal.Error
+import HDF5.C
 
 
 ----------------------------------------------------------------
@@ -99,28 +101,27 @@ endOfExtent = ParserDim $ \uncons s -> uncons s >>= \case
   Nothing -> pure $ Just (s,())
   Just _  -> pure Nothing
 
-
-runParseFromDataspace :: IsExtent a => Dataspace -> IO (Maybe a)
+runParseFromDataspace :: IsExtent a => Dataspace -> HIO (Maybe a)
 runParseFromDataspace (getHID -> hid) =
-  C.h5s_get_simple_extent_type hid >>= \case
-    C.H5S_NULL   -> pure $ decodeNullExtent
-    C.H5S_SCALAR -> pure $ undefined
-    C.H5S_SIMPLE -> evalContT $ do
+  h5s_get_simple_extent_type hid >>= \case
+    H5S_NULL   -> pure $ decodeNullExtent
+    H5S_SCALAR -> pure $ undefined
+    H5S_SIMPLE -> evalContT $ do
       n_dim <- fmap fromIntegral
-             $ liftIO $ C.h5s_get_simple_extent_ndims hid
-      when (n_dim < 0) $ error "Cannot parse extent"
+             $ lift $ h5s_get_simple_extent_ndims hid
+      when (n_dim < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
       -- Allocate buffers
-      p_dim <- ContT $ allocaArray n_dim
-      p_max <- ContT $ allocaArray n_dim
-      liftIO $ do
-        do r <- C.h5s_get_simple_extent_dims hid p_dim p_max
-           when (r < 0) $ error "Cannot parse extent"
+      p_dim <- liftHIO $ ContT $ allocaArray n_dim
+      p_max <- liftHIO $ ContT $ allocaArray n_dim
+      lift $ do
+        do r <- h5s_get_simple_extent_dims hid p_dim p_max
+           when (r < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
         --
         let uncons i | i >= n_dim = pure Nothing
                      | otherwise  = do dim <- Dim <$> (fromIntegral <$> peekElemOff p_dim i)
                                                   <*> (fromIntegral <$> peekElemOff p_max i)
                                        pure $ Just (i+1, dim)
-        unParserDim decodeExtent uncons 0 <&> \case
+        unParserDim decodeExtent (liftIO . uncons) 0 <&> \case
           Nothing    -> Nothing
           Just (_,a) -> Just a
     _ -> error "getDataspace: Cannot obtain dataspace dimension"
@@ -162,11 +163,11 @@ instance (IsExtent a, IsExtent b) => IsExtent (a,b) where
 
 -- | Monoid which is used to fill buffers for calling HDF5 functions.
 newtype DSpaceWriter = DSpaceWriter
-  (  Ptr C.HSize -- Pointer to size
-  -> Ptr C.HSize -- Pointer to maxsize
+  (  Ptr HSize -- Pointer to size
+  -> Ptr HSize -- Pointer to maxsize
   -> Int         -- Guard ptr
   -> Int
-  -> IO Int
+  -> HIO Int
   )
 
 instance Semigroup DSpaceWriter where
@@ -180,10 +181,10 @@ instance Monoid DSpaceWriter where
 putDimension :: Dim -> DSpaceWriter
 putDimension (Dim sz sz_max) = DSpaceWriter go where
   go p_sz p_max i_max i
-    | i >= i_max = error "putDimension: buffer overrun"
-    | otherwise  = do pokeElemOff p_sz  i (fromIntegral sz)
-                      pokeElemOff p_max i (fromIntegral sz_max)
-                      pure $! i + 1
+    | i >= i_max = throwM $ InternalErr "putDimension: buffer overrun"
+    | otherwise  = liftIO $ do pokeElemOff p_sz  i (fromIntegral sz)
+                               pokeElemOff p_max i (fromIntegral sz_max)
+                               pure $! i + 1
 
 
 -- | Create simple dataspace which could e used in bracket-like
@@ -191,20 +192,20 @@ putDimension (Dim sz sz_max) = DSpaceWriter go where
 withDSpace
   :: IsExtent dim
   => dim
-  -> (Dataspace -> IO a)
-  -> IO a
+  -> (Dataspace -> HIO a)
+  -> HIO a
 withDSpace dim action = case encodeExtent dim of
   Nothing  -> evalContT $ do
-    spc <- ContT $ bracket (C.h5s_create C.H5S_NULL) C.h5s_close
-    liftIO $ action $ Dataspace spc
+    spc <- ContT $ bracket (h5s_create H5S_NULL) h5s_close
+    lift $ action $ Dataspace spc
   Just fld -> evalContT $ do
     let DSpaceWriter write = fld putDimension
-    -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
+    -- -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
     let max_rank = 32
-    ptr <- ContT $ allocaArray (max_rank * 2)
+    ptr <- liftHIO $ ContT $ allocaArray (max_rank * 2)
     let ptr_max = plusPtr ptr $ sz * max_rank
-    rank <- liftIO $ write ptr ptr_max max_rank 0
-    spc  <- ContT $ bracket (C.h5s_create_simple (fromIntegral rank) ptr ptr_max) C.h5s_close
-    liftIO $ action $ Dataspace spc
+    rank <- lift  $ write ptr ptr_max max_rank 0
+    spc  <- ContT $ bracket (h5s_create_simple (fromIntegral rank) ptr ptr_max) h5s_close
+    lift $ action $ Dataspace spc
   where
-    sz = sizeOf (undefined :: C.HSize) 
+    sz = sizeOf (undefined :: HSize) 

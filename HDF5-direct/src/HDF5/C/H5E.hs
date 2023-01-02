@@ -25,6 +25,7 @@ module HDF5.C.H5E
     -- ** Callback types
   , H5EAuto
   , H5EWalk
+  , makeWalker
     -- * Functions
   , h5e_close_msg
   , h5e_close_stack
@@ -34,15 +35,6 @@ module HDF5.C.H5E
   , h5e_set_auto
   , h5e_walk
   , h5e_get_msg
-
-  , off_cls_id
-  , off_maj_num
-  , off_min_num
-  , off_line
-  , off_func_name
-  , off_file_name
-  , off_desc
-
   ) where
 
 import Foreign.C
@@ -130,11 +122,13 @@ h5e_error_desc p = castPtr $ plusPtr p (fromIntegral off_desc)
 ----------------------------------------------------------------
 
 -- | Callback to call in case of error
-type H5EAuto = HID -> Ptr () -> IO HErr
+type H5EAuto = HID -> Ptr () -> HIO HErr
 
 -- | Callback for traversing error stack
-type H5EWalk = CUInt -> Ptr H5EError -> Ptr () -> IO HErr
+type H5EWalk = CUInt -> Ptr H5EError -> Ptr () -> HIO HErr
 
+foreign import ccall "wrapper"
+  makeWalker :: H5EWalk -> HIO (FunPtr H5EWalk)
 
 ----------------------------------------------------------------
 -- Wrapper functions
@@ -142,15 +136,15 @@ type H5EWalk = CUInt -> Ptr H5EError -> Ptr () -> IO HErr
 
 -- | Closes an error message.
 foreign import capi "hdf5.h H5Eclose_msg" h5e_close_msg
-  :: HID     -- ^ @err_id@ An error message identifier
-  -> IO HErr -- ^ Returns a non-negative value if successful;
-             --   otherwise returns a negative value.
+  :: HID      -- ^ @err_id@ An error message identifier
+  -> HIO HErr -- ^ Returns a non-negative value if successful;
+              --   otherwise returns a negative value.
 
 -- | Closes an error stack handle. 
 foreign import capi "hdf5.h H5Eclose_stack" h5e_close_stack
-  :: HID     -- ^ @stack_id@ Error stack identifier
-  -> IO HErr -- ^ Returns a non-negative value if successful;
-             --   otherwise returns a negative value.
+  :: HID      -- ^ @stack_id@ Error stack identifier
+  -> HIO HErr -- ^ Returns a non-negative value if successful;
+              --   otherwise returns a negative value.
 
 
 
@@ -158,13 +152,13 @@ foreign import capi "hdf5.h H5Eclose_stack" h5e_close_stack
 -- | Creates a new, empty error stack. Use H5Eclose_stack() to close
 --   the error stack identifier returned by this function.
 foreign import capi "hdf5.h H5Ecreate_stack" h5e_create_stack
-  :: IO HID -- ^ Returns an error stack identifier if successful;
-            --   otherwise returns @H5I_INVALID_HID@.
+  :: HIO HID -- ^ Returns an error stack identifier if successful;
+             --   otherwise returns @H5I_INVALID_HID@.
 
 -- | Returns a copy of the current error stack.
 foreign import capi "hdf5.h H5Eget_current_stack" h5e_get_current_stack
-  :: IO HID -- ^ Returns an error stack identifier if successful;
-            --   otherwise returns @H5I_INVALID_HID@.
+  :: HIO HID -- ^ Returns an error stack identifier if successful;
+             --   otherwise returns @H5I_INVALID_HID@.
 
 -- | @H5Eget_auto2@ returns the settings for the automatic error stack
 --   traversal function, @func@, and its data, @client_data@, that are
@@ -184,7 +178,7 @@ foreign import ccall "hdf5.h H5Eget_auto2" h5e_get_auto
      --   an error condition
   -> Ptr (Ptr ()) -- ^ @client_data@ Data currently set to be passed
                   --   to the error function
-  -> IO HErr
+  -> HIO HErr
 -- NOTE: capi chokes on function pointers
 
 -- | Turns automatic error printing on or off.
@@ -215,7 +209,7 @@ foreign import capi "hdf5.h H5Eset_auto2" h5e_set_auto
   :: HID            -- ^ @estack_id@ Error stack identifier
   -> FunPtr H5EAuto -- ^ Function to be called upon an error condition
   -> Ptr ()         -- ^ @client_data@ Data passed to the error function
-  -> IO HErr        -- ^ Returns a non-negative value if successful;
+  -> HIO HErr       -- ^ Returns a non-negative value if successful;
                     --   otherwise returns a negative value.
 
 
@@ -247,7 +241,7 @@ foreign import capi "hdf5.h H5Ewalk2" h5e_walk
                     --   stack is to be walked
   -> FunPtr H5EWalk -- ^ @func@ Function to be called for each error encountered 
   -> Ptr ()         -- ^ @client_data@ Data to be passed to func
-  -> IO HErr        -- ^ Returns a non-negative value if successful;
+  -> HIO HErr       -- ^ Returns a non-negative value if successful;
                     --   otherwise returns a negative value.
 
 -- | @H5Eget_msg@ retrieves the error message including its length and
@@ -263,7 +257,7 @@ foreign import capi "hdf5.h H5Eget_msg" h5e_get_msg
   -> Ptr H5EType -- ^ @[out]@ @type@ The type of the error message
   -> Ptr CChar   -- ^ @msg@ Error message buffer
   -> CSize       -- ^ @size@ The length of error message to be returned by this function 
-  -> IO CSize    -- ^ Returns the size of the error message in bytes
+  -> HIO CSize   -- ^ Returns the size of the error message in bytes
                  --   on success; otherwise returns a negative value.
 
 {-

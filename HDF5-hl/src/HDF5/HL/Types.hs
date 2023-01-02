@@ -13,8 +13,6 @@ module HDF5.HL.Types
   , Attribute
     -- * Data types
   , Type
-    -- * Exceptions
-  , HDF5Error(..)
     -- * Type classes
     -- ** HDF objects
   , IsObject

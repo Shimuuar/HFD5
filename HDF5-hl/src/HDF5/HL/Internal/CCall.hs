@@ -6,11 +6,7 @@
 -- Utilities for calling C functions
 module HDF5.HL.Internal.CCall
   ( -- * Exceptions
-    HDF5Error(..)
-  , ObjTag(..)
-    -- ** Calling C functions
-  , convertHErr
-  , checkINV
+    ObjTag(..)
     -- * Internal type classes
   , HDF5Param(..)
   , HDF5Enum(..)
@@ -32,31 +28,6 @@ data ObjTag
   | TagAttribute
   | TagDataspace
   deriving (Show,Eq,Ord)
-
--- | Error during HDF5 call
-data HDF5Error
-  = HDF5Error String
-  | CastError !ObjTag !ObjTag
-  deriving stock Show
-
-instance Exception HDF5Error
-
--- | Convert C error code to haskell exception
-convertHErr
-  :: String    -- ^ Error message in case of failure
-  -> IO C.HErr -- ^ Function to call
-  -> IO ()
--- FIXME: We need to extract full error stack from exception
-convertHErr msg io = io >>= \case
-  C.HErrored -> throwIO $ HDF5Error msg
-  C.HOK      -> pure ()
-
--- | Check that HID is not invalid
-checkINV :: String -> C.HID -> IO C.HID
-checkINV msg hid
-  | hid == C.h5i_INVALID_HID = throwIO $ HDF5Error msg
-  | otherwise                = pure hid
-
 
 ----------------------------------------------------------------
 -- Enumerations and constants

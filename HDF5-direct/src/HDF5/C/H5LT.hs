@@ -50,7 +50,7 @@ foreign import capi "hdf5_hl.h H5LTdtype_to_text" h5lt_dtype_to_text
   -> H5LTLang  -- ^ The language used to describe the datatype. The
                --   currently supported language is H5LT_DDL.
   -> Ptr CSize -- ^ The size of buffer needed to store the text description.
-  -> IO HErr
+  -> HIO HErr
 
 {-
 H5_HLDLL herr_t H5LTmake_dataset (hid_t loc_id, const char *dset_name, int rank, const hsize_t *dims, hid_t type_id, const void *buffer)

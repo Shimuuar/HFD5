@@ -32,3 +32,4 @@ Library
         HDF5.HL.Internal.TyHDF
         HDF5.HL.Internal.Dataspace
         HDF5.HL.Internal.Types
+        HDF5.HL.Internal.Error

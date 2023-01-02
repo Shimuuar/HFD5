@@ -15,8 +15,6 @@ module HDF5.HL.Internal.Types
   , Dataset(..)
   , Attribute(..)
   , Dataspace(..)
-    -- * Exceptions
-  , HDF5Error(..)
     -- * Type classes
   , Closable(..)
   , close
@@ -36,11 +34,11 @@ import Control.Monad.Catch
 import Control.Monad.IO.Class
 import Data.Coerce
 import Foreign.Ptr
-import HDF5.C qualified as C
+import HDF5.C
 import HDF5.HL.Internal.CCall
 import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.TyHDF
-
+import HDF5.HL.Internal.Error
 
 ----------------------------------------------------------------
 -- Type classes
@@ -50,18 +48,18 @@ import HDF5.HL.Internal.TyHDF
 --   explicitly in order to avoid resource leaks. This is utility
 --   class which allows to use same function to all of them.
 class Closable a where
-  closeIO :: a -> IO ()
+  basicClose :: a -> HIO ()
 
--- | Lifted variant of 'closeIO'
+-- | Public API variant of close function
 close :: (Closable a, MonadIO m) => a -> m ()
-close = liftIO . closeIO
+close = liftIO . runHIO . basicClose
 
 
 
 -- | Some HDF5 object. 
 class IsObject a where
-  getHID        :: a -> C.HID
-  unsafeFromHID :: C.HID -> a
+  getHID        :: a -> HID
+  unsafeFromHID :: HID -> a
   getTag        :: ObjTag
 
 -- | Cast one object to another object
@@ -72,8 +70,10 @@ castObj a | getTag @a == getTag @b = Just $! unsafeFromHID $ getHID a
 -- | Cast one object to another object. In case of failure throw
 --   exception 'CastError'.
 castObj' :: forall a b. (IsObject a, IsObject b) => a -> b
-castObj' a | getTag @a == getTag @b = unsafeFromHID $ getHID a
-          | otherwise               = throw $ CastError (getTag @a) (getTag @b)
+castObj' a
+  -- FIXME: do we need this function???
+  | getTag @a == getTag @b = unsafeFromHID $ getHID a
+  | otherwise              = error "castObj' failed"
 
   
 -- | HDF5 entities that could be used in context where group is
@@ -86,26 +86,26 @@ class IsObject a => HasAttrs a
 -- | HDF5 entities which contains data that could be 
 class IsObject a => HasData a where
   -- | Get type of object
-  getTypeIO      :: a -> IO Type
+  getTypeIO      :: a -> HIO Type
   -- | Get dataspace associated with object
-  getDataspaceIO :: a -> IO Dataspace
+  getDataspaceIO :: a -> HIO Dataspace
   -- | Read all content of object
   unsafeReadAll  :: a      -- ^ Object handle
                  -> Type   -- ^ Type of in-memory elements 
                  -> Ptr () -- ^ Buffer to read to
-                 -> IO ()
+                 -> HIO ()
   -- | Write full dataset at once
   unsafeWriteAll :: a      -- ^ Object handle
                  -> Type   -- ^ Type of in-memory elements
                  -> Ptr () -- ^ Buffer with data
-                 -> IO ()
+                 -> HIO ()
                  
   
 getType :: (HasData a, MonadIO m) => a -> m Type
-getType = liftIO . getTypeIO
+getType = liftIO . runHIO . getTypeIO
 
 getDataspace :: (HasData a, MonadIO m) => a -> m Dataspace
-getDataspace = liftIO . getDataspaceIO
+getDataspace = liftIO . runHIO . getDataspaceIO
 
 withDataspace :: (HasData a, MonadIO m, MonadMask m) => a -> (Dataspace -> m b) -> m b
 withDataspace a = bracket (getDataspace a) close
@@ -116,23 +116,23 @@ withDataspace a = bracket (getDataspace a) close
 ----------------------------------------------------------------
 
 -- | Handle for working with HDF5 file
-newtype File = File C.HID
+newtype File = File HID
   deriving stock (Show,Eq,Ord)
 
 -- | Handle for working with group (directory)
-newtype Group = Group C.HID
+newtype Group = Group HID
   deriving stock (Show,Eq,Ord)
 
 -- | Handle for dataset
-newtype Dataset = Dataset C.HID
+newtype Dataset = Dataset HID
   deriving stock (Show,Eq,Ord)
 
 -- | Handle for attribute
-newtype Attribute = Attribute C.HID
+newtype Attribute = Attribute HID
   deriving stock (Show,Eq,Ord)
 
 -- | Handle for dataspace
-newtype Dataspace = Dataspace C.HID
+newtype Dataspace = Dataspace HID
   deriving stock (Show,Eq,Ord)
 
 
@@ -163,20 +163,20 @@ instance IsObject Dataset where
 
 instance HasData Dataset where
   getTypeIO (Dataset hid) = unsafeNewType $ do
-    checkINV "Cannot read type from dataset" =<< C.h5d_get_type hid
+    checkHID "Cannot read type from dataset" =<< h5d_get_type hid
   getDataspaceIO (Dataset hid) = Dataspace <$> do
-    checkINV "Cannot read dataspace from dataset" =<< C.h5d_get_space hid
+    checkHID "Cannot read dataspace from dataset" =<< h5d_get_space hid
   unsafeReadAll (Dataset hid) ty buf = withType ty $ \tid ->
-    convertHErr "Reading from dataset failed" $ C.h5d_read hid tid
-      C.h5s_ALL
-      C.h5s_ALL
-      C.h5p_DEFAULT
+    checkHErr "Reading from dataset failed" =<< h5d_read hid tid
+      h5s_ALL
+      h5s_ALL
+      h5p_DEFAULT
       (castPtr buf)
   unsafeWriteAll (Dataset hid) ty buf = withType ty $ \tid ->
-    convertHErr "Reading to dataset failed" $ C.h5d_write hid tid
-      C.h5s_ALL
-      C.h5s_ALL
-      C.h5p_DEFAULT
+    checkHErr "Reading to dataset failed" =<< h5d_write hid tid
+      h5s_ALL
+      h5s_ALL
+      h5p_DEFAULT
       buf
 
 instance HasAttrs Dataset
@@ -190,15 +190,15 @@ instance IsObject Attribute where
 
 instance HasData Attribute where
   getTypeIO (Attribute hid) = unsafeNewType $ do
-    checkINV "Cannot read type from attribute" =<< C.h5a_get_type hid
+    checkHID "Cannot read type from attribute" =<< h5a_get_type hid
   getDataspaceIO (Attribute hid) = Dataspace <$> do
-    checkINV "Cannot read dataspace from dataset" =<< C.h5a_get_space hid
+    checkHID "Cannot read dataspace from dataset" =<< h5a_get_space hid
   unsafeReadAll (Attribute hid) ty buf = withType ty $ \tid ->
-    convertHErr "Reading from attribute failed" $
-      C.h5a_read hid tid (castPtr buf)
+    checkHErr "Reading from attribute failed" =<<
+      h5a_read hid tid (castPtr buf)
   unsafeWriteAll (Attribute hid) ty buf = withType ty $ \tid ->
-    convertHErr "Writing of attribute failed" $
-      C.h5a_write hid tid (castPtr buf)
+    checkHErr "Writing of attribute failed" =<<
+      h5a_write hid tid (castPtr buf)
 
 ----------------
 
@@ -210,15 +210,15 @@ instance IsObject Dataspace where
 
 
 instance Closable File where
-  closeIO (File hid) = convertHErr "Unable to close file" $ C.h5f_close hid
+  basicClose (File hid) = checkHErr "Unable to close file" =<< h5f_close hid
 instance Closable Dataset where
-  closeIO (Dataset hid) = convertHErr "Unable to close dataset" $ C.h5d_close hid
+  basicClose (Dataset hid) = checkHErr "Unable to close dataset" =<< h5d_close hid
 instance Closable Attribute where
-  closeIO (Attribute hid) = convertHErr "Unable to close attribute" $ C.h5a_close hid
+  basicClose (Attribute hid) = checkHErr "Unable to close attribute" =<< h5a_close hid
 instance Closable Dataspace where
-  closeIO (Dataspace hid) = convertHErr "Unable to close dataspace" $ C.h5s_close hid
+  basicClose (Dataspace hid) = checkHErr "Unable to close dataspace" =<< h5s_close hid
 
 
 -- instance Closable Group where
---   closeIO (Group hid) = convertHErr "Unable to close group" $ C.h5g_close hid
+--   closeIO (Group hid) = convertHErr "Unable to close group" $ h5g_close hid
 

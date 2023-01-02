@@ -19,9 +19,13 @@ module HDF5.C.Types
   , pattern HErrored
   , HSize
   , HSSize
-    -- * Types
+    -- * IO wrapper
+  , HIO(..)
   ) where
 
+
+import Control.Monad.Catch
+import Control.Monad.IO.Class
 import Data.Int
 import Foreign.C
 import Foreign.Storable
@@ -64,3 +68,11 @@ pattern HOK      <- HErr ((>=0) -> True)
 
 type HSize  = CULong
 type HSSize = CLong
+
+-- | Newtype wrapper for IO for working with HDF5 files. HDF5 could be
+--   compiled in thread-safe of unsafe manner. In order to use it
+--   safely we must protect calls to HDF by lock. HIO allows to
+--   compose calls that must be protected by locks.
+newtype HIO a = HIO { unHIO :: IO a }
+  deriving newtype ( Functor, Applicative, Monad, MonadIO
+                   , MonadThrow, MonadCatch, MonadMask)

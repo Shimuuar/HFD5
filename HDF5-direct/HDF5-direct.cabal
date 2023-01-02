@@ -21,6 +21,8 @@ Library
   extra-source-files: cbits/hdf5-hs.h
   --
   Build-Depends:    base         >=4.12 && <5
+                  , exceptions   >=0.10
+                  , transformers
   Exposed-modules:
         HDF5.C
         HDF5.C.Types

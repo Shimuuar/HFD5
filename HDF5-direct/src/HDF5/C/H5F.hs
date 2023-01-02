@@ -44,7 +44,7 @@ foreign import capi "hdf5.h value H5F_ACC_SWMR_READ"  h5f_ACC_SWMR_READ  :: CUIn
 foreign import capi "hdf5.h H5Fis_accessible" h5f_is_accessible
   :: CString -- ^ Name of a file
   -> HID     -- ^ File access property list identifier
-  -> IO HTri
+  -> HIO HTri
 
 -- | @H5Fcreate@ is the primary function for creating HDF5 files; it
 --   creates a new HDF5 file with the specified name and property lists.
@@ -61,7 +61,7 @@ foreign import capi "hdf5.h H5Fcreate" h5f_create
   -- ^ @fcpl_id@ File creation property list identifier
   -> HID
   -- ^ @fapl_id@ File access property list identifier
-  -> IO HID
+  -> HIO HID
 
 -- | @H5Fopen@ is the primary function for accessing existing HDF5
 --   files. This function opens the named file in the specified access
@@ -91,7 +91,7 @@ foreign import capi "hdf5.h H5Fopen" h5f_open
   --   scenario.
   -> HID
   -- ^ File access property list identifier
-  -> IO HID
+  -> HIO HID
 
 -- | returns a new file identifier for an already-open HDF5 file, as
 --   specified by file_id. Both identifiers share caches and other
@@ -100,7 +100,7 @@ foreign import capi "hdf5.h H5Fopen" h5f_open
 --   mounted on it.
 foreign import capi "hdf5.h H5Freopen" h5f_reopen
   :: HID    -- ^ Identifier of a file for which an additional identifier is required
-  -> IO HID
+  -> HIO HID
 
 
 -- | Terminates access to an HDF5 file (specified by file_id) by
@@ -112,7 +112,7 @@ foreign import capi "hdf5.h H5Freopen" h5f_reopen
 --   be fully closed and access will end.
 foreign import capi "hdf5.h H5Fclose" h5f_close
   :: HID     -- ^ File identifier
-  -> IO HErr
+  -> HIO HErr
 
 -- | Deletes an HDF5 file filename with a file access property list
 --   @fapl_id@. The @fapl_id@ should be configured with the same VOL
@@ -142,7 +142,7 @@ foreign import capi "hdf5.h H5Fclose" h5f_close
 foreign import capi "hdf5.h H5Fdelete" h5f_delete
   :: CString -- ^ Name of file to delete
   -> HID     -- ^ @fapl_id@ File access property list identifier
-  -> IO HErr
+  -> HIO HErr
 
 {-
 herr_t   H5Fflush (hid_t object_id, H5F_scope_t scope)

@@ -36,7 +36,7 @@ foreign import capi "hdf5.h H5Dopen2" h5d_open2
   :: HID     -- ^ @loc_id@
   -> CString -- ^ Name of dataset to open
   -> HID     -- ^ Dataset access property list identifier
-  -> IO HID
+  -> HIO HID
 
 -- | @H5Dcreate2@ creates a new dataset named name at the location
 --   specified by loc_id, and associates constant and initial
@@ -81,7 +81,7 @@ foreign import capi "hdf5.h H5Dcreate2" h5d_create
   -> HID     -- ^ @lcpl_id@ Link creation property list identifier
   -> HID     -- ^ @dcpl_id@ Dataset creation property list identifier
   -> HID     -- ^ @dapl_id@ Dataset access property list identifier
-  -> IO HID  -- ^ Returns a dataset identifier if successful;
+  -> HIO HID -- ^ Returns a dataset identifier if successful;
              --   otherwise returns @H5I_INVALID_HID@.
 
 
@@ -92,7 +92,7 @@ foreign import capi "hdf5.h H5Dcreate2" h5d_create
 --   negative value.
 foreign import capi "hdf5.h H5Dclose" h5d_close
   :: HID    -- ^ Dataset identifier
-  -> IO HErr
+  -> HIO HErr
 
 -- | @H5Dget_type@ returns an identifier of a copy of the datatype for
 --   a dataset.
@@ -102,7 +102,7 @@ foreign import capi "hdf5.h H5Dclose" h5d_close
 --   read-only.
 foreign import capi "hdf5.h H5Dget_type" h5d_get_type
   :: HID   -- ^ Dataset identifier
-  -> IO HID
+  -> HIO HID
 
 
 -- | @H5Dget_space@ makes a copy of the dataspace of the dataset
@@ -116,7 +116,7 @@ foreign import capi "hdf5.h H5Dget_type" h5d_get_type
 --   Returns a dataspace identifier if successful; otherwise returns H5I_INVALID_HID
 foreign import capi "hdf5.h H5Dget_space" h5d_get_space
   :: HID    -- ^ Dataset identifier
-  -> IO HID
+  -> HIO HID
 
 -- | @H5Dread@ reads a dataset, specified by its identifier @dset_id@,
 --   from the file into an application memory buffer buf. Data
@@ -149,7 +149,7 @@ foreign import capi "hdf5.h H5Dread" h5d_read
   -> HID  -- ^ @file_space_id@ Identifier of the dataset's dataspace in the file
   -> HID  -- ^ @dxpl_id@ Identifier of a transfer property list
   -> Ptr ()
-  -> IO HErr
+  -> HIO HErr
 
 -- | @H5Dwrite@ writes a (partial) dataset, specified by its
 --   identifier @dset_id@, from the application memory buffer buf into
@@ -185,7 +185,7 @@ foreign import capi "hdf5.h H5Dwrite" h5d_write
   -> HID   -- ^ @file_space_id@ Identifier of the dataset's dataspace in the file
   -> HID   -- ^ @dxpl_id@ Dataset transfer property list identifier
   -> Ptr x -- ^ @buf@ Buffer with data to be written to the file
-  -> IO HErr
+  -> HIO HErr
 
 {-
 hid_t   H5Dcreate_anon (hid_t loc_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id)

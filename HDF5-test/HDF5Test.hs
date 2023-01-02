@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
@@ -20,8 +21,9 @@ import Foreign.Storable
 import Foreign.Ptr
 import Foreign.C
 import Foreign.Marshal.Array
+import System.IO.Unsafe
 
-import HDF5.C qualified as C
+import HDF5.C
 import HDF5.HL as H5
 import HDF5.HL.Types
 import HDF5.HL.Internal.CCall
@@ -29,11 +31,6 @@ import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Internal.Types
 ----------------------------------------------------------------
 
-type HID = C.HID
-
-
-
-----------------------------------------------------------------
 
 -- foo :: IO ()
 -- foo = do
@@ -132,26 +129,23 @@ errr = do
   -- putStrLn "\n\n\n----------------------------------------------------------------"
   -- print =<< C.h5e_set_auto C.h5e_DEFAULT nullFunPtr nullPtr
   (() <$ H5.openFile "/run/user/1000/XXX.hdf5" OpenRW) `catch` (print @SomeException)
-  --
-  callback <- mkWalker $ \i p p2 -> do
-    print (i,p,p2)
-    --
-    m_maj <- peek (C.h5e_error_maj_num   p)
-    m_min <- peek (C.h5e_error_min_num   p)
-    --
-    allocaArray 1024 $ \buf -> do
-      _ <- C.h5e_get_msg m_maj nullPtr buf 1024
-      putStrLn =<< peekCString buf
-      _ <- C.h5e_get_msg m_min nullPtr buf 1024
-      putStrLn =<< peekCString buf
-      pure ()
-    putStrLn =<< peekCString =<< peek (C.h5e_error_func_name p)
-    putStrLn =<< peekCString =<< peek (C.h5e_error_file_name p)
-    putStrLn =<< peekCString =<< peek (C.h5e_error_desc      p)
-    pure (C.HErr 0)
-  print =<< C.h5e_walk C.h5e_DEFAULT C.H5E_WALK_DOWNWARD callback nullPtr
+  -- --
+  -- callback <- mkWalker $ \i p p2 -> do
+  --   print (i,p,p2)
+  --   --
+  --   m_maj <- peek (C.h5e_error_maj_num   p)
+  --   m_min <- peek (C.h5e_error_min_num   p)
+  --   --
+  --   allocaArray 1024 $ \buf -> do
+  --     _ <- C.h5e_get_msg m_maj nullPtr buf 1024
+  --     putStrLn =<< peekCString buf
+  --     _ <- C.h5e_get_msg m_min nullPtr buf 1024
+  --     putStrLn =<< peekCString buf
+  --     pure ()
+  --   putStrLn =<< peekCString =<< peek (C.h5e_error_func_name p)
+  --   putStrLn =<< peekCString =<< peek (C.h5e_error_file_name p)
+  --   putStrLn =<< peekCString =<< peek (C.h5e_error_desc      p)
+  --   pure (C.HErr 0)
+  -- print =<< C.h5e_walk C.h5e_DEFAULT C.H5E_WALK_DOWNWARD callback nullPtr
+  pure ()
 
-
-
-foreign import ccall "wrapper"
-  mkWalker :: C.H5EWalk -> IO (FunPtr C.H5EWalk)

@@ -31,7 +31,7 @@ module HDF5.HL
   , createDataset
   , withOpenDataset
   , withCreateDataset
-    -- ** Dataspace
+    -- ** Dataspace information
   , Dim(..)
   , Extent(..)
   , rank
@@ -55,9 +55,9 @@ module HDF5.HL
     -- ** Low-level API
   , basicReadBuffer
   , basicReadScalar
-    -- ** Dataspaces
+    -- * Dataspaces
   , Dataspace
-  , dataspaceDim
+  , dataspaceRank
   , dataspaceExt
     -- * Data types
   , Type
@@ -219,39 +219,36 @@ withCreateDataset dir path ty ext = bracket
 -- Dataspace API
 ----------------------------------------------------------------
 
-rank :: (HasData a, MonadIO m) => a -> m Int
-rank = dataspaceDim <=< getDataspace
+rank :: (HasData a, MonadIO m) => a -> m (Maybe Int)
+rank a = liftIO $ withDataspace a dataspaceRank
 
-extent :: (HasData a, MonadIO m) => a -> m Extent
-extent = dataspaceExt <=< getDataspace
+-- | Compute extent of an object. Returns nothing when extent has
+--   unexpected shape. E.g. if 2D array is expected but object is 1D
+--   array.
+extent :: (HasData a, MonadIO m) => a -> m (Maybe Extent)
+extent a = liftIO $ withDataspace a runParseFromDataspace
 
-dataspaceDim
+dataspaceRank
   :: (MonadIO m)
   => Dataspace
-  -> m Int
-dataspaceDim (Dataspace hid) = liftIO $ do
-  ndim <- fromIntegral <$> C.h5s_get_simple_extent_ndims hid
-  if | ndim < 0  -> error "Can't get dimensions"
-     | otherwise -> pure ndim
+  -> m (Maybe Int)
+dataspaceRank (Dataspace hid) = liftIO $ do
+  C.h5s_get_simple_extent_type hid >>= \case
+    C.H5S_NULL   -> pure   Nothing
+    C.H5S_SCALAR -> pure $ Just 0
+    C.H5S_SIMPLE -> do
+      n <- C.h5s_get_simple_extent_ndims hid
+      when (n < 0) $ error "Cannot parse extent"
+      pure $ Just (fromIntegral n)
+    _ -> error "getDataspace: Cannot obtain dataspace dimension"
 
+-- | Parse extent of dataspace. Returns @Nothing@ if dataspace doens't
+--   match expected shape.
 dataspaceExt
-  :: (MonadIO m)
+  :: (MonadIO m, IsExtent ext)
   => Dataspace
-  -> m Extent
-dataspaceExt (Dataspace hid) = liftIO $ do
-  ndim <- fromIntegral <$> C.h5s_get_simple_extent_ndims hid
-  if | ndim < 0  -> error "getDataspace: Cannot obtain dataspace dimension"
-     | ndim == 0 -> pure (Simple [])
-     | otherwise -> evalContT $ do
-         p_dim <- ContT $ allocaArray ndim
-         p_max <- ContT $ allocaArray ndim
-         liftIO $ do
-           _ <- C.h5s_get_simple_extent_dims hid p_dim p_max
-           Simple <$> sequence
-             [ Dim <$> (fromIntegral <$> peekElemOff p_dim i)
-                   <*> (fromIntegral <$> peekElemOff p_max i)
-             | i <- [0 .. ndim-1]
-             ]
+  -> m (Maybe ext)
+dataspaceExt spc = liftIO $ runParseFromDataspace spc
 
 ----------------------------------------------------------------
 -- Attributes
@@ -442,8 +439,8 @@ instance Element a => SerializeDSet (VS.Vector a) where
   getExtent = VS.length
 instance Element a => Serialize     (VS.Vector a) where
   basicRead dset spc = do
-    n <- dataspaceDim spc
-    when (n /= 1) $ error "Invalid dimention"
+    n <- dataspaceRank spc
+    when (n /= Just 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
   basicWrite dset xs = do
     VS.unsafeWith xs $ \ptr ->

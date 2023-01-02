@@ -66,8 +66,7 @@ foreign import capi "hdf5.h value H5S_ALL"            h5s_ALL         :: HID
 --   deadlock.
 runHIO :: HIO a -> IO a
 runHIO (HIO io)
-  | is_threadsafe == 0 =
-    disabledAutoPrint `seq` withMVar mutex (const io)
+  | is_threadsafe == 0 = withMVar mutex $ \_ -> disabledAutoPrint `seq` io
   -- FIXME: calls are safe but error handling is wrong. HDF5 error
   --        stack is stored in thread local storage and our thread may
   --        migrate to another capability and we'll look at wrong

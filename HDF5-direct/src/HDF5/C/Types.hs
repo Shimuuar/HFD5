@@ -1,9 +1,10 @@
-{-# LANGUAGE CApiFFI                  #-}
-{-# LANGUAGE DeriveGeneric            #-}
-{-# LANGUAGE DerivingStrategies       #-}
-{-# LANGUAGE ForeignFunctionInterface #-}
-{-# LANGUAGE PatternSynonyms          #-}
-{-# LANGUAGE ViewPatterns             #-}
+{-# LANGUAGE CApiFFI                    #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE ForeignFunctionInterface   #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE ViewPatterns               #-}
 -- |
 -- Newtype wrappers over data types defined by C API of HDF5.
 module HDF5.C.Types
@@ -23,6 +24,7 @@ module HDF5.C.Types
 
 import Data.Int
 import Foreign.C
+import Foreign.Storable
 import GHC.Generics (Generic)
 
 
@@ -32,7 +34,8 @@ import GHC.Generics (Generic)
 
 -- | Type of IDs to return to users
 newtype HID = HID Int64
-  deriving stock (Show,Eq,Ord,Generic)
+  deriving stock   (Show,Eq,Ord,Generic)
+  deriving newtype (Storable)
 
 -- | Three-valued Boolean type. Functions that return htri_t however
 --   return zero (false), positive (true), or negative (failure).

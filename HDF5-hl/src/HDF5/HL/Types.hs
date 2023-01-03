@@ -18,12 +18,9 @@ module HDF5.HL.Types
   , IsObject
   , IsDirectory
   , HasData(..)
-  , getType
-  , getDataspace
   , HasAttrs
     -- ** Closing objects
   , Closable(..)
-  , close
   ) where
 
 import HDF5.HL.Internal.Types

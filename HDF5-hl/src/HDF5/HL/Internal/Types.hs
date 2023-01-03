@@ -17,21 +17,16 @@ module HDF5.HL.Internal.Types
   , Dataspace(..)
     -- * Type classes
   , Closable(..)
-  , close
   , IsObject(..)
   , castObj
   , castObj'
   , IsDirectory
   , HasAttrs
   , HasData(..)
-  , getType
-  , getDataspace
   , withDataspace
   ) where
 
-import Control.Exception      (throw)
 import Control.Monad.Catch
-import Control.Monad.IO.Class
 import Data.Coerce
 import Foreign.Ptr
 import HDF5.C
@@ -49,10 +44,6 @@ import HDF5.HL.Internal.Error
 --   class which allows to use same function to all of them.
 class Closable a where
   basicClose :: a -> HIO ()
-
--- | Public API variant of close function
-close :: (Closable a, MonadIO m) => a -> m ()
-close = liftIO . runHIO . basicClose
 
 
 
@@ -100,15 +91,9 @@ class IsObject a => HasData a where
                  -> Ptr () -- ^ Buffer with data
                  -> HIO ()
                  
-  
-getType :: (HasData a, MonadIO m) => a -> m Type
-getType = liftIO . runHIO . getTypeIO
-
-getDataspace :: (HasData a, MonadIO m) => a -> m Dataspace
-getDataspace = liftIO . runHIO . getDataspaceIO
-
-withDataspace :: (HasData a, MonadIO m, MonadMask m) => a -> (Dataspace -> m b) -> m b
-withDataspace a = bracket (getDataspace a) close
+ 
+withDataspace :: (HasData a) => a -> (Dataspace -> HIO b) -> HIO b
+withDataspace a = bracket (getDataspaceIO a) basicClose
 
 
 ----------------------------------------------------------------

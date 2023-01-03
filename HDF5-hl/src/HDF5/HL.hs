@@ -25,6 +25,12 @@ module HDF5.HL
   , CreateMode(..)
   , createFile
   , withCreateFile
+    -- ** Group operation
+  , Group
+  , openGroup
+  , createGroup
+  , withOpenGroup
+  , withCreateGroup
     -- * Datasets
   , Dataset
   , openDataset
@@ -96,7 +102,7 @@ import Prelude hiding (read,readIO)
 -- Lifted function from other modules
 ----------------------------------------------------------------
 
--- | Close value 
+-- | Close value
 close :: (Closable a, MonadIO m) => a -> m ()
 close = liftIO . runHIO . basicClose
 
@@ -138,6 +144,40 @@ withCreateFile
   :: (MonadMask m, MonadIO m)
   => FilePath -> CreateMode -> (File -> m a) -> m a
 withCreateFile path mode = bracket (createFile path mode) close
+
+----------------------------------------------------------------
+-- Group API
+----------------------------------------------------------------
+
+openGroup
+  :: (IsDirectory dir, MonadIO m)
+  => dir      -- ^ Location
+  -> FilePath -- ^ Name of group
+  -> m Group
+openGroup dir path = liftIO $ runHIO $ HIO.openGroup dir path
+
+withOpenGroup
+  :: (IsDirectory dir, MonadIO m, MonadMask m)
+  => dir              -- ^ Location
+  -> FilePath         -- ^ Name of group
+  -> (Group -> m a)
+  -> m a
+withOpenGroup dir path = bracket (openGroup dir path) close
+
+createGroup
+  :: (IsDirectory dir, MonadIO m)
+  => dir       -- ^ Location
+  -> FilePath  -- ^ Name of group
+  -> m Group
+createGroup dir path = liftIO $ runHIO $ HIO.createGroup dir path
+
+withCreateGroup
+  :: (IsDirectory dir, MonadIO m, MonadMask m)
+  => dir              -- ^ Location
+  -> FilePath         -- ^ Name of group
+  -> (Group -> m a)
+  -> m a
+withCreateGroup dir path = bracket (createGroup dir path) close
 
 
 ----------------------------------------------------------------

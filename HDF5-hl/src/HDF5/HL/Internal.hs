@@ -49,7 +49,7 @@ import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Dataspace
-import HDF5.HL.Internal.Enum 
+import HDF5.HL.Internal.Enum
 import HDF5.C
 import Prelude hiding (read,readIO)
 
@@ -129,6 +129,50 @@ readDataset d = withDataspace d $ \spc -> basicReadDSet d spc
 
 readObject :: (Serialize a, HasData d) => d -> HIO a
 readObject d = withDataspace d $ \spc -> basicRead d spc
+
+----------------------------------------------------------------
+-- File API
+----------------------------------------------------------------
+
+openGroup
+  :: (IsDirectory dir)
+  => dir
+  -> FilePath
+  -> HIO Group
+openGroup (getHID -> hid) path = evalContT $ do
+  c_path <- liftHIO $ ContT $ withCString path
+  lift $ do
+    r <- checkHID "Cannot open group" =<< h5g_open hid c_path h5p_DEFAULT
+    pure $ Group r
+
+withOpenGroup
+  :: (IsDirectory dir)
+  => dir
+  -> FilePath
+  -> (Group -> HIO a)
+  -> HIO a
+withOpenGroup dir path = bracket (openGroup dir path) basicClose
+
+createGroup
+  :: (IsDirectory dir)
+  => dir
+  -> FilePath
+  -> HIO Group
+createGroup (getHID -> hid) path = evalContT $ do
+  c_path <- liftHIO $ ContT $ withCString path
+  lift $ do
+    r <- checkHID "Cannot open group"
+     =<< h5g_create hid c_path h5p_DEFAULT h5p_DEFAULT h5p_DEFAULT
+    pure $ Group r
+
+withCreateGroup
+  :: (IsDirectory dir)
+  => dir
+  -> FilePath
+  -> (Group -> HIO a)
+  -> HIO a
+withCreateGroup dir path = bracket (createGroup dir path) basicClose
+
 
 
 ----------------------------------------------------------------

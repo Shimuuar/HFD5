@@ -12,6 +12,7 @@ module HDF5.HL.Internal.Types
     File(..)
   , OpenMode(..)
   , CreateMode(..)
+  , Group(..)
   , Dataset(..)
   , Attribute(..)
   , Dataspace(..)
@@ -41,7 +42,6 @@ import HDF5.HL.Internal.Error
 --   class which allows to use same function to all of them.
 class Closable a where
   basicClose :: a -> HIO ()
-
 
 
 -- | Some HDF5 object. 
@@ -180,8 +180,6 @@ instance Closable Attribute where
   basicClose (Attribute hid) = checkHErr "Unable to close attribute" =<< h5a_close hid
 instance Closable Dataspace where
   basicClose (Dataspace hid) = checkHErr "Unable to close dataspace" =<< h5s_close hid
-
-
--- instance Closable Group where
---   closeIO (Group hid) = convertHErr "Unable to close group" $ h5g_close hid
+instance Closable Group where
+  basicClose (Group hid) = checkHErr "Unable to close group" =<< h5g_close hid
 

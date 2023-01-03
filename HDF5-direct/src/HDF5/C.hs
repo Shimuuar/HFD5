@@ -15,6 +15,8 @@ module HDF5.C
   , h5s_ALL
     -- * Attributes API
   , module HDF5.C.H5A
+    -- * Group API
+  , module HDF5.C.H5G
     -- * File API
   , module HDF5.C.H5F
     -- * Dataset API
@@ -45,6 +47,7 @@ import HDF5.C.H5A
 import HDF5.C.H5T
 import HDF5.C.H5D
 import HDF5.C.H5E
+import HDF5.C.H5G
 import HDF5.C.H5S
 import HDF5.C.H5F
 import HDF5.C.H5LT

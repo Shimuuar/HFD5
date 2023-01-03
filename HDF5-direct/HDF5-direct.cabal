@@ -30,6 +30,7 @@ Library
         HDF5.C.H5D
         HDF5.C.H5E
         HDF5.C.H5F
+        HDF5.C.H5G
         HDF5.C.H5S
         HDF5.C.H5T
         HDF5.C.H5LT

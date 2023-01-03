@@ -5,8 +5,11 @@
 -- |
 -- Mapping of C enums from HDF to haskell data types
 module HDF5.HL.Internal.Enum
-  ( -- * Enumerations
-    OpenMode(..)
+  ( -- * Type classes
+    HDF5Enum(..)
+  , HDF5Param(..)
+    -- * Enumerations
+  , OpenMode(..)
   , CreateMode(..)
   , Sign(..)
   , Class(..)
@@ -14,7 +17,20 @@ module HDF5.HL.Internal.Enum
 
 import Foreign.C.Types
 import HDF5.C qualified as C
-import HDF5.HL.Internal.CCall
+
+
+-- | Conversion to and from corresponding C enumeration
+class HDF5Enum a where
+  type CEnum a
+  fromCEnum :: CEnum a -> Maybe a
+  toCEnum   :: a -> CEnum a
+
+-- | Type class for values which could be converted to C
+--   parameters. This type class is for value which only used as parametersq
+class HDF5Param a where
+  type CParam a
+  toCParam :: a -> CParam a
+
 
 
 -- | Mode for opening files
@@ -70,7 +86,7 @@ data Class
   | Reference
   | Enum
   | Vlen
-  | Array
+  | ClsArray
   deriving stock (Show,Eq,Ord)
 
 instance HDF5Enum Class where
@@ -87,7 +103,7 @@ instance HDF5Enum Class where
     Reference -> C.H5T_REFERENCE
     Enum      -> C.H5T_ENUM
     Vlen      -> C.H5T_VLEN
-    Array     -> C.H5T_ARRAY
+    ClsArray  -> C.H5T_ARRAY
   fromCEnum = \case
     C.H5T_NO_CLASS  -> Just NoClass
     C.H5T_INTEGER   -> Just Integer    
@@ -100,5 +116,5 @@ instance HDF5Enum Class where
     C.H5T_REFERENCE -> Just Reference  
     C.H5T_ENUM      -> Just Enum       
     C.H5T_VLEN      -> Just Vlen       
-    C.H5T_ARRAY     -> Just Array      
+    C.H5T_ARRAY     -> Just ClsArray      
     _               -> Nothing

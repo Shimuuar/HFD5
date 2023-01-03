@@ -45,11 +45,11 @@ import Foreign.Marshal
 import Foreign.ForeignPtr
 import Data.Int
 import Data.Word
-import HDF5.HL.Internal.CCall
 import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Dataspace
+import HDF5.HL.Internal.Enum 
 import HDF5.C
 import Prelude hiding (read,readIO)
 

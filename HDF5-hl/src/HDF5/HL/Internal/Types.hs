@@ -18,8 +18,6 @@ module HDF5.HL.Internal.Types
     -- * Type classes
   , Closable(..)
   , IsObject(..)
-  , castObj
-  , castObj'
   , IsDirectory
   , HasAttrs
   , HasData(..)
@@ -30,7 +28,6 @@ import Control.Monad.Catch
 import Data.Coerce
 import Foreign.Ptr
 import HDF5.C
-import HDF5.HL.Internal.CCall
 import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Internal.Error
@@ -51,20 +48,6 @@ class Closable a where
 class IsObject a where
   getHID        :: a -> HID
   unsafeFromHID :: HID -> a
-  getTag        :: ObjTag
-
--- | Cast one object to another object
-castObj :: forall a b. (IsObject a, IsObject b) => a -> Maybe b
-castObj a | getTag @a == getTag @b = Just $! unsafeFromHID $ getHID a
-          | otherwise              = Nothing
-
--- | Cast one object to another object. In case of failure throw
---   exception 'CastError'.
-castObj' :: forall a b. (IsObject a, IsObject b) => a -> b
-castObj' a
-  -- FIXME: do we need this function???
-  | getTag @a == getTag @b = unsafeFromHID $ getHID a
-  | otherwise              = error "castObj' failed"
 
   
 -- | HDF5 entities that could be used in context where group is
@@ -125,7 +108,6 @@ newtype Dataspace = Dataspace HID
 instance IsObject File where
   getHID        = coerce
   unsafeFromHID = coerce
-  getTag        = TagFile
 
 instance IsDirectory File
 
@@ -134,7 +116,6 @@ instance IsDirectory File
 instance IsObject Group where
   getHID        = coerce
   unsafeFromHID = coerce
-  getTag        = TagGroup
 
 instance IsDirectory Group
 instance HasAttrs    Group
@@ -144,7 +125,6 @@ instance HasAttrs    Group
 instance IsObject Dataset where
   getHID        = coerce
   unsafeFromHID = coerce
-  getTag        = TagDataset
 
 instance HasData Dataset where
   getTypeIO (Dataset hid) = unsafeNewType $ do
@@ -171,7 +151,6 @@ instance HasAttrs Dataset
 instance IsObject Attribute where
   getHID        = coerce
   unsafeFromHID = coerce
-  getTag        = TagAttribute
 
 instance HasData Attribute where
   getTypeIO (Attribute hid) = unsafeNewType $ do
@@ -190,7 +169,6 @@ instance HasData Attribute where
 instance IsObject Dataspace where
   getHID        = coerce
   unsafeFromHID = coerce
-  getTag        = TagDataspace
 
 
 

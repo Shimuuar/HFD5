@@ -78,10 +78,15 @@ module HDF5.HL
   , Element(..)
   , SerializeDSet(..)
   , Serialize(..)
-  , SerializeAttr(..)
     -- ** Primitives
   , basicReadBuffer
   , basicReadScalar
+    -- * Attributes
+  , SerializeAttr(..)
+  , HIO.AttributeM(..)
+  , HIO.basicAttrSubset
+  , HIO.basicEncodeAttr
+  , HIO.basicDecodeAttr
   ) where
 
 import Control.Monad

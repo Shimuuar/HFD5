@@ -81,9 +81,12 @@ module HDF5.HL
     -- ** Primitives
   , basicReadBuffer
   , basicReadScalar
+  , HIO.basicReadAttr
+  , HIO.basicCreateAttr
     -- * Attributes
   , SerializeAttr(..)
   , HIO.AttributeM(..)
+  , HIO.runAttributeM
   , HIO.basicAttrSubset
   , HIO.basicEncodeAttr
   , HIO.basicDecodeAttr
@@ -328,12 +331,11 @@ createAttr
   -> String -- ^ Attribute name
   -> a      -- ^ Value to store in attribute
   -> m ()
-createAttr dir path a = unsafeRunHIO $ HIO.createAttr dir path a
+createAttr dir path a = unsafeRunHIO $ HIO.basicCreateAttr dir path a
 
 readAttr
   :: (Serialize a, HasAttrs d, MonadIO m)
   => d      -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> m (Maybe a)
-readAttr a name = unsafeRunHIO $ HIO.readAttr a name
-
+readAttr a name = unsafeRunHIO $ HIO.basicReadAttr a name

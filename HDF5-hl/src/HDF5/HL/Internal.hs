@@ -216,13 +216,13 @@ withAttr
   -> HIO b
 withAttr a path = bracket (openAttr a path) (mapM_ basicClose)
 
-createAttr
+basicCreateAttr
   :: forall a dir. (Serialize a, HasAttrs dir)
   => dir    -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> a      -- ^ Value to store in attribute
   -> HIO ()
-createAttr dir path a = evalContT $ do
+basicCreateAttr dir path a = evalContT $ do
   c_path <- ContT $ hioWithCString path
   space  <- ContT $ withDSpace (getExtent a)
   ty     <- ContT $ withType @(ElementOf a)
@@ -234,12 +234,12 @@ createAttr dir path a = evalContT $ do
     h5a_close
   lift $ basicWrite (Attribute attr) a
 
-readAttr
+basicReadAttr
   :: (Serialize a, HasAttrs d)
   => d      -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> HIO (Maybe a)
-readAttr a name = withAttr a name $ \case
+basicReadAttr a name = withAttr a name $ \case
   Just x  -> Just <$> readObject x
   Nothing -> pure Nothing
 
@@ -329,6 +329,9 @@ newtype AttributeM a = AttributeM
   { unAttributeM :: forall d. HasAttrs d => d -> (FilePath -> FilePath) -> HIO a }
   deriving Functor
 
+runAttributeM :: HasAttrs d => d -> AttributeM a -> HIO a
+runAttributeM d (AttributeM f) = f d id
+
 instance Applicative AttributeM where
   pure a = AttributeM $ \_ _ -> pure a
   (<*>)  = ap
@@ -343,18 +346,14 @@ basicAttrSubset dir m = AttributeM $ \d fun -> unAttributeM m d ((dir++) . ('/':
 
 basicEncodeAttr :: Serialize a => FilePath -> a -> AttributeM ()
 basicEncodeAttr name a = AttributeM $ \d fun -> do
-  createAttr d (fun name) a
+  basicCreateAttr d (fun name) a
 
 basicDecodeAttr :: Serialize a => FilePath -> AttributeM a
 basicDecodeAttr name = AttributeM $ \d fun -> do
-  readAttr d (fun name) >>= \case
+  basicReadAttr d (fun name) >>= \case
     Nothing -> error "No attribute" -- FIXME: proper error handling
     Just a  -> pure a
--- basicReadAttr :: (SerializeAttr a, HasAttrs d) => d -> HIO a
--- basicReadAttr d = basicReadAttrWrk d ""
 
--- basicWriteAttr :: (SerializeAttr a, HasAttrs d) => d -> a -> HIO ()
--- basicWriteAttr d = basicWriteAttrWrk d ""
 
 
 instance Element a => SerializeDSet [a] where

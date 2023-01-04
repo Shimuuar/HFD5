@@ -25,14 +25,11 @@ module HDF5.HL.Internal.Dataspace
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Catch
-import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Maybe
 import Data.Int
 import Data.Functor
--- import Data.Monoid
-import Foreign.Marshal
 import Foreign.Ptr
 import Foreign.Storable
 
@@ -111,17 +108,17 @@ runParseFromDataspace (getHID -> hid) =
              $ lift $ h5s_get_simple_extent_ndims hid
       when (n_dim < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
       -- Allocate buffers
-      p_dim <- liftHIO $ ContT $ allocaArray n_dim
-      p_max <- liftHIO $ ContT $ allocaArray n_dim
+      p_dim <- ContT $ hioAllocaArray n_dim
+      p_max <- ContT $ hioAllocaArray n_dim
       lift $ do
         do r <- h5s_get_simple_extent_dims hid p_dim p_max
            when (r < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
         --
         let uncons i | i >= n_dim = pure Nothing
-                     | otherwise  = do dim <- Dim <$> (fromIntegral <$> peekElemOff p_dim i)
-                                                  <*> (fromIntegral <$> peekElemOff p_max i)
+                     | otherwise  = do dim <- Dim <$> (fromIntegral <$> hioPeekElemOff p_dim i)
+                                                  <*> (fromIntegral <$> hioPeekElemOff p_max i)
                                        pure $ Just (i+1, dim)
-        unParserDim decodeExtent (liftIO . uncons) 0 <&> \case
+        unParserDim decodeExtent uncons 0 <&> \case
           Nothing    -> Nothing
           Just (_,a) -> Just a
     _ -> error "getDataspace: Cannot obtain dataspace dimension"
@@ -182,9 +179,9 @@ putDimension :: Dim -> DSpaceWriter
 putDimension (Dim sz sz_max) = DSpaceWriter go where
   go p_sz p_max i_max i
     | i >= i_max = throwM $ InternalErr "putDimension: buffer overrun"
-    | otherwise  = liftIO $ do pokeElemOff p_sz  i (fromIntegral sz)
-                               pokeElemOff p_max i (fromIntegral sz_max)
-                               pure $! i + 1
+    | otherwise  = do hioPokeElemOff p_sz  i (fromIntegral sz)
+                      hioPokeElemOff p_max i (fromIntegral sz_max)
+                      pure $! i + 1
 
 
 -- | Create simple dataspace which could e used in bracket-like
@@ -202,7 +199,7 @@ withDSpace dim action = case encodeExtent dim of
     let DSpaceWriter write = fld putDimension
     -- -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
     let max_rank = 32
-    ptr <- liftHIO $ ContT $ allocaArray (max_rank * 2)
+    ptr <- ContT $ hioAllocaArray (max_rank * 2)
     let ptr_max = plusPtr ptr $ sz * max_rank
     rank <- lift  $ write ptr ptr_max max_rank 0
     spc  <- ContT $ bracket (h5s_create_simple (fromIntegral rank) ptr ptr_max) h5s_close

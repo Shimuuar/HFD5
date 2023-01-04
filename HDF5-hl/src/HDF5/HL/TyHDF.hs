@@ -3,7 +3,6 @@
 -- API for working with HDF data types.
 module HDF5.HL.TyHDF
   ( -- * Data types
-    Type
   ) where
 
 import HDF5.HL.Internal.TyHDF

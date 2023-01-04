@@ -1,10 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes        #-}
 {-# LANGUAGE DefaultSignatures          #-}
+{-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImportQualifiedPost        #-}
 {-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeApplications           #-}
@@ -59,14 +61,14 @@ import Prelude hiding (read,readIO)
 
 openFile :: FilePath -> OpenMode -> HIO File
 openFile path mode =
-  liftHIOBracket (withCString path) $ \c_path -> do
+  hioWithCString path $ \c_path -> do
     hid <- checkHID ("Cannot open file " ++ path)
        =<< h5f_open c_path (toCParam mode) h5p_DEFAULT
     pure $ File hid
 
 createFile :: FilePath -> CreateMode -> HIO File
 createFile path mode =
-  liftHIOBracket (withCString path) $ \c_path -> do
+  hioWithCString path $ \c_path -> do
     hid <- checkHID ("Cannot create file " ++ path)
        =<< h5f_create c_path (toCParam mode) h5p_DEFAULT h5p_DEFAULT
     pure $ File hid
@@ -81,7 +83,7 @@ openDataset
   -> FilePath -- ^ Path relative to location
   -> HIO Dataset
 openDataset (getHID -> hid) path = do
-  liftHIOBracket (withCString path) $ \c_path -> do
+  hioWithCString path $ \c_path -> do
     r <- checkHID ("Cannot open dataset " ++ path)
      =<< h5d_open2 hid c_path h5p_DEFAULT
     pure $ Dataset r
@@ -94,12 +96,11 @@ createEmptyDataset
   -> ext      -- ^ Dataspace, that is size of dataset
   -> HIO Dataset
 createEmptyDataset (getHID -> hid) path ty ext = evalContT $ do
-  c_path <- liftHIO $ ContT $ withCString path
-  space  <- ContT $ withDSpace  ext
-  tid    <- ContT $ withType    ty
+  c_path <- ContT $ hioWithCString path
+  space  <- ContT $ withDSpace     ext
   lift $ fmap Dataset
        $ checkHID "Unable to create dataset"
-     =<< h5d_create hid c_path tid (getHID space)
+     =<< h5d_create hid c_path (getHID ty) (getHID space)
          h5p_DEFAULT
          h5p_DEFAULT
          h5p_DEFAULT
@@ -139,9 +140,8 @@ openGroup
   => dir
   -> FilePath
   -> HIO Group
-openGroup (getHID -> hid) path = evalContT $ do
-  c_path <- liftHIO $ ContT $ withCString path
-  lift $ do
+openGroup (getHID -> hid) path = 
+  hioWithCString path $ \c_path -> do
     r <- checkHID "Cannot open group" =<< h5g_open hid c_path h5p_DEFAULT
     pure $ Group r
 
@@ -158,9 +158,8 @@ createGroup
   => dir
   -> FilePath
   -> HIO Group
-createGroup (getHID -> hid) path = evalContT $ do
-  c_path <- liftHIO $ ContT $ withCString path
-  lift $ do
+createGroup (getHID -> hid) path =
+  hioWithCString path $ \c_path -> do
     r <- checkHID "Cannot open group"
      =<< h5g_create hid c_path h5p_DEFAULT h5p_DEFAULT h5p_DEFAULT
     pure $ Group r
@@ -202,11 +201,11 @@ openAttr
   -> String -- ^ Attribute name
   -> HIO (Maybe Attribute)
 openAttr (getHID -> hid) path = do
-  liftHIOBracket (withCString path) $ \c_str -> do
+  hioWithCString path $ \c_str -> do
     h5a_exists hid c_str >>= \case
       HFalse -> pure Nothing
       HTrue  -> Just . Attribute
-              <$> (checkHID "Cannot open attribute" =<< h5a_open hid c_str h5p_DEFAULT)
+            <$> (checkHID "Cannot open attribute" =<< h5a_open hid c_str h5p_DEFAULT)
       HFail  -> throwM =<< decodeError "Cannot check existence of attribute"
 
 withAttr
@@ -224,17 +223,25 @@ createAttr
   -> a      -- ^ Value to store in attribute
   -> HIO ()
 createAttr dir path a = evalContT $ do
-  c_path <- liftHIO $ ContT $ withCString path
+  c_path <- ContT $ hioWithCString path
   space  <- ContT $ withDSpace (getExtent a)
-  tid    <- ContT $ withType (typeH5 @(ElementOf a))
+  ty     <- ContT $ withType @(ElementOf a)
   attr   <- ContT $ bracket
     (checkHID "Cannot create attribute"
-    =<< h5a_create (getHID dir) c_path tid (getHID space)
+    =<< h5a_create (getHID dir) c_path (getHID ty) (getHID space)
           h5p_DEFAULT
           h5p_DEFAULT)
     h5a_close
   lift $ basicWrite (Attribute attr) a
 
+readAttr
+  :: (Serialize a, HasAttrs d)
+  => d      -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> HIO (Maybe a)
+readAttr a name = withAttr a name $ \case
+  Just x  -> Just <$> readObject x
+  Nothing -> pure Nothing
 
 
 ----------------------------------------------------------------
@@ -244,38 +251,44 @@ createAttr dir path a = evalContT $ do
 -- | Data type which corresponds to some HDF data type and could read
 --   from buffer using 'Storable'.
 class Storable a => Element a where
-  typeH5 :: Type
+  typeH5 :: HIO Type
 
+withType :: forall a r. Element a => (Type -> HIO r) -> HIO r
+withType = bracket (typeH5 @a) basicClose
 
-instance Element Int8   where typeH5 = tyI8
-instance Element Int16  where typeH5 = tyI16
-instance Element Int32  where typeH5 = tyI32
-instance Element Int64  where typeH5 = tyI64
-instance Element Word8  where typeH5 = tyU8
-instance Element Word16 where typeH5 = tyU16
-instance Element Word32 where typeH5 = tyU32
-instance Element Word64 where typeH5 = tyU64
+instance Element Int8   where typeH5 = pure tyI8
+instance Element Int16  where typeH5 = pure tyI16
+instance Element Int32  where typeH5 = pure tyI32
+instance Element Int64  where typeH5 = pure tyI64
+instance Element Word8  where typeH5 = pure tyU8
+instance Element Word16 where typeH5 = pure tyU16
+instance Element Word32 where typeH5 = pure tyU32
+instance Element Word64 where typeH5 = pure tyU64
 
-instance Element Float  where typeH5 = tyF32
-instance Element Double where typeH5 = tyF64
+instance Element Float  where typeH5 = pure tyF32
+instance Element Double where typeH5 = pure tyF64
 
 instance (Element a, F.Arity n) => Element (FB.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
+  typeH5 = do ty <- typeH5 @a
+              makeArray ty [F.length (undefined :: FB.Vec n a)]
 instance (Element a, F.Arity n, FU.Unbox n a) => Element (FU.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FU.Vec n a)]
+  typeH5 = do ty <- typeH5 @a
+              makeArray ty [F.length (undefined :: FB.Vec n a)]
 instance (Element a, F.Arity n) => Element (FS.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FS.Vec n a)]
+  typeH5 = do ty <- typeH5 @a
+              makeArray ty [F.length (undefined :: FB.Vec n a)]
 instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FP.Vec n a)]
+  typeH5 = do ty <- typeH5 @a
+              makeArray ty [F.length (undefined :: FB.Vec n a)]
 
 instance Element a => Element (Identity a) where typeH5 = typeH5 @a
 
 instance Element Int where
-  typeH5 | wordSizeInBits == 64 = tyI64
-         | otherwise            = tyI32
+  typeH5 | wordSizeInBits == 64 = pure tyI64
+         | otherwise            = pure tyI32
 instance Element Word where
-  typeH5 | wordSizeInBits == 64 = tyU64
-         | otherwise            = tyU32
+  typeH5 | wordSizeInBits == 64 = pure tyU64
+         | otherwise            = pure tyU32
 
 wordSizeInBits :: Int
 wordSizeInBits = finiteBitSize (0 :: Word)
@@ -309,14 +322,39 @@ class SerializeDSet a => Serialize a where
 
 -- | Values which could be serialized as set of attributes
 class SerializeAttr a where
-  basicReadAttrWrk  :: HasAttrs d => d -> FilePath -> HIO a
-  basicWriteAttrWrk :: HasAttrs d => d -> FilePath -> a -> HIO ()
+  basicFromAttrs :: AttributeM a
+  basicToAttrs :: a -> AttributeM ()
 
-basicReadAttr :: (SerializeAttr a, HasAttrs d) => d -> HIO a
-basicReadAttr d = basicReadAttrWrk d ""
+newtype AttributeM a = AttributeM
+  { unAttributeM :: forall d. HasAttrs d => d -> (FilePath -> FilePath) -> HIO a }
+  deriving Functor
 
-basicWriteAttr :: (SerializeAttr a, HasAttrs d) => d -> a -> HIO ()
-basicWriteAttr d = basicWriteAttrWrk d ""
+instance Applicative AttributeM where
+  pure a = AttributeM $ \_ _ -> pure a
+  (<*>)  = ap
+
+instance Monad AttributeM where
+  m >>= fun = AttributeM $ \d f -> do
+    a <- unAttributeM m d f
+    unAttributeM (fun a) d f
+
+basicAttrSubset :: FilePath -> AttributeM a -> AttributeM a
+basicAttrSubset dir m = AttributeM $ \d fun -> unAttributeM m d ((dir++) . ('/':) . fun)
+
+basicEncodeAttr :: Serialize a => FilePath -> a -> AttributeM ()
+basicEncodeAttr name a = AttributeM $ \d fun -> do
+  createAttr d (fun name) a
+
+basicDecodeAttr :: Serialize a => FilePath -> AttributeM a
+basicDecodeAttr name = AttributeM $ \d fun -> do
+  readAttr d (fun name) >>= \case
+    Nothing -> error "No attribute" -- FIXME: proper error handling
+    Just a  -> pure a
+-- basicReadAttr :: (SerializeAttr a, HasAttrs d) => d -> HIO a
+-- basicReadAttr d = basicReadAttrWrk d ""
+
+-- basicWriteAttr :: (SerializeAttr a, HasAttrs d) => d -> a -> HIO ()
+-- basicWriteAttr d = basicWriteAttrWrk d ""
 
 
 instance Element a => SerializeDSet [a] where
@@ -353,9 +391,11 @@ instance Element a => Serialize     (VS.Vector a) where
     n <- dataspaceRank spc
     when (n /= Just 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
-  basicWrite dset xs = do
-    liftHIOBracket (VS.unsafeWith xs) $ \ptr ->
-      unsafeWriteAll dset (typeH5 @a) (castPtr ptr)
+  -- We don't have primitive we
+  basicWrite dset xs = HIO $ do
+    VS.unsafeWith xs $ \ptr -> unHIO $ do
+      withType @a $ \ty ->
+        unsafeWriteAll dset ty (castPtr ptr)
 
 
 deriving via SerializeAsScalar Int8   instance SerializeDSet Int8
@@ -420,9 +460,11 @@ instance Element a => SerializeDSet (SerializeAsScalar a) where
 
 instance Element a => Serialize (SerializeAsScalar a) where
   basicRead  dset spc = basicReadScalar dset spc
-  basicWrite dset a   = do
-    liftHIOBracket alloca $ \p -> do liftIO $ poke p a
-                                     unsafeWriteAll dset (typeH5 @a) (castPtr p)
+  basicWrite dset a   = evalContT $ do
+    p  <- ContT hioAlloca
+    ty <- ContT $ withType @a
+    lift $ do hioPoke p a
+              unsafeWriteAll dset ty (castPtr p)
 
 ----------------------------------------------------------------
 -- Primitive read/write operations
@@ -435,10 +477,12 @@ basicReadBuffer
   -> HIO (VS.Vector a)
 basicReadBuffer dset (Dataspace spc) = do
   n   <- h5s_get_simple_extent_npoints spc
-  buf <- liftIO $ mallocForeignPtrArray (fromIntegral n)
-  liftHIOBracket (withForeignPtr buf) $ \p -> do
-    unsafeReadAll dset (typeH5 @a) (castPtr p)
-    pure $! VS.unsafeFromForeignPtr0 buf (fromIntegral n)
+  buf <- hioMallocForeignPtrArray (fromIntegral n)
+  evalContT $ do
+    p  <- ContT $ hioWithForeignPtr buf
+    ty <- ContT $ withType @a
+    lift $ do unsafeReadAll dset ty (castPtr p)
+              pure $! VS.unsafeFromForeignPtr0 buf (fromIntegral n)
 
 basicReadScalar
   :: forall a d. (Element a, HasData d)
@@ -448,6 +492,8 @@ basicReadScalar
 basicReadScalar dset (Dataspace spc) = do
   nd <- h5s_get_simple_extent_ndims spc
   when (nd /= 0) $ throwM $ Error "Scalar could only be read from scalar datasets" []
-  liftHIOBracket alloca $ \p -> do
-    unsafeReadAll dset (typeH5 @a) (castPtr p)
-    liftIO (peek p)
+  evalContT $ do
+    p  <- ContT $ hioAlloca
+    ty <- ContT $ withType @a
+    lift $ do unsafeReadAll dset ty (castPtr p)
+              hioPeek p

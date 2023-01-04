@@ -26,7 +26,7 @@ import System.IO.Unsafe
 import HDF5.C
 import HDF5.HL as H5
 import HDF5.HL.Types
-import HDF5.HL.Internal.CCall
+-- import HDF5.HL.Internal.CCall
 import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Internal.Types
 ----------------------------------------------------------------
@@ -149,3 +149,10 @@ errr = do
   -- print =<< C.h5e_walk C.h5e_DEFAULT C.H5E_WALK_DOWNWARD callback nullPtr
   pure ()
 
+
+hang :: ()
+hang = unsafePerformIO $ runHIO $ do
+  HIO $ print "A"
+  HIO $ print "B"
+  
+ty = Array tyI8 [1]

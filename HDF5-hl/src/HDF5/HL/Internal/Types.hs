@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE ViewPatterns        #-}
 -- |
 -- Data types for working with HDF5 files
 module HDF5.HL.Internal.Types
@@ -16,6 +17,7 @@ module HDF5.HL.Internal.Types
   , Dataset(..)
   , Attribute(..)
   , Dataspace(..)
+  , Type(..)
     -- * Type classes
   , Closable(..)
   , IsObject(..)
@@ -30,7 +32,6 @@ import Data.Coerce
 import Foreign.Ptr
 import HDF5.C
 import HDF5.HL.Internal.Enum
-import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Internal.Error
 
 ----------------------------------------------------------------
@@ -103,13 +104,20 @@ newtype Attribute = Attribute HID
 newtype Dataspace = Dataspace HID
   deriving stock (Show,Eq,Ord)
 
+-- | Type of element
+data Type
+  = Type   HID -- ^ Type which should be closed
+  | Native HID -- ^ Data types which does not need to be finalized
 
+
+----------------
 
 instance IsObject File where
   getHID        = coerce
   unsafeFromHID = coerce
 
 instance IsDirectory File
+instance HasAttrs    File
 
 ----------------
 
@@ -127,17 +135,17 @@ instance IsObject Dataset where
   unsafeFromHID = coerce
 
 instance HasData Dataset where
-  getTypeIO (Dataset hid) = unsafeNewType $ do
+  getTypeIO (Dataset hid) = Type <$> do
     checkHID "Cannot read type from dataset" =<< h5d_get_type hid
   getDataspaceIO (Dataset hid) = Dataspace <$> do
     checkHID "Cannot read dataspace from dataset" =<< h5d_get_space hid
-  unsafeReadAll (Dataset hid) ty buf = withType ty $ \tid ->
+  unsafeReadAll (Dataset hid) (getHID -> tid) buf =
     checkHErr "Reading from dataset failed" =<< h5d_read hid tid
       h5s_ALL
       h5s_ALL
       h5p_DEFAULT
       (castPtr buf)
-  unsafeWriteAll (Dataset hid) ty buf = withType ty $ \tid ->
+  unsafeWriteAll (Dataset hid) (getHID -> tid) buf =
     checkHErr "Reading to dataset failed" =<< h5d_write hid tid
       h5s_ALL
       h5s_ALL
@@ -153,16 +161,14 @@ instance IsObject Attribute where
   unsafeFromHID = coerce
 
 instance HasData Attribute where
-  getTypeIO (Attribute hid) = unsafeNewType $ do
+  getTypeIO (Attribute hid) = Type <$> do
     checkHID "Cannot read type from attribute" =<< h5a_get_type hid
   getDataspaceIO (Attribute hid) = Dataspace <$> do
     checkHID "Cannot read dataspace from dataset" =<< h5a_get_space hid
-  unsafeReadAll (Attribute hid) ty buf = withType ty $ \tid ->
-    checkHErr "Reading from attribute failed" =<<
-      h5a_read hid tid (castPtr buf)
-  unsafeWriteAll (Attribute hid) ty buf = withType ty $ \tid ->
-    checkHErr "Writing of attribute failed" =<<
-      h5a_write hid tid (castPtr buf)
+  unsafeReadAll (Attribute hid) (getHID -> tid) buf =
+    checkHErr "Reading from attribute failed" =<< h5a_read hid tid (castPtr buf)
+  unsafeWriteAll (Attribute hid) (getHID -> tid) buf =
+    checkHErr "Writing of attribute failed" =<< h5a_write hid tid (castPtr buf)
 
 ----------------
 
@@ -170,16 +176,30 @@ instance IsObject Dataspace where
   getHID        = coerce
   unsafeFromHID = coerce
 
+----------------
 
+instance IsObject Type where
+  getHID (Type   hid) = hid
+  getHID (Native hid) = hid
+  unsafeFromHID = Type
+
+----------------------------------------------------------------
 
 instance Closable File where
   basicClose (File hid) = checkHErr "Unable to close file" =<< h5f_close hid
+
 instance Closable Dataset where
   basicClose (Dataset hid) = checkHErr "Unable to close dataset" =<< h5d_close hid
+
 instance Closable Attribute where
   basicClose (Attribute hid) = checkHErr "Unable to close attribute" =<< h5a_close hid
+
 instance Closable Dataspace where
   basicClose (Dataspace hid) = checkHErr "Unable to close dataspace" =<< h5s_close hid
+
 instance Closable Group where
   basicClose (Group hid) = checkHErr "Unable to close group" =<< h5g_close hid
 
+instance Closable Type where
+  basicClose (Type hid) = checkHErr "Unable to close type" =<< h5t_close hid
+  basicClose (Native _) = pure ()

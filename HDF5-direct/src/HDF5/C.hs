@@ -3,6 +3,8 @@
 {-# LANGUAGE DerivingStrategies       #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE PatternSynonyms          #-}
+{-# LANGUAGE ScopedTypeVariables      #-}
+{-# LANGUAGE TypeApplications         #-}
 {-# LANGUAGE ViewPatterns             #-}
 -- |
 module HDF5.C
@@ -31,15 +33,42 @@ module HDF5.C
   , module HDF5.C.H5E
     -- * IO wrapper
   , HIO(..)
-  , runHIO
-  , liftHIO
-  , liftHIOBracket
+  , unsafeRunHIO
+    -- ** lifted functions
+    -- *** Marshalling
+  , hioPeek
+  , hioPoke
+  , hioPokeElemOff
+  , hioPeekElemOff
+  , hioPeekCString
+  , hioWithCString
+  , hioPeekArray
+  , hioAlloca
+  , hioAllocaArray
+  , hioAllocaArray0
+  , hioWithArray
+    -- *** Foreign pointers
+  , hioMallocForeignPtrArray
+  , hioWithForeignPtr
+    -- *** Function pointers
+  , hioWithHaskellFunPtr
+    -- *** IORef
+  , hioNewIORef
+  , hioReadIORef
+  , hioModifyIORef'
   ) where
 
 import Control.Concurrent.MVar
+import Control.Exception
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Cont
 import Data.Coerce
+import Data.IORef
 import Foreign.Ptr
+import Foreign.ForeignPtr
+import Foreign.Storable
+import Foreign.C
+import Foreign.Marshal
 import System.IO.Unsafe
 
 import HDF5.C.Types
@@ -65,11 +94,12 @@ foreign import capi "hdf5.h value H5S_ALL"            h5s_ALL         :: HID
 -- HIO & friends
 ----------------------------------------------------------------
 
--- | Run HIO monad. Calls to @runHIO@ must not be nested or it will
+-- | Run HIO monad. Calls to @unsafeRunHIO@ must not be nested or it will
 --   deadlock.
-runHIO :: HIO a -> IO a
-runHIO (HIO io)
-  | is_threadsafe == 0 = withMVar mutex $ \_ -> disabledAutoPrint `seq` io
+unsafeRunHIO :: MonadIO m => HIO a -> m a
+unsafeRunHIO (HIO io)
+  | is_threadsafe == 0 = liftIO $ withMVar mutex $ \_ -> do
+      disabledAutoPrint `seq` io
   -- FIXME: calls are safe but error handling is wrong. HDF5 error
   --        stack is stored in thread local storage and our thread may
   --        migrate to another capability and we'll look at wrong
@@ -80,19 +110,7 @@ runHIO (HIO io)
   --        check for errors
   --
   -- FIXME: Also need to figure out how h5e_set_auto works.
-  | otherwise          = io
-
--- | Lift bracket in IO monad into bracket working in HIO. Generally
---   useful for dealing with functions like @alloca@.
-liftHIO :: ContT r IO a -> ContT r HIO a
-liftHIO = coerce
-
--- | Lift bracket in IO monad into bracket working in HIO. Generally
---   useful for dealing with functions like @alloca@.
-liftHIOBracket
-  :: ((a ->  IO b) ->  IO b)
-  -> ((a -> HIO b) -> HIO b)
-liftHIOBracket = coerce
+  | otherwise          = liftIO io
 
 mutex :: MVar ()
 {-# NOINLINE mutex #-}
@@ -100,10 +118,64 @@ mutex = unsafePerformIO $ newMVar ()
 
 foreign import capi "hdf5-hs.h value HS_H5_THREADSAFE" is_threadsafe :: Int
 
-
 disabledAutoPrint :: HErr
 {-# NOINLINE disabledAutoPrint #-}
 disabledAutoPrint
   = unsafePerformIO
   $ unHIO
   $ h5e_set_auto h5e_DEFAULT nullFunPtr nullPtr
+
+
+
+----------------------------------------------------------------
+
+hioPeek :: forall a. Storable a => Ptr a -> HIO a
+hioPeek = coerce (peek @a)
+
+hioPoke :: forall a. Storable a => Ptr a -> a -> HIO ()
+hioPoke = coerce (poke @a)
+
+hioPeekElemOff :: forall a. Storable a => Ptr a -> Int -> HIO a
+hioPeekElemOff = coerce (peekElemOff @a)
+
+hioPokeElemOff :: forall a. Storable a => Ptr a -> Int -> a -> HIO ()
+hioPokeElemOff = coerce (pokeElemOff @a)
+
+hioPeekCString :: CString -> HIO String
+hioPeekCString = coerce peekCString
+
+hioWithCString :: forall a. String -> (CString -> HIO a) -> HIO a
+hioWithCString = coerce (withCString @a)
+
+hioPeekArray :: forall a. Storable a => Int -> Ptr a -> HIO [a]
+hioPeekArray = coerce (peekArray @a)
+
+hioAlloca :: forall a r. Storable a => (Ptr a -> HIO r) -> HIO r
+hioAlloca = coerce (alloca @a @r)
+
+hioAllocaArray :: forall a r. Storable a => Int -> (Ptr a -> HIO r) -> HIO r
+hioAllocaArray = coerce (allocaArray @a @r)
+
+hioAllocaArray0 :: forall a r. Storable a => Int -> (Ptr a -> HIO r) -> HIO r
+hioAllocaArray0 = coerce (allocaArray0 @a @r)
+
+hioWithArray :: forall a r. Storable a => [a] -> (Ptr a -> HIO r) -> HIO r
+hioWithArray = coerce (withArray @a @r)
+
+hioNewIORef :: forall a. a -> HIO (IORef a)
+hioNewIORef = coerce (newIORef @a)
+
+hioMallocForeignPtrArray :: forall a. Storable a => Int -> HIO (ForeignPtr a)
+hioMallocForeignPtrArray = coerce (mallocForeignPtrArray @a)
+
+hioWithForeignPtr :: forall a r. ForeignPtr a -> (Ptr a -> HIO r) -> HIO r
+hioWithForeignPtr = coerce (withForeignPtr @a @r)
+
+hioWithHaskellFunPtr :: forall a r. HIO (FunPtr a) -> ContT r HIO (FunPtr a)
+hioWithHaskellFunPtr mk = ContT $ \io -> HIO $ bracket (unHIO mk) freeHaskellFunPtr (unHIO . io)
+
+hioReadIORef :: forall a. IORef a -> HIO a
+hioReadIORef = coerce (readIORef @a)
+
+hioModifyIORef' :: forall a. IORef a -> (a -> a) -> HIO ()
+hioModifyIORef' = coerce (modifyIORef' @a)

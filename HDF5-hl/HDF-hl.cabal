@@ -33,3 +33,20 @@ Library
         HDF5.HL.Internal.Dataspace
         HDF5.HL.Internal.Types
         HDF5.HL.Internal.Error
+
+Test-suite HDF5-hl-tests
+  type:             exitcode-stdio-1.0
+  Default-Language: Haskell2010
+  ghc-options:      -Wall
+  Build-Depends:    base
+                  , HDF5-hl
+                    --
+                  , temporary
+                  , filepath
+                    --
+                  , tasty
+                  , tasty-quickcheck
+                  , tasty-hunit
+  hs-source-dirs: tests
+  main-is:        Main.hs
+  other-modules:  TM.File

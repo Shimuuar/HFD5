@@ -14,14 +14,9 @@ module HDF5.HL.Internal.Error
   ) where
 
 import Control.Monad.Catch
-import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
-import Data.IORef
-import Foreign.Marshal
-import Foreign.C
 import Foreign.Ptr
-import Foreign.Storable
 import HDF5.C
 
 ----------------------------------------------------------------
@@ -52,27 +47,27 @@ instance Exception Error
 -- | Decode error from HDF5 error stack
 decodeError :: String -> HIO Error
 decodeError msg = evalContT $ do
-  v_stack  <- liftIO $ newIORef []
-  buf      <- liftHIO $ ContT $ allocaArray (fromIntegral $ msg_size+1)  
+  v_stack  <- lift  $ hioNewIORef []
+  buf      <- ContT $ hioAllocaArray $ fromIntegral $ msg_size + 1
   let step _ p _ = do
-        msgMajor <- do m_maj <- liftIO $ peek (h5e_error_maj_num   p)
+        msgMajor <- do m_maj <- hioPeek $ h5e_error_maj_num p
                        n     <- h5e_get_msg m_maj nullPtr buf msg_size
-                       if | n > 0     -> liftIO $ peekCString buf
+                       if | n > 0     -> hioPeekCString buf
                           | otherwise -> pure ""
-        msgMinor <- do m_min <- liftIO $ peek (h5e_error_min_num   p)
+        msgMinor <- do m_min <- hioPeek $ h5e_error_min_num p
                        n     <- h5e_get_msg m_min nullPtr buf msg_size
-                       if | n > 0     -> liftIO $ peekCString buf
+                       if | n > 0     -> hioPeekCString buf
                           | otherwise -> pure ""
-        msgFunc  <- liftIO $ peekCString =<< peek (h5e_error_func_name p)
-        msgFile  <- liftIO $ peekCString =<< peek (h5e_error_file_name p)
-        msgDescr <- liftIO $ peekCString =<< peek (h5e_error_desc      p)
-        msgLine  <- fmap fromIntegral $ liftIO $ peek (h5e_error_line p)
-        liftIO $ modifyIORef' v_stack (Message{..}:)
+        msgFunc  <- hioPeekCString =<< hioPeek (h5e_error_func_name p)
+        msgFile  <- hioPeekCString =<< hioPeek (h5e_error_file_name p)
+        msgDescr <- hioPeekCString =<< hioPeek (h5e_error_desc      p)
+        msgLine  <- fromIntegral <$> hioPeek (h5e_error_line p)
+        hioModifyIORef' v_stack (Message{..}:)
         pure $ HErr 0
-  callback <- ContT $ bracket (makeWalker step) (liftIO . freeHaskellFunPtr)
+  callback <- hioWithHaskellFunPtr $ makeWalker step
   res      <- lift  $ h5e_walk h5e_DEFAULT H5E_WALK_DOWNWARD callback nullPtr
-  liftIO $ case res of
-    HOK      -> Error msg <$> readIORef v_stack
+  case res of
+    HOK      -> lift $ Error msg <$> hioReadIORef v_stack
     HErrored -> pure $ InternalErr $ unlines ["Failed to decode HDF5 error for", msg]
   where
     -- Error message from major/minor labels are usually short so we

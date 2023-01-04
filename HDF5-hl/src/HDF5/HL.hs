@@ -217,17 +217,13 @@ createEmptyDataset dir path ty ext
 -- | Create new dataset at given location and write provided data to
 --   it. Shape of data is inferred from data to write.
 createDataset
-  :: forall a dir m.
-     (SerializeDSet a, IsDirectory dir, MonadIO m)
+  :: (SerializeDSet a, IsDirectory dir, MonadIO m)
   => dir      -- ^ File (root will be used) or group
   -> FilePath -- ^ Path to dataset
   -> a        -- ^ Value to write
   -> m ()
-createDataset dir path a = unsafeRunHIO $ evalContT $ do
-  ty   <- ContT $ HIO.withType @(ElementOf a)
-  dset <- ContT $ HIO.withCreateEmptyDataset dir path ty (getExtent a)
-  lift $ basicWriteDSet dset a
-
+createDataset dir path a
+  = unsafeRunHIO $ HIO.basicCreateDataset dir path a
 
 -- | Open dataset and pass handle to continuation. Dataset will be
 --   closed when continuation finish execution normally or with an

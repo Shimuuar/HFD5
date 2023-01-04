@@ -105,6 +105,19 @@ createEmptyDataset (getHID -> hid) path ty ext = evalContT $ do
          h5p_DEFAULT
          h5p_DEFAULT
 
+basicCreateDataset
+  :: forall a dir.
+     (SerializeDSet a, IsDirectory dir)
+  => dir      -- ^ File (root will be used) or group
+  -> FilePath -- ^ Path to dataset
+  -> a        -- ^ Value to write
+  -> HIO ()
+basicCreateDataset dir path a = evalContT $ do
+  ty   <- ContT $ withType @(ElementOf a)
+  dset <- ContT $ withCreateEmptyDataset dir path ty (getExtent a)
+  lift $ basicWriteDSet dset a
+
+
 withOpenDataset
   :: (IsDirectory dir)
   => dir      -- ^ Location

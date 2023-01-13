@@ -41,16 +41,16 @@ import HDF5.C
 -- Type definition
 ----------------------------------------------------------------
 
-basicShowType :: Type -> HIO String
+basicShowType :: Type -> IO String
 basicShowType (getHID -> tid) = evalContT $ do
-  p_sz  <- ContT $ hioAlloca
+  p_sz  <- ContT $ alloca
   _     <- lift  $ checkHErr "Can't show type"
-               =<< h5lt_dtype_to_text tid nullPtr h5lt_DDL p_sz
-  sz    <- lift  $ hioPeek p_sz
-  p_str <- ContT $ hioAllocaArray0 $ fromIntegral sz
+                 $ h5lt_dtype_to_text tid nullPtr h5lt_DDL p_sz
+  sz    <- lift  $ peek p_sz
+  p_str <- ContT $ allocaArray0 $ fromIntegral sz
   lift   $ do
-    checkHErr "Can't show type" =<< h5lt_dtype_to_text tid p_str h5lt_DDL p_sz
-    hioPeekCString p_str
+    checkHErr "Can't show type" $ h5lt_dtype_to_text tid p_str h5lt_DDL p_sz
+    peekCString p_str
 
 ----------------------------------------------------------------
 --
@@ -77,10 +77,10 @@ tyF64 = Native h5t_NATIVE_DOUBLE
 --   where
 --     Array ty dim = makeArray ty dim
 
-makeArray :: Type -> [Int] -> HIO Type
+makeArray :: Type -> [Int] -> IO Type
 makeArray (getHID -> tid) dim =
-  hioWithArray (fromIntegral <$> dim) $ \p_dim -> do
-    arr <- checkHID "Cannot create array type" =<< h5t_array_create tid n p_dim
+  withArray (fromIntegral <$> dim) $ \p_dim -> do
+    arr <- checkHID "Cannot create array type" $ h5t_array_create tid n p_dim
     pure $ Type arr
   where
     n = fromIntegral $ length dim

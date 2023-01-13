@@ -59,18 +59,18 @@ import Prelude hiding (read,readIO)
 -- File API
 ----------------------------------------------------------------
 
-openFile :: FilePath -> OpenMode -> HIO File
+openFile :: FilePath -> OpenMode -> IO File
 openFile path mode =
-  hioWithCString path $ \c_path -> do
+  withCString path $ \c_path -> do
     hid <- checkHID ("Cannot open file " ++ path)
-       =<< h5f_open c_path (toCParam mode) h5p_DEFAULT
+         $ h5f_open c_path (toCParam mode) h5p_DEFAULT
     pure $ File hid
 
-createFile :: FilePath -> CreateMode -> HIO File
+createFile :: FilePath -> CreateMode -> IO File
 createFile path mode =
-  hioWithCString path $ \c_path -> do
+  withCString path $ \c_path -> do
     hid <- checkHID ("Cannot create file " ++ path)
-       =<< h5f_create c_path (toCParam mode) h5p_DEFAULT h5p_DEFAULT
+         $ h5f_create c_path (toCParam mode) h5p_DEFAULT h5p_DEFAULT
     pure $ File hid
 
 ----------------------------------------------------------------
@@ -81,11 +81,11 @@ openDataset
   :: (IsDirectory dir)
   => dir      -- ^ Location
   -> FilePath -- ^ Path relative to location
-  -> HIO Dataset
+  -> IO Dataset
 openDataset (getHID -> hid) path = do
-  hioWithCString path $ \c_path -> do
+  withCString path $ \c_path -> do
     r <- checkHID ("Cannot open dataset " ++ path)
-     =<< h5d_open2 hid c_path h5p_DEFAULT
+       $ h5d_open2 hid c_path h5p_DEFAULT
     pure $ Dataset r
 
 createEmptyDataset
@@ -94,13 +94,13 @@ createEmptyDataset
   -> FilePath -- ^ Path relative to location
   -> Type     -- ^ Element type
   -> ext      -- ^ Dataspace, that is size of dataset
-  -> HIO Dataset
+  -> IO Dataset
 createEmptyDataset (getHID -> hid) path ty ext = evalContT $ do
-  c_path <- ContT $ hioWithCString path
+  c_path <- ContT $ withCString path
   space  <- ContT $ withDSpace     ext
   lift $ fmap Dataset
        $ checkHID "Unable to create dataset"
-     =<< h5d_create hid c_path (getHID ty) (getHID space)
+       $ h5d_create hid c_path (getHID ty) (getHID space)
          h5p_DEFAULT
          h5p_DEFAULT
          h5p_DEFAULT
@@ -111,7 +111,7 @@ basicCreateDataset
   => dir      -- ^ File (root will be used) or group
   -> FilePath -- ^ Path to dataset
   -> a        -- ^ Value to write
-  -> HIO ()
+  -> IO ()
 basicCreateDataset dir path a = evalContT $ do
   ty   <- ContT $ withType @(ElementOf a)
   dset <- ContT $ withCreateEmptyDataset dir path ty (getExtent a)
@@ -122,8 +122,8 @@ withOpenDataset
   :: (IsDirectory dir)
   => dir      -- ^ Location
   -> FilePath -- ^ Path relative to location
-  -> (Dataset -> HIO a)
-  -> HIO a
+  -> (Dataset -> IO a)
+  -> IO a
 withOpenDataset dir path = bracket (openDataset dir path) basicClose
 
 withCreateEmptyDataset
@@ -132,16 +132,16 @@ withCreateEmptyDataset
   -> FilePath -- ^ Path relative to location
   -> Type     -- ^ Element type
   -> ext      -- ^ Dataspace, that is size of dataset
-  -> (Dataset -> HIO a)
-  -> HIO a
+  -> (Dataset -> IO a)
+  -> IO a
 withCreateEmptyDataset dir path ty ext = bracket
   (createEmptyDataset dir path ty ext)
   basicClose
 
-readDataset :: (SerializeDSet a) => Dataset -> HIO a
+readDataset :: (SerializeDSet a) => Dataset -> IO a
 readDataset d = withDataspace d $ \spc -> basicReadDSet d spc
 
-readObject :: (Serialize a, HasData d) => d -> HIO a
+readObject :: (Serialize a, HasData d) => d -> IO a
 readObject d = withDataspace d $ \spc -> basicRead d spc
 
 ----------------------------------------------------------------
@@ -152,37 +152,39 @@ openGroup
   :: (IsDirectory dir)
   => dir
   -> FilePath
-  -> HIO Group
+  -> IO Group
 openGroup (getHID -> hid) path = 
-  hioWithCString path $ \c_path -> do
-    r <- checkHID "Cannot open group" =<< h5g_open hid c_path h5p_DEFAULT
+  withCString path $ \c_path -> do
+    r <- checkHID "Cannot open group" $ h5g_open hid c_path h5p_DEFAULT
     pure $ Group r
 
 withOpenGroup
   :: (IsDirectory dir)
   => dir
   -> FilePath
-  -> (Group -> HIO a)
-  -> HIO a
+  -> (Group -> IO a)
+  -> IO a
 withOpenGroup dir path = bracket (openGroup dir path) basicClose
 
 createGroup
   :: (IsDirectory dir)
   => dir
   -> FilePath
-  -> HIO Group
-createGroup (getHID -> hid) path =
-  hioWithCString path $ \c_path -> do
+  -> IO Group
+createGroup (getHID -> hid) path = evalContT $ do
+  c_path <- ContT $ withCString path
+  liftIO $ do
+    -- FIXME: reallocation
     r <- checkHID "Cannot open group"
-     =<< h5g_create hid c_path h5p_DEFAULT h5p_DEFAULT h5p_DEFAULT
+       $ h5g_create hid c_path h5p_DEFAULT h5p_DEFAULT h5p_DEFAULT
     pure $ Group r
 
 withCreateGroup
   :: (IsDirectory dir)
   => dir
   -> FilePath
-  -> (Group -> HIO a)
-  -> HIO a
+  -> (Group -> IO a)
+  -> IO a
 withCreateGroup dir path = bracket (createGroup dir path) basicClose
 
 
@@ -193,16 +195,18 @@ withCreateGroup dir path = bracket (createGroup dir path) basicClose
 
 dataspaceRank
   :: Dataspace
-  -> HIO (Maybe Int)
+  -> IO (Maybe Int)
 dataspaceRank (Dataspace hid) = do
-  h5s_get_simple_extent_type hid >>= \case
-    H5S_NULL   -> pure   Nothing
-    H5S_SCALAR -> pure $ Just 0
-    H5S_SIMPLE -> do
-      n <- h5s_get_simple_extent_ndims hid
-      when (n < 0) $ error "Cannot parse extent"
-      pure $ Just (fromIntegral n)
-    _ -> error "getDataspace: Cannot obtain dataspace dimension"
+  alloca $ \p_err -> do
+    -- FIXME: proper errors!
+    h5s_get_simple_extent_type hid p_err >>= \case
+      H5S_NULL   -> pure   Nothing
+      H5S_SCALAR -> pure $ Just 0
+      H5S_SIMPLE -> do
+        n <- h5s_get_simple_extent_ndims hid p_err
+        when (n < 0) $ error "Cannot parse extent"
+        pure $ Just (fromIntegral n)
+      _ -> error "getDataspace: Cannot obtain dataspace dimension"
 
 ----------------------------------------------------------------
 -- Attributes
@@ -212,21 +216,24 @@ openAttr
   :: (HasAttrs a)
   => a      -- ^ Dataset or group
   -> String -- ^ Attribute name
-  -> HIO (Maybe Attribute)
-openAttr (getHID -> hid) path = do
-  hioWithCString path $ \c_str -> do
-    h5a_exists hid c_str >>= \case
+  -> IO (Maybe Attribute)
+openAttr (getHID -> hid) path = evalContT $ do
+  p_err <- ContT $ alloca
+  c_str <- ContT $ withCString path
+  -- FIXME: proper exceptions
+  liftIO $ do
+    h5a_exists hid c_str p_err >>= \case
       HFalse -> pure Nothing
       HTrue  -> Just . Attribute
-            <$> (checkHID "Cannot open attribute" =<< h5a_open hid c_str h5p_DEFAULT)
-      HFail  -> throwM =<< decodeError "Cannot check existence of attribute"
+            <$> (checkHID "Cannot open attribute" $ h5a_open hid c_str h5p_DEFAULT)
+      HFail  -> throwM =<< decodeError p_err "Cannot check existence of attribute"
 
 withAttr
   :: (HasAttrs a)
   => a      -- ^ Dataset or group
   -> String -- ^ Attribute name
-  -> (Maybe Attribute -> HIO b)
-  -> HIO b
+  -> (Maybe Attribute -> IO b)
+  -> IO b
 withAttr a path = bracket (openAttr a path) (mapM_ basicClose)
 
 basicCreateAttr
@@ -234,24 +241,25 @@ basicCreateAttr
   => dir    -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> a      -- ^ Value to store in attribute
-  -> HIO ()
+  -> IO ()
 basicCreateAttr dir path a = evalContT $ do
-  c_path <- ContT $ hioWithCString path
+  -- FIXME: error checking!!!
+  c_path <- ContT $ withCString path
   space  <- ContT $ withDSpace (getExtent a)
   ty     <- ContT $ withType @(ElementOf a)
   attr   <- ContT $ bracket
-    (checkHID "Cannot create attribute"
-    =<< h5a_create (getHID dir) c_path (getHID ty) (getHID space)
+    ( checkHID "Cannot create attribute"
+    $ h5a_create (getHID dir) c_path (getHID ty) (getHID space)
           h5p_DEFAULT
           h5p_DEFAULT)
-    h5a_close
+    ( \h -> checkHErr "XXX" $ h5a_close h)
   lift $ basicWrite (Attribute attr) a
 
 basicReadAttr
   :: (Serialize a, HasAttrs d)
   => d      -- ^ Dataset or group
   -> String -- ^ Attribute name
-  -> HIO (Maybe a)
+  -> IO (Maybe a)
 basicReadAttr a name = withAttr a name $ \case
   Just x  -> Just <$> readObject x
   Nothing -> pure Nothing
@@ -264,9 +272,9 @@ basicReadAttr a name = withAttr a name $ \case
 -- | Data type which corresponds to some HDF data type and could read
 --   from buffer using 'Storable'.
 class Storable a => Element a where
-  typeH5 :: HIO Type
+  typeH5 :: IO Type
 
-withType :: forall a r. Element a => (Type -> HIO r) -> HIO r
+withType :: forall a r. Element a => (Type -> IO r) -> IO r
 withType = bracket (typeH5 @a) basicClose
 
 instance Element Int8   where typeH5 = pure tyI8
@@ -317,21 +325,21 @@ class (Element (ElementOf a), IsExtent (ExtentOf a)) => SerializeDSet a where
   type ExtentOf  a
   -- | Read object using object itself and dataspace associated with
   --   it. This method shouldn't be called directly
-  basicReadDSet :: Dataset -> Dataspace -> HIO a
-  default basicReadDSet :: (Serialize a) => Dataset -> Dataspace -> HIO a
+  basicReadDSet :: Dataset -> Dataspace -> IO a
+  default basicReadDSet :: (Serialize a) => Dataset -> Dataspace -> IO a
   basicReadDSet = basicRead
   -- | Write object to HDF5 file. At this point dataset is already
   --   created with correct dataspace.
-  basicWriteDSet :: Dataset -> a -> HIO ()
-  default basicWriteDSet :: (Serialize a) => Dataset -> a -> HIO ()
+  basicWriteDSet :: Dataset -> a -> IO ()
+  default basicWriteDSet :: (Serialize a) => Dataset -> a -> IO ()
   basicWriteDSet = basicWrite
   -- | Compute dimensions of an array
   getExtent :: a -> ExtentOf a
 
 -- | More restrictive version which could be used for both
 class SerializeDSet a => Serialize a where
-  basicRead  :: HasData d => d -> Dataspace -> HIO a
-  basicWrite :: HasData d => d -> a -> HIO ()
+  basicRead  :: HasData d => d -> Dataspace -> IO a
+  basicWrite :: HasData d => d -> a -> IO ()
 
 -- | Values which could be serialized as set of attributes
 class SerializeAttr a where
@@ -339,10 +347,10 @@ class SerializeAttr a where
   basicToAttrs :: a -> AttributeM ()
 
 newtype AttributeM a = AttributeM
-  { unAttributeM :: forall d. HasAttrs d => d -> (FilePath -> FilePath) -> HIO a }
+  { unAttributeM :: forall d. HasAttrs d => d -> (FilePath -> FilePath) -> IO a }
   deriving Functor
 
-runAttributeM :: HasAttrs d => d -> AttributeM a -> HIO a
+runAttributeM :: HasAttrs d => d -> AttributeM a -> IO a
 runAttributeM d (AttributeM f) = f d id
 
 instance Applicative AttributeM where
@@ -404,8 +412,8 @@ instance Element a => Serialize     (VS.Vector a) where
     when (n /= Just 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
   -- We don't have primitive we
-  basicWrite dset xs = HIO $ do
-    VS.unsafeWith xs $ \ptr -> unHIO $ do
+  basicWrite dset xs = do
+    VS.unsafeWith xs $ \ptr -> do
       withType @a $ \ty ->
         unsafeWriteAll dset ty (castPtr ptr)
 
@@ -473,9 +481,9 @@ instance Element a => SerializeDSet (SerializeAsScalar a) where
 instance Element a => Serialize (SerializeAsScalar a) where
   basicRead  dset spc = basicReadScalar dset spc
   basicWrite dset a   = evalContT $ do
-    p  <- ContT hioAlloca
+    p  <- ContT $ alloca
     ty <- ContT $ withType @a
-    lift $ do hioPoke p a
+    lift $ do poke p a
               unsafeWriteAll dset ty (castPtr p)
 
 ----------------------------------------------------------------
@@ -486,26 +494,30 @@ basicReadBuffer
   :: forall a d. (Element a, HasData d)
   => d
   -> Dataspace
-  -> HIO (VS.Vector a)
+  -> IO (VS.Vector a)
 basicReadBuffer dset (Dataspace spc) = do
-  n   <- h5s_get_simple_extent_npoints spc
-  buf <- hioMallocForeignPtrArray (fromIntegral n)
-  evalContT $ do
-    p  <- ContT $ hioWithForeignPtr buf
-    ty <- ContT $ withType @a
-    lift $ do unsafeReadAll dset ty (castPtr p)
-              pure $! VS.unsafeFromForeignPtr0 buf (fromIntegral n)
+  -- FIXME: error checking!
+  alloca $ \p_err -> do
+    n   <- h5s_get_simple_extent_npoints spc p_err
+    buf <- mallocForeignPtrArray (fromIntegral n)
+    evalContT $ do
+      p  <- ContT $ withForeignPtr buf
+      ty <- ContT $ withType @a
+      lift $ do unsafeReadAll dset ty (castPtr p)
+                pure $! VS.unsafeFromForeignPtr0 buf (fromIntegral n)
 
 basicReadScalar
   :: forall a d. (Element a, HasData d)
   => d
   -> Dataspace
-  -> HIO a
+  -> IO a
 basicReadScalar dset (Dataspace spc) = do
-  nd <- h5s_get_simple_extent_ndims spc
-  when (nd /= 0) $ throwM $ Error "Scalar could only be read from scalar datasets" []
-  evalContT $ do
-    p  <- ContT $ hioAlloca
-    ty <- ContT $ withType @a
-    lift $ do unsafeReadAll dset ty (castPtr p)
-              hioPeek p
+  -- FIXME: error checking!
+  alloca $ \p_err -> do
+    nd <- h5s_get_simple_extent_ndims spc p_err
+    when (nd /= 0) $ throwM $ Error "Scalar could only be read from scalar datasets" []
+    evalContT $ do
+      p  <- ContT $ alloca
+      ty <- ContT $ withType @a
+      lift $ do unsafeReadAll dset ty (castPtr p)
+                peek p

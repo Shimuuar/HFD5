@@ -22,17 +22,14 @@ module HDF5.C.Types
   , HSize
   , HSSize
     -- * IO wrapper
-  , HIO(..)
+  , HIO
   ) where
 
-
-import Control.Monad.Catch
-import Control.Monad.IO.Class
 import Data.Int
 import Foreign.C
 import Foreign.Storable
+import Foreign.Ptr
 import GHC.Generics (Generic)
-import GHC.TypeLits
 
 
 ----------------------------------------------------------------
@@ -72,20 +69,6 @@ pattern HOK      <- HErr ((>=0) -> True)
 type HSize  = CULong
 type HSSize = CLong
 
--- | Newtype wrapper for IO for calling HDF5 functions. If HDF5 is
---   compiled in thread unsafe manner it rely on global variables and
---   calls must be protected by a mutex. @HIO@ allows to batch such
---   calls and to avoid races when one call fails and another clobbers
---   error stack before we're able to read its content.
---
---   Support for thread-safe HDF5 is not implemented yet.
---
-newtype HIO a = HIO { unHIO :: IO a }
-  deriving newtype ( Functor, Applicative, Monad
-                   , MonadThrow, MonadCatch, MonadMask)
-
--- | Instance is intentionally removed. This is to prevent nested
---   calls to 'HDF5.C.runHIO' which could lead to deadlocks. Otherwise
---   functions operating in 'MonadIO' could be used in 'HIO' context.
-instance TypeError ('Text "HIO doesn't hame MonadIO istance on purpose") => MonadIO HIO where
-  liftIO = error "UNREACHABLE"
+-- | We use standard approach where last parameter of wrapper function
+--   is always pointer where we return error stack in case of error.
+type HIO a = Ptr HID -> IO a

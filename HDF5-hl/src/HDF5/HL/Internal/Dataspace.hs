@@ -32,6 +32,7 @@ import Data.Int
 import Data.Functor
 import Foreign.Ptr
 import Foreign.Storable
+import Foreign.Marshal
 
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Error
@@ -98,25 +99,27 @@ endOfExtent = ParserDim $ \uncons s -> uncons s >>= \case
   Nothing -> pure $ Just (s,())
   Just _  -> pure Nothing
 
-runParseFromDataspace :: IsExtent a => Dataspace -> HIO (Maybe a)
-runParseFromDataspace (getHID -> hid) =
-  h5s_get_simple_extent_type hid >>= \case
+runParseFromDataspace :: IsExtent a => Dataspace -> IO (Maybe a)
+runParseFromDataspace (getHID -> hid) = evalContT $ do
+  -- FIXME: proper errors!!!
+  p_err <- ContT alloca
+  lift (h5s_get_simple_extent_type hid p_err) >>= \case
     H5S_NULL   -> pure $ decodeNullExtent
-    H5S_SCALAR -> pure $ undefined
-    H5S_SIMPLE -> evalContT $ do
+    H5S_SCALAR -> pure $ undefined -- FIXME:!!!
+    H5S_SIMPLE -> do
       n_dim <- fmap fromIntegral
-             $ lift $ h5s_get_simple_extent_ndims hid
+             $ lift $ h5s_get_simple_extent_ndims hid p_err
       when (n_dim < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
       -- Allocate buffers
-      p_dim <- ContT $ hioAllocaArray n_dim
-      p_max <- ContT $ hioAllocaArray n_dim
+      p_dim <- ContT $ allocaArray n_dim
+      p_max <- ContT $ allocaArray n_dim
       lift $ do
-        do r <- h5s_get_simple_extent_dims hid p_dim p_max
+        do r <- h5s_get_simple_extent_dims hid p_dim p_max p_err
            when (r < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
         --
         let uncons i | i >= n_dim = pure Nothing
-                     | otherwise  = do dim <- Dim <$> (fromIntegral <$> hioPeekElemOff p_dim i)
-                                                  <*> (fromIntegral <$> hioPeekElemOff p_max i)
+                     | otherwise  = do dim <- Dim <$> (fromIntegral <$> peekElemOff p_dim i)
+                                                  <*> (fromIntegral <$> peekElemOff p_max i)
                                        pure $ Just (i+1, dim)
         unParserDim decodeExtent uncons 0 <&> \case
           Nothing    -> Nothing
@@ -164,7 +167,7 @@ newtype DSpaceWriter = DSpaceWriter
   -> Ptr HSize -- Pointer to maxsize
   -> Int         -- Guard ptr
   -> Int
-  -> HIO Int
+  -> IO Int
   )
 
 instance Semigroup DSpaceWriter where
@@ -179,8 +182,8 @@ putDimension :: Dim -> DSpaceWriter
 putDimension (Dim sz sz_max) = DSpaceWriter go where
   go p_sz p_max i_max i
     | i >= i_max = throwM $ InternalErr "putDimension: buffer overrun"
-    | otherwise  = do hioPokeElemOff p_sz  i (fromIntegral sz)
-                      hioPokeElemOff p_max i (fromIntegral sz_max)
+    | otherwise  = do pokeElemOff p_sz  i (fromIntegral sz)
+                      pokeElemOff p_max i (fromIntegral sz_max)
                       pure $! i + 1
 
 
@@ -189,20 +192,23 @@ putDimension (Dim sz sz_max) = DSpaceWriter go where
 withDSpace
   :: IsExtent dim
   => dim
-  -> (Dataspace -> HIO a)
-  -> HIO a
+  -> (Dataspace -> IO a)
+  -> IO a
 withDSpace dim action = case encodeExtent dim of
   Nothing  -> evalContT $ do
-    spc <- ContT $ bracket (h5s_create H5S_NULL) h5s_close
+    p_err <- ContT $ alloca
+    spc <- ContT $ bracket (h5s_create H5S_NULL p_err) (flip h5s_close p_err)
     lift $ action $ Dataspace spc
   Just fld -> evalContT $ do
     let DSpaceWriter write = fld putDimension
-    -- -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
+    -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
     let max_rank = 32
-    ptr <- ContT $ hioAllocaArray (max_rank * 2)
+    ptr <- ContT $ allocaArray (max_rank * 2)
     let ptr_max = plusPtr ptr $ sz * max_rank
     rank <- lift  $ write ptr ptr_max max_rank 0
-    spc  <- ContT $ bracket (h5s_create_simple (fromIntegral rank) ptr ptr_max) h5s_close
+    p_err <- ContT $ alloca
+    -- FIXME: error checking! (Is this redundant?)
+    spc  <- ContT $ bracket (h5s_create_simple (fromIntegral rank) ptr ptr_max p_err) (\h -> h5s_close h p_err)
     lift $ action $ Dataspace spc
   where
     sz = sizeOf (undefined :: HSize) 

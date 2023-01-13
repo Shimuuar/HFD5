@@ -114,13 +114,13 @@ import Prelude hiding (read,readIO)
 
 -- | Close value
 close :: (Closable a, MonadIO m) => a -> m ()
-close = unsafeRunHIO . basicClose
+close = liftIO . basicClose
 
 getType :: (HasData a, MonadIO m) => a -> m Type
-getType = unsafeRunHIO . getTypeIO
+getType = liftIO . getTypeIO
 
 getDataspace :: (HasData a, MonadIO m) => a -> m Dataspace
-getDataspace = unsafeRunHIO . getDataspaceIO
+getDataspace = liftIO . getDataspaceIO
 
 ----------------------------------------------------------------
 -- File API
@@ -130,7 +130,7 @@ getDataspace = unsafeRunHIO . getDataspaceIO
 --   doesn't exists even if it's open for writing. Use 'createFile' to
 --   create new file. Returned handle must be closed using 'close'.
 openFile :: MonadIO m => FilePath -> OpenMode -> m File
-openFile path mode = unsafeRunHIO $ HIO.openFile path mode
+openFile path mode = liftIO $ HIO.openFile path mode
 
 -- | Open file using 'openFile' and pass handle to continuation. It
 --   will be closed when continuation finish execution normally or
@@ -144,7 +144,7 @@ withOpenFile path mode = bracket (openFile path mode) close
 --   open existing file for modification. Returned handle must be
 --   closed using 'close'.
 createFile :: MonadIO m => FilePath -> CreateMode -> m File
-createFile path mode = unsafeRunHIO $ HIO.createFile path mode
+createFile path mode = liftIO $ HIO.createFile path mode
 
 -- | Create file using 'createFile' and pass handle to
 --   continuation. It will be closed when continuation finish
@@ -163,7 +163,7 @@ openGroup
   => dir      -- ^ Location
   -> FilePath -- ^ Name of group
   -> m Group
-openGroup dir path = unsafeRunHIO $ HIO.openGroup dir path
+openGroup dir path = liftIO $ HIO.openGroup dir path
 
 withOpenGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m)
@@ -178,7 +178,7 @@ createGroup
   => dir       -- ^ Location
   -> FilePath  -- ^ Name of group
   -> m Group
-createGroup dir path = unsafeRunHIO $ HIO.createGroup dir path
+createGroup dir path = liftIO $ HIO.createGroup dir path
 
 withCreateGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m)
@@ -200,7 +200,7 @@ openDataset
   => dir      -- ^ Location
   -> FilePath -- ^ Path relative to location
   -> m Dataset
-openDataset dir path = unsafeRunHIO $ HIO.openDataset dir path
+openDataset dir path = liftIO $ HIO.openDataset dir path
 
 -- | Create new dataset at given location without writing any data to
 --   it. Returned 'Dataset' must be closed by call to 'close'.
@@ -212,7 +212,7 @@ createEmptyDataset
   -> ext      -- ^ Dataspace, that is size of dataset
   -> m Dataset
 createEmptyDataset dir path ty ext
-  = unsafeRunHIO $ HIO.createEmptyDataset dir path ty ext
+  = liftIO $ HIO.createEmptyDataset dir path ty ext
 
 -- | Create new dataset at given location and write provided data to
 --   it. Shape of data is inferred from data to write.
@@ -223,7 +223,7 @@ createDataset
   -> a        -- ^ Value to write
   -> m ()
 createDataset dir path a
-  = unsafeRunHIO $ HIO.basicCreateDataset dir path a
+  = liftIO $ HIO.basicCreateDataset dir path a
 
 -- | Open dataset and pass handle to continuation. Dataset will be
 --   closed when continuation finish execution normally or with an
@@ -254,11 +254,11 @@ withCreateEmptyDataset dir path ty ext = bracket
 --   specifically with datasets and can use its attributes. Use 'read'
 --   to be able to read from attributes as well.
 readDataset :: (SerializeDSet a, MonadIO m) => Dataset -> m a
-readDataset d = unsafeRunHIO $ HIO.readDataset d
+readDataset d = liftIO $ HIO.readDataset d
 
 -- | Read value from already opened dataset or attribute.
 readObject :: (Serialize a, HasData d, MonadIO m) => d -> m a
-readObject d = unsafeRunHIO $ bracket (getDataspaceIO d) basicClose (basicRead d)
+readObject d = liftIO $ bracket (getDataspaceIO d) basicClose (basicRead d)
 
 -- | Open dataset and read it using 'readDSet'.
 readAt
@@ -266,7 +266,7 @@ readAt
   => dir      -- ^ File (root will be used) or group
   -> FilePath -- ^ Path to dataset
   -> m a
-readAt dir path = unsafeRunHIO $ HIO.withOpenDataset dir path HIO.readDataset
+readAt dir path = liftIO $ HIO.withOpenDataset dir path HIO.readDataset
 
 
 ----------------------------------------------------------------
@@ -274,19 +274,19 @@ readAt dir path = unsafeRunHIO $ HIO.withOpenDataset dir path HIO.readDataset
 ----------------------------------------------------------------
 
 rank :: (HasData a, MonadIO m) => a -> m (Maybe Int)
-rank a = unsafeRunHIO $ withDataspace a HIO.dataspaceRank
+rank a = liftIO $ withDataspace a HIO.dataspaceRank
 
 -- | Compute extent of an object. Returns nothing when extent has
 --   unexpected shape. E.g. if 2D array is expected but object is 1D
 --   array.
 extent :: (HasData a, IsExtent ext, MonadIO m) => a -> m (Maybe ext)
-extent a = unsafeRunHIO $ withDataspace a runParseFromDataspace
+extent a = liftIO $ withDataspace a runParseFromDataspace
 
 dataspaceRank
   :: (MonadIO m)
   => Dataspace
   -> m (Maybe Int)
-dataspaceRank spc = unsafeRunHIO $ HIO.dataspaceRank spc
+dataspaceRank spc = liftIO $ HIO.dataspaceRank spc
 
 -- | Parse extent of dataspace. Returns @Nothing@ if dataspace doens't
 --   match expected shape.
@@ -294,7 +294,7 @@ dataspaceExt
   :: (MonadIO m, IsExtent ext)
   => Dataspace
   -> m (Maybe ext)
-dataspaceExt spc = unsafeRunHIO $ runParseFromDataspace spc
+dataspaceExt spc = liftIO $ runParseFromDataspace spc
 
 ----------------------------------------------------------------
 -- Attributes
@@ -307,7 +307,7 @@ openAttr
   => a      -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> m (Maybe Attribute)
-openAttr a path = unsafeRunHIO $ HIO.openAttr a path
+openAttr a path = liftIO $ HIO.openAttr a path
 
 -- | Open attribute of given group or dataset and pass handle to
 --   continuation. It'll be closed when continuation finish
@@ -327,11 +327,11 @@ createAttr
   -> String -- ^ Attribute name
   -> a      -- ^ Value to store in attribute
   -> m ()
-createAttr dir path a = unsafeRunHIO $ HIO.basicCreateAttr dir path a
+createAttr dir path a = liftIO $ HIO.basicCreateAttr dir path a
 
 readAttr
   :: (Serialize a, HasAttrs d, MonadIO m)
   => d      -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> m (Maybe a)
-readAttr a name = unsafeRunHIO $ HIO.basicReadAttr a name
+readAttr a name = liftIO $ HIO.basicReadAttr a name

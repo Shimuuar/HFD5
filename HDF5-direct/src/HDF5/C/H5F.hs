@@ -41,14 +41,14 @@ foreign import capi "hdf5.h value H5F_ACC_SWMR_READ"  h5f_ACC_SWMR_READ  :: CUIn
 -- | Checks if a file can be opened with a given file access property
 --   list. Returns zero (false), a positive (true) or a negative
 --   (failure) value.
-foreign import capi "hdf5.h H5Fis_accessible" h5f_is_accessible
+foreign import capi "hdf5-hs.h hs_H5Fis_accessible" h5f_is_accessible
   :: CString -- ^ Name of a file
   -> HID     -- ^ File access property list identifier
   -> HIO HTri
 
 -- | @H5Fcreate@ is the primary function for creating HDF5 files; it
 --   creates a new HDF5 file with the specified name and property lists.
-foreign import capi "hdf5.h H5Fcreate" h5f_create
+foreign import capi "hdf5-hs.h hs_H5Fcreate" h5f_create
   :: CString
   -- ^ Name of file to create
   -> CUInt
@@ -72,7 +72,7 @@ foreign import capi "hdf5.h H5Fcreate" h5f_create
 --
 --   Returns a file identifier if successful; otherwise returns
 --   'h5i_INVALID_HID'.
-foreign import capi "hdf5.h H5Fopen" h5f_open
+foreign import capi "hdf5-hs.h hs_H5Fopen" h5f_open
   :: CString
   -- ^ Name of the file to be opened
   -> CUInt
@@ -98,7 +98,7 @@ foreign import capi "hdf5.h H5Fopen" h5f_open
 --   information. The only difference between the identifiers is that
 --   the new identifier is not mounted anywhere and no files are
 --   mounted on it.
-foreign import capi "hdf5.h H5Freopen" h5f_reopen
+foreign import capi "hdf5-hs.h hs_H5Freopen" h5f_reopen
   :: HID    -- ^ Identifier of a file for which an additional identifier is required
   -> HIO HID
 
@@ -110,7 +110,7 @@ foreign import capi "hdf5.h H5Freopen" h5f_reopen
 --   other access identifier is open (e.g., a dataset identifier,
 --   group identifier, or shared datatype identifier), the file will
 --   be fully closed and access will end.
-foreign import capi "hdf5.h H5Fclose" h5f_close
+foreign import capi "hdf5-hs.h hs_H5Fclose" h5f_close
   :: HID     -- ^ File identifier
   -> HIO HErr
 
@@ -139,7 +139,7 @@ foreign import capi "hdf5.h H5Fclose" h5f_close
 --   is an HDF5 file via H5Fis_accessible(). This is done to ensure
 --   that H5Fdelete() cannot be used as an arbitrary file deletion
 --   call.
-foreign import capi "hdf5.h H5Fdelete" h5f_delete
+foreign import capi "hdf5-hs.h hs_H5Fdelete" h5f_delete
   :: CString -- ^ Name of file to delete
   -> HID     -- ^ @fapl_id@ File access property list identifier
   -> HIO HErr

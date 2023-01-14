@@ -22,6 +22,8 @@ import Foreign.Marshal
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.C
+import Text.Printf
+
 import HDF5.C
 
 ----------------------------------------------------------------
@@ -35,7 +37,22 @@ data Error
           }
   | InternalErr String
     -- ^ Internal error in library.
-  deriving stock Show
+
+-- GHC display exception using show instead of displayException. No
+-- way around this. We have to override Show
+instance Show Error where
+  show (InternalErr s) = "HDF5 internal error: " ++ s
+  show Error{..}
+    = unlines
+    $ "HDF5 error"
+    : errorDescr
+    : (displayMsg =<< errorStack)
+    where
+      displayMsg Message{..} =
+        [ printf "%s (%s:%i): %s" msgFunc msgFile msgLine msgDescr
+        , printf "  Major: %s" msgMajor
+        , printf "  Minor: %s" msgMinor
+        ]
 
 data Message = Message
   { msgDescr :: String

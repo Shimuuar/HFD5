@@ -88,7 +88,7 @@ decodeError p_err msg = evalContT $ do
         modifyIORef' v_stack (Message{..}:)
         pure $ HErr 0
   callback <- ContT $ bracket (makeWalker step) freeHaskellFunPtr
-  res      <- lift  $ h5e_walk hid_err H5E_WALK_DOWNWARD callback nullPtr p_err
+  res      <- lift  $ h5e_walk hid_err H5E_WALK_UPWARD callback nullPtr p_err
   case res of
     HOK      -> lift $ Error msg <$> readIORef v_stack
     HErrored -> pure $ InternalErr $ unlines ["Failed to decode HDF5 error for", msg]

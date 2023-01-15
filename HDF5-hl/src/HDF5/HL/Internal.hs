@@ -60,18 +60,26 @@ import Prelude hiding (read,readIO)
 ----------------------------------------------------------------
 
 openFile :: FilePath -> OpenMode -> IO File
-openFile path mode =
-  withCString path $ \c_path -> do
-    hid <- checkHID ("Cannot open file " ++ path)
+openFile path mode = evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  lift $ do
+    hid <- checkHID p_err (mkMsg $ "Cannot open file " ++ path)
          $ h5f_open c_path (toCParam mode) h5p_DEFAULT
     pure $ File hid
+  where
+    mkMsg = makeMessage "openFile"
 
 createFile :: FilePath -> CreateMode -> IO File
-createFile path mode =
-  withCString path $ \c_path -> do
-    hid <- checkHID ("Cannot create file " ++ path)
+createFile path mode = evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  lift $ do
+    hid <- checkHID p_err (mkMsg $ "Cannot create file " ++ path)
          $ h5f_create c_path (toCParam mode) h5p_DEFAULT h5p_DEFAULT
     pure $ File hid
+  where
+    mkMsg = makeMessage "createFile"
 
 ----------------------------------------------------------------
 -- Dataset API
@@ -82,11 +90,14 @@ openDataset
   => dir      -- ^ Location
   -> FilePath -- ^ Path relative to location
   -> IO Dataset
-openDataset (getHID -> hid) path = do
-  withCString path $ \c_path -> do
-    r <- checkHID ("Cannot open dataset " ++ path)
-       $ h5d_open2 hid c_path h5p_DEFAULT
-    pure $ Dataset r
+openDataset (getHID -> hid) path = evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  lift $  Dataset
+      <$> ( checkHID p_err (mkMsg $ "Cannot open dataset " ++ path)
+          $ h5d_open2 hid c_path h5p_DEFAULT)
+  where
+    mkMsg = makeMessage "openDataset"
 
 createEmptyDataset
   :: ( IsDirectory dir, IsExtent ext)
@@ -96,14 +107,18 @@ createEmptyDataset
   -> ext      -- ^ Dataspace, that is size of dataset
   -> IO Dataset
 createEmptyDataset (getHID -> hid) path ty ext = evalContT $ do
+  p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
-  space  <- ContT $ withDSpace     ext
+  space  <- ContT $ withDSpace  ext
+  tid    <- ContT $ withType    ty
   lift $ fmap Dataset
-       $ checkHID "Unable to create dataset"
-       $ h5d_create hid c_path (getHID ty) (getHID space)
+       $ checkHID p_err (mkMsg "Unable to create dataset")
+       $ h5d_create hid c_path tid (getHID space)
          h5p_DEFAULT
          h5p_DEFAULT
          h5p_DEFAULT
+  where
+    mkMsg = makeMessage "createEmptyDataset"
 
 basicCreateDataset
   :: forall a dir.
@@ -113,8 +128,7 @@ basicCreateDataset
   -> a        -- ^ Value to write
   -> IO ()
 basicCreateDataset dir path a = evalContT $ do
-  ty   <- ContT $ withType @(ElementOf a)
-  dset <- ContT $ withCreateEmptyDataset dir path ty (getExtent a)
+  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a)
   lift $ basicWriteDSet dset a
 
 
@@ -153,10 +167,15 @@ openGroup
   => dir
   -> FilePath
   -> IO Group
-openGroup (getHID -> hid) path = 
-  withCString path $ \c_path -> do
-    r <- checkHID "Cannot open group" $ h5g_open hid c_path h5p_DEFAULT
+openGroup (getHID -> hid) path = evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  lift $ do
+    r <- checkHID p_err (mkMsg "Cannot open group")
+       $ h5g_open hid c_path h5p_DEFAULT
     pure $ Group r
+  where
+    mkMsg = makeMessage "openGroup"
 
 withOpenGroup
   :: (IsDirectory dir)
@@ -172,12 +191,14 @@ createGroup
   -> FilePath
   -> IO Group
 createGroup (getHID -> hid) path = evalContT $ do
+  p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
   liftIO $ do
-    -- FIXME: reallocation
-    r <- checkHID "Cannot open group"
+    r <- checkHID p_err (mkMsg "Cannot create group")
        $ h5g_create hid c_path h5p_DEFAULT h5p_DEFAULT h5p_DEFAULT
     pure $ Group r
+  where
+    mkMsg = makeMessage "createGroup"
 
 withCreateGroup
   :: (IsDirectory dir)
@@ -220,13 +241,16 @@ openAttr
 openAttr (getHID -> hid) path = evalContT $ do
   p_err <- ContT $ alloca
   c_str <- ContT $ withCString path
-  -- FIXME: proper exceptions
-  liftIO $ do
-    h5a_exists hid c_str p_err >>= \case
-      HFalse -> pure Nothing
-      HTrue  -> Just . Attribute
-            <$> (checkHID "Cannot open attribute" $ h5a_open hid c_str h5p_DEFAULT)
-      HFail  -> throwM =<< decodeError p_err "Cannot check existence of attribute"
+  lift $ do
+    exists <- checkHTri p_err (mkMsg "Cannot check whether attribute exists")
+            $ h5a_exists hid c_str
+    case exists of
+      False -> pure Nothing
+      True  -> Just . Attribute
+            <$> ( checkHID p_err (mkMsg "Cannot open attribute")
+                $ h5a_open hid c_str h5p_DEFAULT)
+  where
+    mkMsg = makeMessage "openAttr"
 
 withAttr
   :: (HasAttrs a)
@@ -243,17 +267,20 @@ basicCreateAttr
   -> a      -- ^ Value to store in attribute
   -> IO ()
 basicCreateAttr dir path a = evalContT $ do
-  -- FIXME: error checking!!!
+  p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
   space  <- ContT $ withDSpace (getExtent a)
-  ty     <- ContT $ withType @(ElementOf a)
+  tid    <- ContT $ withType $ typeH5 @(ElementOf a)
   attr   <- ContT $ bracket
-    ( checkHID "Cannot create attribute"
-    $ h5a_create (getHID dir) c_path (getHID ty) (getHID space)
+    ( checkHID p_err (mkMsg "Cannot create attribute")
+    $ h5a_create (getHID dir) c_path tid (getHID space)
           h5p_DEFAULT
           h5p_DEFAULT)
-    ( \h -> checkHErr "XXX" $ h5a_close h)
+    (\h -> checkHErr p_err (mkMsg "Failed to close opened attribute")
+         $ h5a_close h)
   lift $ basicWrite (Attribute attr) a
+  where
+    mkMsg = makeMessage "basicCreateAttr"
 
 basicReadAttr
   :: (Serialize a, HasAttrs d)
@@ -272,44 +299,37 @@ basicReadAttr a name = withAttr a name $ \case
 -- | Data type which corresponds to some HDF data type and could read
 --   from buffer using 'Storable'.
 class Storable a => Element a where
-  typeH5 :: IO Type
+  typeH5 :: Type
 
-withType :: forall a r. Element a => (Type -> IO r) -> IO r
-withType = bracket (typeH5 @a) basicClose
+instance Element Int8   where typeH5 = tyI8
+instance Element Int16  where typeH5 = tyI16
+instance Element Int32  where typeH5 = tyI32
+instance Element Int64  where typeH5 = tyI64
+instance Element Word8  where typeH5 = tyU8
+instance Element Word16 where typeH5 = tyU16
+instance Element Word32 where typeH5 = tyU32
+instance Element Word64 where typeH5 = tyU64
 
-instance Element Int8   where typeH5 = pure tyI8
-instance Element Int16  where typeH5 = pure tyI16
-instance Element Int32  where typeH5 = pure tyI32
-instance Element Int64  where typeH5 = pure tyI64
-instance Element Word8  where typeH5 = pure tyU8
-instance Element Word16 where typeH5 = pure tyU16
-instance Element Word32 where typeH5 = pure tyU32
-instance Element Word64 where typeH5 = pure tyU64
-
-instance Element Float  where typeH5 = pure tyF32
-instance Element Double where typeH5 = pure tyF64
+instance Element Float  where typeH5 = tyF32
+instance Element Double where typeH5 = tyF64
 
 instance (Element a, F.Arity n) => Element (FB.Vec n a) where
-  typeH5 = do ty <- typeH5 @a
-              makeArray ty [F.length (undefined :: FB.Vec n a)]
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
 instance (Element a, F.Arity n, FU.Unbox n a) => Element (FU.Vec n a) where
-  typeH5 = do ty <- typeH5 @a
-              makeArray ty [F.length (undefined :: FB.Vec n a)]
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
 instance (Element a, F.Arity n) => Element (FS.Vec n a) where
-  typeH5 = do ty <- typeH5 @a
-              makeArray ty [F.length (undefined :: FB.Vec n a)]
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
 instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
-  typeH5 = do ty <- typeH5 @a
-              makeArray ty [F.length (undefined :: FB.Vec n a)]
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
 
 instance Element a => Element (Identity a) where typeH5 = typeH5 @a
 
 instance Element Int where
-  typeH5 | wordSizeInBits == 64 = pure tyI64
-         | otherwise            = pure tyI32
+  typeH5 | wordSizeInBits == 64 = tyI64
+         | otherwise            = tyI32
 instance Element Word where
-  typeH5 | wordSizeInBits == 64 = pure tyU64
-         | otherwise            = pure tyU32
+  typeH5 | wordSizeInBits == 64 = tyU64
+         | otherwise            = tyU32
 
 wordSizeInBits :: Int
 wordSizeInBits = finiteBitSize (0 :: Word)
@@ -412,10 +432,7 @@ instance Element a => Serialize     (VS.Vector a) where
     when (n /= Just 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
   -- We don't have primitive we
-  basicWrite dset xs = do
-    VS.unsafeWith xs $ \ptr -> do
-      withType @a $ \ty ->
-        unsafeWriteAll dset ty (castPtr ptr)
+  basicWrite dset xs = VS.unsafeWith xs $ unsafeWriteAll dset (typeH5 @a)
 
 
 deriving via SerializeAsScalar Int8   instance SerializeDSet Int8
@@ -482,9 +499,8 @@ instance Element a => Serialize (SerializeAsScalar a) where
   basicRead  dset spc = basicReadScalar dset spc
   basicWrite dset a   = evalContT $ do
     p  <- ContT $ alloca
-    ty <- ContT $ withType @a
     lift $ do poke p a
-              unsafeWriteAll dset ty (castPtr p)
+              unsafeWriteAll dset (typeH5 @a) p
 
 ----------------------------------------------------------------
 -- Primitive read/write operations
@@ -502,8 +518,7 @@ basicReadBuffer dset (Dataspace spc) = do
     buf <- mallocForeignPtrArray (fromIntegral n)
     evalContT $ do
       p  <- ContT $ withForeignPtr buf
-      ty <- ContT $ withType @a
-      lift $ do unsafeReadAll dset ty (castPtr p)
+      lift $ do unsafeReadAll dset (typeH5 @a) (castPtr p)
                 pure $! VS.unsafeFromForeignPtr0 buf (fromIntegral n)
 
 basicReadScalar
@@ -515,9 +530,16 @@ basicReadScalar dset (Dataspace spc) = do
   -- FIXME: error checking!
   alloca $ \p_err -> do
     nd <- h5s_get_simple_extent_ndims spc p_err
-    when (nd /= 0) $ throwM $ Error "Scalar could only be read from scalar datasets" []
+    when (nd /= 0) $ throwM $ Error
+      []
     evalContT $ do
       p  <- ContT $ alloca
-      ty <- ContT $ withType @a
-      lift $ do unsafeReadAll dset ty (castPtr p)
+      lift $ do unsafeReadAll dset (typeH5 @a) (castPtr p)
                 peek p
+
+makeMessage :: String -> String -> MessageHS
+makeMessage func descr = MessageHS
+  { msgHsDescr = descr
+  , msgHsFile  = "HDF5.HL.Internal"
+  , msgHsFunc  = func
+  }

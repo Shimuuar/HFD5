@@ -101,30 +101,30 @@ endOfExtent = ParserDim $ \uncons s -> uncons s >>= \case
 
 runParseFromDataspace :: IsExtent a => Dataspace -> IO (Maybe a)
 runParseFromDataspace (getHID -> hid) = evalContT $ do
-  -- FIXME: proper errors!!!
   p_err <- ContT alloca
   lift (h5s_get_simple_extent_type hid p_err) >>= \case
     H5S_NULL   -> pure $ decodeNullExtent
-    H5S_SCALAR -> pure $ undefined -- FIXME:!!!
+    H5S_SCALAR -> unParserDim decodeExtent (\() -> pure Nothing) () <&> fmap snd
     H5S_SIMPLE -> do
-      n_dim <- fmap fromIntegral
-             $ lift $ h5s_get_simple_extent_ndims hid p_err
-      when (n_dim < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
+      rank <- lift
+            $ fmap fromIntegral
+            $ checkCInt p_err (mkMsg "Cannot get rank of simple extent")
+            $ h5s_get_simple_extent_ndims hid
       -- Allocate buffers
-      p_dim <- ContT $ allocaArray n_dim
-      p_max <- ContT $ allocaArray n_dim
+      p_dim <- ContT $ allocaArray rank
+      p_max <- ContT $ allocaArray rank
       lift $ do
-        do r <- h5s_get_simple_extent_dims hid p_dim p_max p_err
-           when (r < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
+        _ <- checkCInt p_err (mkMsg "Cannot get rank of simple extent")
+           $ h5s_get_simple_extent_dims hid p_dim p_max
         --
-        let uncons i | i >= n_dim = pure Nothing
-                     | otherwise  = do dim <- Dim <$> (fromIntegral <$> peekElemOff p_dim i)
-                                                  <*> (fromIntegral <$> peekElemOff p_max i)
-                                       pure $ Just (i+1, dim)
-        unParserDim decodeExtent uncons 0 <&> \case
-          Nothing    -> Nothing
-          Just (_,a) -> Just a
-    _ -> error "getDataspace: Cannot obtain dataspace dimension"
+        let uncons i | i >= rank = pure Nothing
+                     | otherwise = do dim <- Dim <$> (fromIntegral <$> peekElemOff p_dim i)
+                                                 <*> (fromIntegral <$> peekElemOff p_max i)
+                                      pure $ Just (i+1, dim)
+        unParserDim decodeExtent uncons 0 <&> fmap snd
+    _ -> lift $ throwM =<< decodeError p_err (mkMsg "Cannot get class of dataspace")
+  where
+    mkMsg = makeMessage "runParseFromDataspace"
 
 
 instance IsExtent () where
@@ -181,11 +181,12 @@ instance Monoid DSpaceWriter where
 putDimension :: Dim -> DSpaceWriter
 putDimension (Dim sz sz_max) = DSpaceWriter go where
   go p_sz p_max i_max i
-    | i >= i_max = throwM $ InternalErr "putDimension: buffer overrun"
+    | i >= i_max = throwM $ Error [Left $ mkMsg "Internal error: buffer overrun"]
     | otherwise  = do pokeElemOff p_sz  i (fromIntegral sz)
                       pokeElemOff p_max i (fromIntegral sz_max)
                       pure $! i + 1
-
+    where
+      mkMsg = makeMessage "putDimension"
 
 -- | Create simple dataspace which could e used in bracket-like
 --   context
@@ -212,3 +213,10 @@ withDSpace dim action = case encodeExtent dim of
     lift $ action $ Dataspace spc
   where
     sz = sizeOf (undefined :: HSize) 
+
+makeMessage :: String -> String -> MessageHS
+makeMessage func descr = MessageHS
+  { msgHsDescr = descr
+  , msgHsFile  = "HDF5.HL.Internal.Dataspace"
+  , msgHsFunc  = func
+  }

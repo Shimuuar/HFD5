@@ -61,7 +61,7 @@ module HDF5.HL
   , tyI8, tyI16, tyI32, tyI64
   , tyU8, tyU16, tyU32, tyU64
   , tyF32, tyF64
-  , makeArray
+  , pattern Array
     -- ** Type classes
   , IsObject
   , IsDirectory

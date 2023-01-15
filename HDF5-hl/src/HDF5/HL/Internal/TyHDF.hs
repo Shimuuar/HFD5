@@ -13,15 +13,12 @@ module HDF5.HL.Internal.TyHDF
     Type(..)
   , unsafeNewType
   , withType
-    -- basicShowType
     -- * Scalar data types
   , tyI8, tyI16, tyI32, tyI64
   , tyU8, tyU16, tyU32, tyU64
   , tyF32, tyF64
     -- * Patterns
   , pattern Array
-  -- , makeArray
-  -- , matchArrat
   ) where
 
 import Control.Monad
@@ -83,15 +80,14 @@ instance Show Type where
     p_err <- ContT $ alloca
     tid   <- ContT $ withType ty
     p_sz  <- ContT $ alloca
-    _     <- lift  $ checkHErr p_err (mkMsg "Can't show type")
+    _     <- lift  $ checkHErr p_err "Can't show type"
                    $ h5lt_dtype_to_text tid nullPtr h5lt_DDL p_sz
     sz    <- lift  $ peek p_sz
     p_str <- ContT $ allocaArray0 $ fromIntegral sz
     lift $ do
-      checkHErr p_err (mkMsg "Can't show type") $ h5lt_dtype_to_text tid p_str h5lt_DDL p_sz
+      checkHErr p_err "Can't show type" $ h5lt_dtype_to_text tid p_str h5lt_DDL p_sz
       peekCString p_str
-    where
-      mkMsg = makeMessage "show"
+
 
 ----------------------------------------------------------------
 --
@@ -124,41 +120,30 @@ makeArray ty dim = unsafePerformIO $ evalContT $ do
   p_dim <- ContT $ withArray (fromIntegral <$> dim)
   p_err <- ContT $ alloca
   liftIO $ unsafeNewType
-         $ checkHID p_err (mkMsg "Cannot create array type")
+         $ checkHID p_err "Cannot create array type"
          $ h5t_array_create tid n p_dim
   where
-    n     = fromIntegral $ length dim
-    mkMsg = makeMessage "makeArray"
+    n = fromIntegral $ length dim
 
 matchArray :: Type -> Maybe (Type, [Int])
 matchArray ty = unsafePerformIO $ evalContT $ do
   p_err <- ContT $ alloca
   tid   <- ContT $ withType ty
   liftIO (h5t_get_class tid p_err) >>= \case
-    H5T_NO_CLASS -> liftIO $ throwM =<< decodeError p_err (mkMsg "INTERNAL: Unable to get class for a type")
+    H5T_NO_CLASS -> liftIO $ throwM =<< decodeError p_err "INTERNAL: Unable to get class for a type"
     H5T_ARRAY    -> do
         n     <- liftIO
                $ fmap fromIntegral
-               $ checkCInt p_err (mkMsg "INTERNAL: Unable to get number of array dimensions")
+               $ checkCInt p_err "INTERNAL: Unable to get number of array dimensions"
                $ h5t_get_array_ndims tid
         buf   <- ContT $ allocaArray n
         _     <- liftIO
-               $ checkCInt p_err (mkMsg "INTERNAL: Unable to get array's dimensions")
+               $ checkCInt p_err "INTERNAL: Unable to get array's dimensions"
                $ h5t_get_array_dims tid buf
         super <- liftIO
                $ unsafeNewType
-               $ checkHID p_err (mkMsg "INTERNAL: Cannot get supertype")
+               $ checkHID p_err "INTERNAL: Cannot get supertype"
                $ h5t_get_super tid
         dims  <- liftIO $ peekArray n buf
         pure $ Just (super, fromIntegral <$> dims)
     _ -> pure Nothing
-  where
-    mkMsg = makeMessage "matchArray"
-
-
-makeMessage :: String -> String -> MessageHS
-makeMessage func descr = MessageHS
-  { msgHsDescr = descr
-  , msgHsFile  = "HDF5.HL.Internal.TyHDF"
-  , msgHsFunc  = func
-  }

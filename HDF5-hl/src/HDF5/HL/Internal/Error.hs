@@ -1,20 +1,22 @@
-{-# LANGUAGE DerivingStrategies  #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE MultiWayIf          #-}
-{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImportQualifiedPost        #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiWayIf                 #-}
+{-# LANGUAGE RecordWildCards            #-}
 -- |
 module HDF5.HL.Internal.Error
   ( -- * Exception data type
     Error(..)
   , Message(..)
-  , MessageHS(..)
     -- * API
   , decodeError
   , checkHID
   , checkHErr
   , checkHTri
   , checkCInt
+  , checkCLong
   ) where
 
 import Control.Monad.Catch
@@ -26,6 +28,7 @@ import Foreign.Ptr
 import Foreign.Storable
 import Foreign.C
 import Text.Printf
+import GHC.Stack
 
 import HDF5.C
 
@@ -34,7 +37,8 @@ import HDF5.C
 ----------------------------------------------------------------
 
 -- | Error during HDF5 call
-newtype Error = Error [Either MessageHS Message]
+data Error where
+  Error :: HasCallStack => [Either String Message] -> Error
 
 -- GHC display exception using show instead of displayException. No
 -- way around this. We have to override Show
@@ -42,27 +46,19 @@ newtype Error = Error [Either MessageHS Message]
 -- See https://mail.haskell.org/pipermail/libraries/2018-May/028813.html
 -- for a bit of history
 instance Show Error where
-  show (Error msgs)
-    = unlines
-    $ "HDF5 error"
-    : (either displayMsgHS displayMsg =<< msgs)
+  show (Error msgs) = unlines $ concat
+    [ [ "HDF5 error" ]
+    , [ ' ':' ':prettyCallSite s | s <- reverse $ getCallStack callStack]
+    , either displayMsgHS displayMsg =<< msgs
+    ]
     where
+      prettyCallSite (f, loc) = f ++ ", called at " ++ prettySrcLoc loc
       displayMsg Message{..} =
         [ printf "%s (%s:%i): %s" msgFunc msgFile msgLine msgDescr
         , printf "  Major: %s" msgMajor
         , printf "  Minor: %s" msgMinor
         ]
-      displayMsgHS MessageHS{..} =
-        [ printf "%s.%s:" msgHsFile msgHsFunc
-        , printf "  %s"   msgHsDescr
-        ]
-
-data MessageHS = MessageHS
-  { msgHsDescr :: String
-  , msgHsFunc  :: String
-  , msgHsFile  :: String
-  }
-  deriving stock Show
+      displayMsgHS msg = [msg]
 
 data Message = Message
   { msgDescr :: String
@@ -77,7 +73,7 @@ data Message = Message
 instance Exception Error
 
 -- | Decode error from HDF5 error stack
-decodeError :: Ptr HID -> MessageHS -> IO Error
+decodeError :: HasCallStack => Ptr HID -> String -> IO Error
 decodeError p_err msg = evalContT $ do
   hid_err  <- lift  $ peek p_err
   v_stack  <- lift  $ newIORef []
@@ -106,20 +102,16 @@ decodeError p_err msg = evalContT $ do
     -- Error message from major/minor labels are usually short so we
     -- don't need to bother with size discovery
     msg_size = 255
-    internal = MessageHS
-      { msgHsDescr = "INTERNAL: Failed to decode HDF5 error"
-      , msgHsFile  = "HDF5.HL.Internal.Error"
-      , msgHsFunc  = "decodeError"
-      }
+    internal = "INTERNAL: Failed to decode HDF5 error"
 
-checkHID :: Ptr HID -> MessageHS -> (Ptr HID -> IO HID) -> IO HID
+checkHID :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO HID) -> IO HID
 {-# INLINE checkHID #-}
 checkHID p_err msg action =
   action p_err >>= \case
     hid | hid < (HID 0) -> throwM =<< decodeError p_err msg
         | otherwise     -> pure hid
 
-checkHErr :: Ptr HID -> MessageHS -> (Ptr HID -> IO HErr) -> IO ()
+checkHErr :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO HErr) -> IO ()
 {-# INLINE checkHErr #-}
 checkHErr p_err msg action =
   action p_err >>= \case
@@ -127,14 +119,21 @@ checkHErr p_err msg action =
     _   -> throwM =<< decodeError p_err msg
 
 
-checkCInt :: Ptr HID -> MessageHS -> (Ptr HID -> IO CInt) -> IO CInt
+checkCInt :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO CInt) -> IO CInt
 {-# INLINE checkCInt #-}
 checkCInt p_err msg action =
   action p_err >>= \case
     n | n < 0     -> throwM =<< decodeError p_err msg
       | otherwise -> pure n 
 
-checkHTri :: Ptr HID -> MessageHS -> (Ptr HID -> IO HTri) -> IO Bool
+checkCLong :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO CLong) -> IO CLong
+{-# INLINE checkCLong #-}
+checkCLong p_err msg action =
+  action p_err >>= \case
+    n | n < 0     -> throwM =<< decodeError p_err msg
+      | otherwise -> pure n 
+
+checkHTri :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO HTri) -> IO Bool
 {-# INLINE checkHTri #-}
 checkHTri p_err msg action =
   action p_err >>= \case

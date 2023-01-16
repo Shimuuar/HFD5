@@ -4,7 +4,8 @@
 {-# LANGUAGE ViewPatterns             #-}
 -- |
 module HDF5.C.H5G
-  ( h5g_close
+  ( -- * Functions
+    h5g_close
   , h5g_open
   , h5g_create
   ) where

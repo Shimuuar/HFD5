@@ -21,6 +21,12 @@ module HDF5.C.Types
   , pattern HErrored
   , HSize
   , HSSize
+    -- * Enumerations
+  , H5Index(..)
+  , pattern H5_INDEX_UNKNOWN
+  , pattern H5_INDEX_NAME
+  , pattern H5_INDEX_CRT_ORDER
+  , pattern H5_INDEX_N
     -- * IO wrapper
   , HIO
   ) where
@@ -72,3 +78,37 @@ type HSSize = CLong
 -- | We use standard approach where last parameter of wrapper function
 --   is always pointer where we return error stack in case of error.
 type HIO a = Ptr HID -> IO a
+
+
+----------------------------------------------------------------
+-- Enumerations
+----------------------------------------------------------------
+
+
+-- | The types of indices on links in groups\/attributes on
+--   objects. Primarily used for @<do> <foo> by index@ routines and
+--   for iterating over links in groups\/attributes on objects.
+newtype H5Index = H5Index CInt
+  deriving (Show,Eq,Ord)
+
+foreign import capi "hdf5.h value H5_INDEX_UNKNOWN"   h5_INDEX_UNKNOWN   :: H5Index
+foreign import capi "hdf5.h value H5_INDEX_NAME"      h5_INDEX_NAME      :: H5Index
+foreign import capi "hdf5.h value H5_INDEX_CRT_ORDER" h5_INDEX_CRT_ORDER :: H5Index
+foreign import capi "hdf5.h value H5_INDEX_N"         h5_INDEX_N         :: H5Index
+
+-- | Unknown index type
+pattern H5_INDEX_UNKNOWN :: H5Index
+pattern H5_INDEX_UNKNOWN <- ((==h5_INDEX_UNKNOWN) -> True) where H5_INDEX_UNKNOWN = h5_INDEX_UNKNOWN
+
+-- | Index on names
+pattern H5_INDEX_NAME :: H5Index
+pattern H5_INDEX_NAME <- ((==h5_INDEX_NAME) -> True) where H5_INDEX_NAME = h5_INDEX_NAME
+
+-- | Index on creation order
+pattern H5_INDEX_CRT_ORDER :: H5Index
+pattern H5_INDEX_CRT_ORDER <- ((==h5_INDEX_CRT_ORDER) -> True) where H5_INDEX_CRT_ORDER = h5_INDEX_CRT_ORDER
+
+-- | Number of indices defined
+pattern H5_INDEX_N :: H5Index
+pattern H5_INDEX_N <- ((==h5_INDEX_N) -> True) where H5_INDEX_N = h5_INDEX_N
+

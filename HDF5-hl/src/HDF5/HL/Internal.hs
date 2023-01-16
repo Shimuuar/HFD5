@@ -54,7 +54,6 @@ import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Dataspace
-import HDF5.HL.Internal.Enum
 import HDF5.C
 import Prelude hiding (read,readIO)
 
@@ -62,144 +61,15 @@ import Prelude hiding (read,readIO)
 -- File API
 ----------------------------------------------------------------
 
-openFile :: HasCallStack => FilePath -> OpenMode -> IO File
-openFile path mode = withFrozenCallStack $ evalContT $ do
-  p_err  <- ContT $ alloca
-  c_path <- ContT $ withCString path
-  lift $ do
-    hid <- checkHID p_err ("Cannot open file " ++ path)
-         $ h5f_open c_path (toCParam mode) h5p_DEFAULT
-    pure $ File hid
-
-createFile :: HasCallStack => FilePath -> CreateMode -> IO File
-createFile path mode = withFrozenCallStack $ evalContT $ do
-  p_err  <- ContT $ alloca
-  c_path <- ContT $ withCString path
-  lift $ do
-    hid <- checkHID p_err ("Cannot create file " ++ path)
-         $ h5f_create c_path (toCParam mode) h5p_DEFAULT h5p_DEFAULT
-    pure $ File hid
-
 ----------------------------------------------------------------
 -- Dataset API
 ----------------------------------------------------------------
 
-openDataset
-  :: (IsDirectory dir, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> IO Dataset
-openDataset (getHID -> hid) path = withFrozenCallStack $ evalContT $ do
-  p_err  <- ContT $ alloca
-  c_path <- ContT $ withCString path
-  lift $  Dataset
-      <$> ( checkHID p_err ("Cannot open dataset " ++ path)
-          $ h5d_open2 hid c_path h5p_DEFAULT)
-
-createEmptyDataset
-  :: (IsDirectory dir, IsExtent ext, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> Type     -- ^ Element type
-  -> ext      -- ^ Dataspace, that is size of dataset
-  -> IO Dataset
-createEmptyDataset (getHID -> hid) path ty ext = evalContT $ do
-  p_err  <- ContT $ alloca
-  c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspace ext
-  tid    <- ContT $ withType ty
-  lift $ withFrozenCallStack
-       $ fmap Dataset
-       $ checkHID p_err ("Unable to create dataset")
-       $ h5d_create hid c_path tid (getHID space)
-         h5p_DEFAULT
-         h5p_DEFAULT
-         h5p_DEFAULT
-
-basicCreateDataset
-  :: forall a dir.
-     (SerializeDSet a, IsDirectory dir, HasCallStack)
-  => dir      -- ^ File (root will be used) or group
-  -> FilePath -- ^ Path to dataset
-  -> a        -- ^ Value to write
-  -> IO ()
-basicCreateDataset dir path a = evalContT $ do
-  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a)
-  lift $ basicWriteDSet dset a
 
 
-withOpenDataset
-  :: (IsDirectory dir, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> (Dataset -> IO a)
-  -> IO a
-withOpenDataset dir path = bracket (openDataset dir path) basicClose
-
-withCreateEmptyDataset
-  :: ( IsDirectory dir, IsExtent ext, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> Type     -- ^ Element type
-  -> ext      -- ^ Dataspace, that is size of dataset
-  -> (Dataset -> IO a)
-  -> IO a
-withCreateEmptyDataset dir path ty ext = bracket
-  (createEmptyDataset dir path ty ext)
-  basicClose
-
-readDataset :: (SerializeDSet a, HasCallStack) => Dataset -> IO a
-readDataset d = withDataspace d $ \spc -> basicReadDSet d spc
-
-readObject :: (Serialize a, HasData d, HasCallStack) => d -> IO a
-readObject d = withDataspace d $ \spc -> basicRead d spc
-
-----------------------------------------------------------------
--- File API
-----------------------------------------------------------------
-
-openGroup
-  :: (IsDirectory dir, HasCallStack)
-  => dir
-  -> FilePath
-  -> IO Group
-openGroup (getHID -> hid) path = withFrozenCallStack $ evalContT $ do
-  p_err  <- ContT $ alloca
-  c_path <- ContT $ withCString path
-  lift $ do
-    r <- checkHID p_err ("Cannot open group " ++ path)
-       $ h5g_open hid c_path h5p_DEFAULT
-    pure $ Group r
-
-withOpenGroup
-  :: (IsDirectory dir, HasCallStack)
-  => dir
-  -> FilePath
-  -> (Group -> IO a)
-  -> IO a
-withOpenGroup dir path = bracket (openGroup dir path) basicClose
-
-createGroup
-  :: (IsDirectory dir, HasCallStack)
-  => dir
-  -> FilePath
-  -> IO Group
-createGroup (getHID -> hid) path = withFrozenCallStack $ evalContT $ do
-  p_err  <- ContT $ alloca
-  c_path <- ContT $ withCString path
-  liftIO $ do
-    r <- checkHID p_err ("Cannot create group " ++ path)
-       $ h5g_create hid c_path h5p_DEFAULT h5p_DEFAULT h5p_DEFAULT
-    pure $ Group r
-
-withCreateGroup
-  :: (IsDirectory dir, HasCallStack)
-  => dir
-  -> FilePath
-  -> (Group -> IO a)
-  -> IO a
-withCreateGroup dir path = bracket (createGroup dir path) basicClose
-
+-- | Read value from already opened dataset or attribute.
+basicReadObject :: (Serialize a, HasData d, MonadIO m, HasCallStack) => d -> m a
+basicReadObject d = liftIO $ withDataspace d $ \spc -> basicRead d spc
 
 
 ----------------------------------------------------------------
@@ -279,7 +149,7 @@ basicReadAttr
   -> String -- ^ Attribute name
   -> IO (Maybe a)
 basicReadAttr a name = withAttr a name $ \case
-  Just x  -> Just <$> readObject x
+  Just x  -> Just <$> basicReadObject x
   Nothing -> pure Nothing
 
 

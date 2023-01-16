@@ -14,7 +14,6 @@ module HDF5.C
     -- ** Constants
   , h5p_DEFAULT
   , h5i_INVALID_HID
-  , h5s_ALL
     -- * General library
   , h5_free_memory
     -- * Attributes API
@@ -59,7 +58,6 @@ import HDF5.C.H5LT
 
 foreign import capi "hdf5.h value H5P_DEFAULT"        h5p_DEFAULT     :: HID
 foreign import capi "hdf5.h value H5I_INVALID_HID"    h5i_INVALID_HID :: HID
-foreign import capi "hdf5.h value H5S_ALL"            h5s_ALL         :: HID
 
 
 foreign import capi "hdf5-hs.h value HS_H5_THREADSAFE" is_threadsafe :: Int

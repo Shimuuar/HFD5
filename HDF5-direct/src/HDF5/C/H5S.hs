@@ -5,8 +5,10 @@
 -- |
 -- API for dataspaces
 module HDF5.C.H5S
-  ( -- * Enumerations
-    H5SClass(..)
+  ( -- * Constants
+    h5s_ALL
+    -- * Enumerations
+  , H5SClass(..)
   , pattern H5S_NO_CLASS
   , pattern H5S_SCALAR
   , pattern H5S_SIMPLE
@@ -26,6 +28,8 @@ import Foreign.C
 import Foreign.Ptr
 import HDF5.C.Types
 
+
+foreign import capi "hdf5.h value H5S_ALL" h5s_ALL :: HID
 
 ----------------------------------------------------------------
 -- Enumerations

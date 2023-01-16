@@ -1,225 +1,149 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DerivingStrategies  #-}
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE MagicHash           #-}
+{-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE UnboxedTuples       #-}
 {-# LANGUAGE ViewPatterns        #-}
 -- |
--- Data types for working with HDF5 files
+-- API for working with HDF5 data types. We treat them as immutable
+-- while they're mutable in HDF5.
 module HDF5.HL.Internal.Types
-  ( -- * Files and groups
-    File(..)
-  , OpenMode(..)
-  , CreateMode(..)
-  , Group(..)
-  , Dataset(..)
-  , Attribute(..)
-  , Dataspace(..)
-  , Type(..)
-    -- * Type classes
-  , Closable(..)
-  , IsObject(..)
-  , IsDirectory
-  , HasAttrs
-  , HasData(..)
-  , withDataspace
+  ( -- * Operations on types
+    Type(..)
+  , unsafeNewType
+  , withType
+    -- * Scalar data types
+  , tyI8, tyI16, tyI32, tyI64
+  , tyU8, tyU16, tyU32, tyU64
+  , tyF32, tyF64
+    -- * Patterns
+  , pattern Array
   ) where
 
+import Control.Monad
 import Control.Monad.Catch
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
-import Data.Coerce
+import Data.IORef
+import Foreign.Marshal (alloca, allocaArray, allocaArray0, withArray, peekArray)
 import Foreign.Ptr
-import Foreign.Marshal
-import GHC.Stack
+import Foreign.C.String
+import Foreign.Storable
+import System.IO.Unsafe
+import GHC.Exts
+import GHC.IO          (IO(..))
 
-import HDF5.C
-import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.Error
-import HDF5.HL.Internal.TyHDF
-
-
-----------------------------------------------------------------
--- Type classes
-----------------------------------------------------------------
-
--- | Most value (files, groups, datasets, etc.) should be closed
---   explicitly in order to avoid resource leaks. This is utility
---   class which allows to use same function to all of them.
-class Closable a where
-  basicClose :: HasCallStack => a -> IO ()
-
-
--- | Some HDF5 object.
-class IsObject a where
-  getHID        :: a -> HID
-  unsafeFromHID :: HID -> a
-
-
--- | HDF5 entities that could be used in context where group is
---   expected: groups, files (root group is used).
-class IsObject a => IsDirectory a
-
--- | Objects which could have attributes attached, such as files and groups
-class IsObject a => HasAttrs a
-
--- | HDF5 entities which contains data that could be
-class IsObject a => HasData a where
-  -- | Get type of object
-  getTypeIO      :: HasCallStack => a -> IO Type
-  -- | Get dataspace associated with object
-  getDataspaceIO :: HasCallStack => a -> IO Dataspace
-  -- | Read all content of object
-  unsafeReadAll  :: HasCallStack
-                 => a      -- ^ Object handle
-                 -> Type   -- ^ Type of in-memory elements
-                 -> Ptr x  -- ^ Buffer to read to
-                 -> IO ()
-  -- | Write full dataset at once
-  unsafeWriteAll :: HasCallStack
-                 => a      -- ^ Object handle
-                 -> Type   -- ^ Type of in-memory elements
-                 -> Ptr x  -- ^ Buffer with data
-                 -> IO ()
-
-
-withDataspace :: (HasData a) => a -> (Dataspace -> IO b) -> IO b
-withDataspace a = bracket (getDataspaceIO a) basicClose
-
+-- import HDF5.HL.Internal.Types
+import HDF5.C
 
 ----------------------------------------------------------------
--- Files, groups, datasets
+-- Type definition
 ----------------------------------------------------------------
 
--- | Handle for working with HDF5 file
-newtype File = File HID
-  deriving stock (Show,Eq,Ord)
+-- | HDF5 data type.
+data Type
+  = Type   HID  {-# UNPACK #-} !(IORef ())
+    -- ^ Type which should be closed
+  | Native HID
+    -- ^ Data types which does not need to be finalized
 
--- | Handle for working with group (directory)
-newtype Group = Group HID
-  deriving stock (Show,Eq,Ord)
+-- | Create new type. IO action must return fresh data type which
+--   should be closed with 'h5t_close'.
+unsafeNewType
+  :: IO HID -- ^ IO action which generates /fresh/ HID for type
+  -> IO Type
+unsafeNewType mkHID = alloca $ \p_err -> mask_ $ do
+  token <- newIORef ()
+  hid   <- mkHID
+  _     <- mkWeakIORef token (void $ h5t_close hid p_err)
+  pure $ Type hid token
 
--- | Handle for dataset
-newtype Dataset = Dataset HID
-  deriving stock (Show,Eq,Ord)
+-- | Use HID from data type. This function ensures that HID is kept
+--   alive while callback is running.
+withType :: Type -> (HID -> IO a) -> IO a
+withType (Native hid)     fun = fun hid
+withType (Type hid token) fun = IO $ \s ->
+  case fun hid of
+#if MIN_VERSION_base(4,15,0)
+    IO action# -> keepAlive# token s action#
+#else
+    IO action# -> case action# s of
+      (# s', a #) -> let s'' = touch# token s'
+                     in (# s'', a #)
+#endif
 
--- | Handle for attribute
-newtype Attribute = Attribute HID
-  deriving stock (Show,Eq,Ord)
-
--- | Handle for dataspace
-newtype Dataspace = Dataspace HID
-  deriving stock (Show,Eq,Ord)
-
-
-----------------
-
-instance IsObject File where
-  getHID        = coerce
-  unsafeFromHID = coerce
-
-instance IsDirectory File
-instance HasAttrs    File
-
-----------------
-
-instance IsObject Group where
-  getHID        = coerce
-  unsafeFromHID = coerce
-
-instance IsDirectory Group
-instance HasAttrs    Group
-
-----------------
-
-instance IsObject Dataset where
-  getHID        = coerce
-  unsafeFromHID = coerce
-
-instance HasData Dataset where
-  getTypeIO (Dataset hid) = withFrozenCallStack $ alloca $ \p_err ->
-      unsafeNewType
-    $ checkHID p_err "Cannot get type of dataset"
-    $ h5d_get_type hid
-  getDataspaceIO (Dataset hid) = withFrozenCallStack $ alloca $ \p_err ->
-      fmap Dataspace
-    $ checkHID p_err "Cannot read dataset's dataspace"
-    $ h5d_get_space hid
-  unsafeReadAll (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
+instance Show Type where
+  show ty = unsafePerformIO $ evalContT $ do
     p_err <- ContT $ alloca
     tid   <- ContT $ withType ty
-    lift $ checkHErr p_err "Reading dataset data failed"
-         $ h5d_read hid tid
-             h5s_ALL h5s_ALL h5p_DEFAULT (castPtr buf)
-  unsafeWriteAll (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
-    tid   <- ContT $ withType ty
-    lift $ checkHErr p_err "Writing dataset data failed"
-         $ h5d_write hid tid
-             h5s_ALL h5s_ALL h5p_DEFAULT buf
-
-instance HasAttrs Dataset
-
-----------------
-
-instance IsObject Attribute where
-  getHID        = coerce
-  unsafeFromHID = coerce
-
-instance HasData Attribute where
-  getTypeIO (Attribute hid) = alloca $ \p_err -> withFrozenCallStack
-    $ unsafeNewType
-    $ checkHID p_err "Cannot get type of attribute"
-    $ h5a_get_type hid
-  getDataspaceIO (Attribute hid) = alloca $ \p_err -> withFrozenCallStack 
-    $ fmap Dataspace
-    $ checkHID p_err "Cannot get attribute's dataspace"
-    $ h5a_get_space hid
-  unsafeReadAll (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
-    tid   <- ContT $ withType ty
-    lift $ checkHErr p_err "Reading attribute data failed"
-         $ h5a_read hid tid (castPtr buf)
-  unsafeWriteAll (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
-    tid   <- ContT $ withType ty
-    lift $ checkHErr p_err "Writing Attribute data failed"
-         $ h5a_write hid tid (castPtr buf)
-
-----------------
-
-instance IsObject Dataspace where
-  getHID        = coerce
-  unsafeFromHID = coerce
+    p_sz  <- ContT $ alloca
+    _     <- lift  $ checkHErr p_err "Can't show type"
+                   $ h5lt_dtype_to_text tid nullPtr h5lt_DDL p_sz
+    sz    <- lift  $ peek p_sz
+    p_str <- ContT $ allocaArray0 $ fromIntegral sz
+    lift $ do
+      checkHErr p_err "Can't show type" $ h5lt_dtype_to_text tid p_str h5lt_DDL p_sz
+      peekCString p_str
 
 
 ----------------------------------------------------------------
+--
+----------------------------------------------------------------
 
-instance Closable File where
-  basicClose (File hid) =  alloca $ \p_err ->
-      checkHErr p_err "Failed to close File"
-    $ h5f_close hid
+tyI8,tyI16,tyI32,tyI64 :: Type
+tyI8  = Native h5t_NATIVE_SCHAR
+tyI16 = Native h5t_NATIVE_SHORT
+tyI32 = Native h5t_NATIVE_INT
+tyI64 = Native h5t_NATIVE_LONG
 
-instance Closable Dataset where
-  basicClose (Dataset hid) =  alloca $ \p_err ->
-      checkHErr p_err "Failed to close Dataset"
-    $ h5d_close hid
+tyU8,tyU16,tyU32,tyU64 :: Type
+tyU8  = Native h5t_NATIVE_UCHAR
+tyU16 = Native h5t_NATIVE_USHORT
+tyU32 = Native h5t_NATIVE_UINT
+tyU64 = Native h5t_NATIVE_ULONG
 
-instance Closable Attribute where
-  basicClose (Attribute hid) =  alloca $ \p_err ->
-      checkHErr p_err "Failed to close Attribute"
-    $ h5a_close hid
+tyF32,tyF64 :: Type
+tyF32 = Native h5t_NATIVE_FLOAT
+tyF64 = Native h5t_NATIVE_DOUBLE
 
-instance Closable Dataspace where
-  basicClose (Dataspace hid) = alloca $ \p_err ->
-      checkHErr p_err "Failed to close Dataspace"
-    $ h5s_close hid
+pattern Array :: Type -> [Int] -> Type
+pattern Array ty dim <- (matchArray -> Just (ty, dim))
+  where
+    Array ty dim = makeArray ty dim
 
-instance Closable Group where
-  basicClose (Group hid) = alloca $ \p_err ->
-      checkHErr p_err "Failed to close Group"
-    $ h5g_close hid
+makeArray :: Type -> [Int] -> Type
+makeArray ty dim = unsafePerformIO $ evalContT $ do
+  tid   <- ContT $ withType ty
+  p_dim <- ContT $ withArray (fromIntegral <$> dim)
+  p_err <- ContT $ alloca
+  liftIO $ unsafeNewType
+         $ checkHID p_err "Cannot create array type"
+         $ h5t_array_create tid n p_dim
+  where
+    n = fromIntegral $ length dim
 
+matchArray :: Type -> Maybe (Type, [Int])
+matchArray ty = unsafePerformIO $ evalContT $ do
+  p_err <- ContT $ alloca
+  tid   <- ContT $ withType ty
+  liftIO (h5t_get_class tid p_err) >>= \case
+    H5T_NO_CLASS -> liftIO $ throwM =<< decodeError p_err "INTERNAL: Unable to get class for a type"
+    H5T_ARRAY    -> do
+        n     <- liftIO
+               $ fmap fromIntegral
+               $ checkCInt p_err "INTERNAL: Unable to get number of array dimensions"
+               $ h5t_get_array_ndims tid
+        buf   <- ContT $ allocaArray n
+        _     <- liftIO
+               $ checkCInt p_err "INTERNAL: Unable to get array's dimensions"
+               $ h5t_get_array_dims tid buf
+        super <- liftIO
+               $ unsafeNewType
+               $ checkHID p_err "INTERNAL: Cannot get supertype"
+               $ h5t_get_super tid
+        dims  <- liftIO $ peekArray n buf
+        pure $ Just (super, fromIntegral <$> dims)
+    _ -> pure Nothing

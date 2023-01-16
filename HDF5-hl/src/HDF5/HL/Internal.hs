@@ -50,8 +50,8 @@ import Data.Int
 import Data.Word
 import GHC.Stack
 
-import HDF5.HL.Internal.TyHDF
 import HDF5.HL.Internal.Types
+import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Dataspace
 import HDF5.HL.Internal.Enum

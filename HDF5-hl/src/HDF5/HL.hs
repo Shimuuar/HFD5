@@ -31,6 +31,7 @@ module HDF5.HL
   , createGroup
   , withOpenGroup
   , withCreateGroup
+  , listGroup
     -- ** Datasets
   , Dataset
   , openDataset
@@ -97,8 +98,11 @@ import Control.Monad.IO.Class
 import Control.Monad.Catch
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
+import Data.IORef
 import Foreign.C.String
 import Foreign.Marshal
+import Foreign.Ptr
+import Foreign.Storable
 import GHC.Stack
 
 import HDF5.HL.Internal            qualified as HIO
@@ -212,6 +216,27 @@ withCreateGroup
   -> (Group -> m a)
   -> m a
 withCreateGroup dir path = bracket (createGroup dir path) close
+
+-- | List all names in the group
+listGroup
+  :: (IsDirectory dir, MonadIO m, HasCallStack)
+  => dir -- ^ Location to use
+  -> m [FilePath]
+listGroup dir = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err <- ContT $ alloca
+  p_idx <- ContT $ alloca
+  names <- lift  $ newIORef []
+  let readNode _hid cname _p_node _p_userdata = do
+        name <- peekCString cname
+        print name
+        modifyIORef' names (name:)
+        pure $ HErr 0
+  callback <- ContT $ bracket (makeH5LIterate2 readNode) freeHaskellFunPtr
+  lift $ do
+    poke p_idx 0 -- We MUST set starting index
+    checkHErr p_err "Unable to iterate over group"
+       $ h5l_iterate (getHID dir) H5_INDEX_NAME H5_ITER_DEC p_idx callback nullPtr
+    readIORef names
 
 
 ----------------------------------------------------------------

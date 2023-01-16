@@ -59,10 +59,12 @@ module HDF5.HL
   , readAttr
     -- ** Data types
   , Type
+  , sizeOfH5
   , tyI8, tyI16, tyI32, tyI64
   , tyU8, tyU16, tyU32, tyU64
   , tyF32, tyF64
   , pattern Array
+  , makePackedRecord
     -- ** Type classes
   , IsObject
   , IsDirectory

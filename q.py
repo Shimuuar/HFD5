@@ -20,8 +20,7 @@ with h5py.File("/run/user/1000/tst.hdf5", "w") as f:
     dset2.attrs['a3'] = np.asarray([1,2,3], dtype='f')
     #
     dset3 = f.create_dataset("dset3", data=np.sqrt((np.linspace(-1,1) + 0j)))
-    print(dset3)
-#    print(dset[:])
+
 
 with h5py.File("/run/user/1000/tst.hdf5", "r") as f:
     dset = f['dset1']
@@ -30,3 +29,7 @@ with h5py.File("/run/user/1000/tst.hdf5", "r") as f:
     dset = f['dset2']
     print(dset)
     print(dset[:])
+    dset = f['dset3']
+    print(dset)
+    print(dset[:])
+    

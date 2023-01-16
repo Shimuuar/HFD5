@@ -13,6 +13,7 @@ import Control.Concurrent
 
 import Data.Int
 import Data.Char
+import Data.Complex
 import Data.Vector.Fixed           qualified as F
 import Data.Vector.Fixed.Unboxed   qualified as FU
 import Foreign.C.String
@@ -29,45 +30,33 @@ import HDF5.HL.Internal.Wrappers
 ----------------------------------------------------------------
 
 
--- foo :: IO ()
--- foo = do
---   withOpenFile "/run/user/1000/tst.hdf5" OpenRO $ \hdf -> do
---     return ()
---     withDataset hdf "dset1" $ \dd -> do
---       print =<< H5.getType dd
---       print =<< H5.dim     dd
---       print =<< H5.extent  dd
---       print =<< H5.read @[Int64] dd
---       return ()
---     putStrLn "\n----------------"
---     withDataset hdf "dset2" $ \dd -> do
---       print =<< H5.getType  dd
---       print =<< H5.dim dd
---       print =<< H5.extent dd
---       print =<< H5.read @[Double] dd
---       Just a1 <- H5.openAttr dd "a1"
---       -- Just a2 <- H5.openAttr dd "a2"
---       -- Just a3 <- H5.openAttr dd "a3"
---       pure ()
---       print =<< H5.getType     a1
---       print =<< H5.extent      a1
---       print =<< H5.read @Int32 a1
---     putStrLn "\n----------------"
---     withDataset hdf "dset3" $ \dd -> do
---       print =<< H5.getType dd
---     --   --
---     --   print =<< H5.getType a2
---     --   print =<< H5.extent  a2
---     --   print =<< readScalar @Double a2
---     --   --
---     --   print =<< H5.getType a3
---     --   print =<< H5.dim     a3
---     --   print =<< H5.extent  a3
---     --   print =<< H5.read @[Double] a3
---     --   print =<< H5.read @[Int32] a3
---     --   -- print a3
---   --
---   pure ()
+foo :: IO ()
+foo = do
+  withOpenFile "/run/user/1000/tst.hdf5" OpenRO $ \hdf -> do
+    -- return ()
+    withOpenDataset hdf "dset1" $ \dd -> do
+      print =<< H5.getType dd
+      print =<< H5.rank     dd
+    --   -- print =<< H5.extent  dd
+      print =<< H5.readDataset @[Int64] dd
+      return ()
+    -- putStrLn "\n----------------"
+    -- withOpenDataset hdf "dset2" $ \dd -> do
+    --   print =<< H5.getType  dd
+    --   print =<< H5.rank dd
+    --   -- print =<< H5.extent dd
+    --   print =<< H5.readDataset @[Double] dd
+    --   Just a1 <- H5.openAttr dd "a1"
+    --   -- Just a2 <- H5.openAttr dd "a2"
+    --   -- Just a3 <- H5.openAttr dd "a3"
+    --   pure ()
+    --   print =<< H5.getType     a1
+    --   -- print =<< H5.extent      a1
+    --   print =<< H5.readObject @Int32 a1
+    -- putStrLn "\n----------------"
+    withOpenDataset hdf "dset3" $ \dd -> do
+      print =<< H5.getType dd
+      mapM_ print =<< H5.readDataset @[Complex Double] dd
 
 
 woo :: IO ()

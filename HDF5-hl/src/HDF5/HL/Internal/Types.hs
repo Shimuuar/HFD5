@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
@@ -13,12 +14,14 @@ module HDF5.HL.Internal.Types
     Type(..)
   , unsafeNewType
   , withType
+  , sizeOfH5
     -- * Scalar data types
   , tyI8, tyI16, tyI32, tyI64
   , tyU8, tyU16, tyU32, tyU64
   , tyF32, tyF64
     -- * Patterns
   , pattern Array
+  , makePackedRecord
   ) where
 
 import Control.Monad
@@ -33,6 +36,7 @@ import Foreign.C.String
 import Foreign.Storable
 import System.IO.Unsafe
 import GHC.Exts
+import GHC.Stack
 import GHC.IO          (IO(..))
 
 import HDF5.HL.Internal.Error
@@ -87,6 +91,16 @@ instance Show Type where
     lift $ do
       checkHErr p_err "Can't show type" $ h5lt_dtype_to_text tid p_str h5lt_DDL p_sz
       peekCString p_str
+
+
+sizeOfH5 :: HasCallStack => Type -> Int
+sizeOfH5 ty = withFrozenCallStack $ unsafePerformIO $
+  withType ty $ \tid -> do
+    alloca $ \p_err -> do
+      sz <- h5t_get_size tid p_err
+      case sz of
+        0 -> throwM =<< decodeError p_err "Cannot compute size of data type"
+        _ -> pure $! fromIntegral sz
 
 
 ----------------------------------------------------------------
@@ -147,3 +161,29 @@ matchArray ty = unsafePerformIO $ evalContT $ do
         dims  <- liftIO $ peekArray n buf
         pure $ Just (super, fromIntegral <$> dims)
     _ -> pure Nothing
+
+
+makePackedRecord :: HasCallStack => [(String,Type)] -> Type
+makePackedRecord fields = unsafePerformIO $ withFrozenCallStack $ unsafeNewType $ do
+  alloca $ \p_err -> do
+    ty_rec <- checkHID p_err "Cannot create compound type"
+            $ h5t_create H5T_COMPOUND (fromIntegral size)
+    -- NOTE: At this point we can't simply throw exceptions or else
+    --       we'll leak ty_rec.
+    forM_ fields_sz $ \(nm,ty,off) -> do
+      withCString nm $ \c_nm -> do
+        withType ty $ \tid ->
+          h5t_insert ty_rec c_nm (fromIntegral off) tid p_err >>= \case
+            -- We must call decodeError before h5t_close in order to
+            -- recover stack. Also we closing ty_rec on best effort
+            -- basis
+            HErrored -> do err <- decodeError p_err "Unable to pack data types"
+                           _   <- h5t_close ty_rec p_err
+                           throwM err
+            _        -> pure ()
+    pure ty_rec
+  where
+    computeOff !off [] = (off,[])
+    computeOff !off ((nm,ty):rest) = (sz, (nm,ty,off) : rest') where
+      (sz,rest') = computeOff (off + sizeOfH5 ty) rest
+    (size, fields_sz) = computeOff 0 fields

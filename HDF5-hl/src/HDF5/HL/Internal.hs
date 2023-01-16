@@ -31,6 +31,7 @@ import Control.Monad.Trans.Class
 -- import Data.Coerce
 import Data.Bits                   (finiteBitSize)
 import Data.Functor.Identity
+import Data.Complex                (Complex)
 import Data.Vector                 qualified as V
 import Data.Vector.Storable        qualified as VS
 import Data.Vector.Unboxed         qualified as VU
@@ -173,6 +174,11 @@ instance Element Word64 where typeH5 = tyU64
 
 instance Element Float  where typeH5 = tyF32
 instance Element Double where typeH5 = tyF64
+
+-- | Uses same convention as @h5py@ by default.
+instance Element a => Element (Complex a) where
+  typeH5 = makePackedRecord [("r",ty), ("i",ty)] where ty = typeH5 @a
+
 
 instance (Element a, F.Arity n) => Element (FB.Vec n a) where
   typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]

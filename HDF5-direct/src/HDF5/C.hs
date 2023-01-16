@@ -19,6 +19,8 @@ module HDF5.C
   , module HDF5.C.H5A
     -- * Group API
   , module HDF5.C.H5G
+    -- * Links API
+  , module HDF5.C.H5L
     -- * File API
   , module HDF5.C.H5F
     -- * Dataset API
@@ -42,6 +44,7 @@ import HDF5.C.H5D
 import HDF5.C.H5E
 import HDF5.C.H5G
 import HDF5.C.H5S
+import HDF5.C.H5L
 import HDF5.C.H5F
 import HDF5.C.H5LT
 

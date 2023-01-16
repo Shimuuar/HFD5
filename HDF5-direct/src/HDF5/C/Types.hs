@@ -27,6 +27,12 @@ module HDF5.C.Types
   , pattern H5_INDEX_NAME
   , pattern H5_INDEX_CRT_ORDER
   , pattern H5_INDEX_N
+  , H5IterOrder(..)
+  , pattern H5_ITER_UNKNOWN
+  , pattern H5_ITER_INC
+  , pattern H5_ITER_DEC
+  , pattern H5_ITER_NATIVE
+  , pattern H5_ITER_N
     -- * IO wrapper
   , HIO
   ) where
@@ -112,3 +118,34 @@ pattern H5_INDEX_CRT_ORDER <- ((==h5_INDEX_CRT_ORDER) -> True) where H5_INDEX_CR
 pattern H5_INDEX_N :: H5Index
 pattern H5_INDEX_N <- ((==h5_INDEX_N) -> True) where H5_INDEX_N = h5_INDEX_N
 
+
+-- | Common iteration orders
+newtype H5IterOrder = H5IterOrder CInt
+  deriving (Show,Eq,Ord)
+
+foreign import capi "hdf5.h value H5_ITER_UNKNOWN" h5_ITER_UNKNOWN :: H5IterOrder
+foreign import capi "hdf5.h value H5_ITER_INC"     h5_ITER_INC     :: H5IterOrder
+foreign import capi "hdf5.h value H5_ITER_DEC"     h5_ITER_DEC     :: H5IterOrder
+foreign import capi "hdf5.h value H5_ITER_NATIVE"  h5_ITER_NATIVE  :: H5IterOrder
+foreign import capi "hdf5.h value H5_ITER_N"       h5_ITER_N       :: H5IterOrder
+
+
+-- | Unknown order
+pattern H5_ITER_UNKNOWN :: H5IterOrder
+pattern H5_ITER_UNKNOWN <- ((==h5_ITER_UNKNOWN) -> True) where H5_ITER_UNKNOWN = h5_ITER_UNKNOWN
+
+-- | Increasing order
+pattern H5_ITER_INC :: H5IterOrder
+pattern H5_ITER_INC <- ((==h5_ITER_INC) -> True) where H5_ITER_INC = h5_ITER_INC
+
+-- | Decreasing order
+pattern H5_ITER_DEC :: H5IterOrder
+pattern H5_ITER_DEC <- ((==h5_ITER_DEC) -> True) where H5_ITER_DEC = h5_ITER_DEC
+
+-- | No particular order, whatever is fastest
+pattern H5_ITER_NATIVE :: H5IterOrder
+pattern H5_ITER_NATIVE <- ((==h5_ITER_NATIVE) -> True) where H5_ITER_NATIVE = h5_ITER_NATIVE
+
+-- | Number of iteration orders
+pattern H5_ITER_N :: H5IterOrder
+pattern H5_ITER_N <- ((==h5_ITER_N) -> True) where H5_ITER_N = h5_ITER_N

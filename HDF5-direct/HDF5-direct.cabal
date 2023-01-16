@@ -17,7 +17,10 @@ Library
   Default-Language:   Haskell2010
   hs-source-dirs:     src
   extra-libraries:    hdf5 hdf5_hl
+  --
   include-dirs:       ./cbits
+  c-options:          -Wall
+  c-sources:          cbits/hdf5.c
   extra-source-files: cbits/hdf5-hs.h
   --
   Build-Depends:    base         >=4.12 && <5

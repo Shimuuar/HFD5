@@ -11,7 +11,7 @@ module HDF5.C.H5G
 
 
 import Foreign.C
-import Foreign.Ptr
+-- import Foreign.Ptr
 import HDF5.C.Types
 
 -- | @H5Gclose@ releases resources used by a group which was opened by
@@ -21,7 +21,7 @@ import HDF5.C.Types
 --
 --   Failure to release a group with this call will result in resource
 --   leaks.
-foreign import capi "hdf5.h H5Gclose" h5g_close
+foreign import capi "hdf5-hs.h hs_H5Gclose" h5g_close
   :: HID     -- ^ @group_id@ Group identifier
   -> HIO HErr
 
@@ -32,7 +32,7 @@ foreign import capi "hdf5.h H5Gclose" h5g_close
 --   @H5Gopen2@ returns a group identifier for the group that was
 --   opened. This group identifier should be released by @H5Gclose@
 --   when it is no longer needed to prevent resource leaks.
-foreign import capi "hdf5.h H5Gopen2" h5g_open
+foreign import capi "hdf5-hs.h hs_H5Gopen2" h5g_open
   :: HID     -- ^ @loc_id@ Location identifier. The identifier may be that
              --   of a file, group, dataset, named datatype, or attribute.
   -> CString -- ^ @name@ Name of the group to open 
@@ -64,7 +64,7 @@ foreign import capi "hdf5.h H5Gopen2" h5g_open
 --
 --   The group identifier should be closed by @H5Gclose@ when access
 --   is no longer required to prevent resource leaks.
-foreign import capi "hdf5.h H5Gcreate2" h5g_create
+foreign import capi "hdf5-hs.h hs_H5Gcreate2" h5g_create
   :: HID     -- ^ @loc_id@ Location identifier. The identifier may be
              --   that of a file, group, dataset, named datatype, or
              --   attribute.

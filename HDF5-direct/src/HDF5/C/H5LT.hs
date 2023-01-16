@@ -44,7 +44,7 @@ foreign import capi "hdf5_hl.h value H5LT_NO_LANG"  h5lt_NO_LANG  :: H5LTLang
 --   Currently only DDL (H5LT_DDL) is supported for lang_type. The
 --   complete DDL definition of HDF5 data types can be found in the
 --   last chapter of the HDF5 User's Guide.
-foreign import capi "hdf5_hl.h H5LTdtype_to_text" h5lt_dtype_to_text
+foreign import capi "hdf5-hs.h hs_H5LTdtype_to_text" h5lt_dtype_to_text
   :: HID
   -> CString   -- ^ Buffer for the text description of the datatype
   -> H5LTLang  -- ^ The language used to describe the datatype. The

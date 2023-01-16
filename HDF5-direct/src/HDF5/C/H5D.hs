@@ -32,7 +32,7 @@ import HDF5.C.Types
 --
 --   Returns a dataset identifier if successful; otherwise returns
 --   @H5I_INVALID_HID@.
-foreign import capi "hdf5.h H5Dopen2" h5d_open2
+foreign import capi "hdf5-hs.h hs_H5Dopen2" h5d_open2
   :: HID     -- ^ @loc_id@
   -> CString -- ^ Name of dataset to open
   -> HID     -- ^ Dataset access property list identifier
@@ -71,7 +71,7 @@ foreign import capi "hdf5.h H5Dopen2" h5d_open2
 --   from or written to. Reading data from a dataset that was not
 --   previously written, the HDF5 library will return default or
 --   user-defined fill values.
-foreign import capi "hdf5.h H5Dcreate2" h5d_create
+foreign import capi "hdf5-hs.h hs_H5Dcreate2" h5d_create
   :: HID     -- ^ @loc_id@ Location identifier. The identifier may be
              --   that of a file, group, dataset, named datatype, or
              --   attribute.
@@ -90,7 +90,7 @@ foreign import capi "hdf5.h H5Dcreate2" h5d_create
 --
 --   Returns a non-negative value if successful; otherwise returns a
 --   negative value.
-foreign import capi "hdf5.h H5Dclose" h5d_close
+foreign import capi "hdf5-hs.h hs_H5Dclose" h5d_close
   :: HID    -- ^ Dataset identifier
   -> HIO HErr
 
@@ -100,7 +100,7 @@ foreign import capi "hdf5.h H5Dclose" h5d_close
 --   If a dataset has a named datatype, then an identifier to the
 --   opened datatype is returned. Otherwise, the returned datatype is
 --   read-only.
-foreign import capi "hdf5.h H5Dget_type" h5d_get_type
+foreign import capi "hdf5-hs.h hs_H5Dget_type" h5d_get_type
   :: HID   -- ^ Dataset identifier
   -> HIO HID
 
@@ -114,7 +114,7 @@ foreign import capi "hdf5.h H5Dget_type" h5d_get_type
 --   so that resource leaks will not occur.
 --
 --   Returns a dataspace identifier if successful; otherwise returns H5I_INVALID_HID
-foreign import capi "hdf5.h H5Dget_space" h5d_get_space
+foreign import capi "hdf5-hs.h hs_H5Dget_space" h5d_get_space
   :: HID    -- ^ Dataset identifier
   -> HIO HID
 
@@ -141,7 +141,7 @@ foreign import capi "hdf5.h H5Dget_space" h5d_get_space
 --
 --   The number of elements selected in the memory dataspace must be
 --   equal to the number of elements selected in the file dataspace.
-foreign import capi "hdf5.h H5Dread" h5d_read
+foreign import capi "hdf5-hs.h hs_H5Dread" h5d_read
   :: HID  -- ^ @dset_id@ Dataset identifier Identifier of the dataset
           --   to read from
   -> HID  -- ^ @mem_type_id@ Identifier of the memory datatype
@@ -178,7 +178,7 @@ foreign import capi "hdf5.h H5Dread" h5d_read
 --   constant @H5S_ALL@, in which case the file dataspace is used for
 --   the memory dataspace and the selection defined with file_space_id
 --   is used for the selection within that dataspace.
-foreign import capi "hdf5.h H5Dwrite" h5d_write
+foreign import capi "hdf5-hs.h hs_H5Dwrite" h5d_write
   :: HID   -- ^ @dset_id Identifier of the dataset to read from
   -> HID   -- ^ @mem_type_id Identifier of the memory datatype
   -> HID   -- ^ @mem_space_id Identifier of the memory dataspace

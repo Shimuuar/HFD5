@@ -122,26 +122,26 @@ h5e_error_desc p = castPtr $ plusPtr p (fromIntegral off_desc)
 ----------------------------------------------------------------
 
 -- | Callback to call in case of error
-type H5EAuto = HID -> Ptr () -> HIO HErr
+type H5EAuto = HID -> Ptr () -> IO HErr
 
 -- | Callback for traversing error stack
-type H5EWalk = CUInt -> Ptr H5EError -> Ptr () -> HIO HErr
+type H5EWalk = CUInt -> Ptr H5EError -> Ptr () -> IO HErr
 
 foreign import ccall "wrapper"
-  makeWalker :: H5EWalk -> HIO (FunPtr H5EWalk)
+  makeWalker :: H5EWalk -> IO (FunPtr H5EWalk)
 
 ----------------------------------------------------------------
 -- Wrapper functions
 ----------------------------------------------------------------
 
 -- | Closes an error message.
-foreign import capi "hdf5.h H5Eclose_msg" h5e_close_msg
+foreign import capi "hdf5-hs.h hs_H5Eclose_msg" h5e_close_msg
   :: HID      -- ^ @err_id@ An error message identifier
   -> HIO HErr -- ^ Returns a non-negative value if successful;
               --   otherwise returns a negative value.
 
 -- | Closes an error stack handle. 
-foreign import capi "hdf5.h H5Eclose_stack" h5e_close_stack
+foreign import capi "hdf5-hs.h hs_H5Eclose_stack" h5e_close_stack
   :: HID      -- ^ @stack_id@ Error stack identifier
   -> HIO HErr -- ^ Returns a non-negative value if successful;
               --   otherwise returns a negative value.
@@ -151,12 +151,12 @@ foreign import capi "hdf5.h H5Eclose_stack" h5e_close_stack
 
 -- | Creates a new, empty error stack. Use H5Eclose_stack() to close
 --   the error stack identifier returned by this function.
-foreign import capi "hdf5.h H5Ecreate_stack" h5e_create_stack
+foreign import capi "hdf5-hs.h hs_H5Ecreate_stack" h5e_create_stack
   :: HIO HID -- ^ Returns an error stack identifier if successful;
              --   otherwise returns @H5I_INVALID_HID@.
 
 -- | Returns a copy of the current error stack.
-foreign import capi "hdf5.h H5Eget_current_stack" h5e_get_current_stack
+foreign import capi "hdf5-hs.h hs_H5Eget_current_stack" h5e_get_current_stack
   :: HIO HID -- ^ Returns an error stack identifier if successful;
              --   otherwise returns @H5I_INVALID_HID@.
 
@@ -171,7 +171,7 @@ foreign import capi "hdf5.h H5Eget_current_stack" h5e_get_current_stack
 --   functions to @H5Eprint1@ and @H5Eprint2@. A call to
 --   @H5Eget_auto2@ returns @H5Eprint2@ or the user-defined function
 --   passed in through @H5Eset_auto2@.
-foreign import ccall "hdf5.h H5Eget_auto2" h5e_get_auto
+foreign import ccall "hdf5-hs.h hs_H5Eget_auto2" h5e_get_auto
   :: HID          -- ^ @estack_id@ Error stack identifier
   -> Ptr (FunPtr H5EAuto)
      -- ^ @[out]@ @func@ The function currently set to be called upon
@@ -205,7 +205,7 @@ foreign import ccall "hdf5.h H5Eget_auto2" h5e_get_auto
 --
 --   Automatic error printing is turned off with a H5Eset_auto2() call
 --   with a NULL func pointer.
-foreign import capi "hdf5.h H5Eset_auto2" h5e_set_auto
+foreign import capi "hdf5-hs.h hs_H5Eset_auto2" h5e_set_auto
   :: HID            -- ^ @estack_id@ Error stack identifier
   -> FunPtr H5EAuto -- ^ Function to be called upon an error condition
   -> Ptr ()         -- ^ @client_data@ Data passed to the error function
@@ -235,7 +235,7 @@ foreign import capi "hdf5.h H5Eset_auto2" h5e_set_auto
 --   prototype is as follows:
 -- 
 -- > typedef herr_t (*H5E_walk2_t)(unsigned n, const H5E_error2_t *err_desc, void *client_data);
-foreign import capi "hdf5.h H5Ewalk2" h5e_walk
+foreign import capi "hdf5-hs.h hs_H5Ewalk2" h5e_walk
   :: HID            -- ^ @err_stack@ Error stack identifier 
   -> H5EDirection   -- ^ @direction@ Direction in which the error
                     --   stack is to be walked
@@ -252,7 +252,7 @@ foreign import capi "hdf5.h H5Ewalk2" h5e_walk
 --   is also returned. If NULL is passed in as msg, only the length
 --   and type of the message is returned. If the return value is zero,
 --   it means there is no message.
-foreign import capi "hdf5.h H5Eget_msg" h5e_get_msg
+foreign import capi "hdf5-hs.h hs_H5Eget_msg" h5e_get_msg
   :: HID         -- ^ @msg_id@ Error message identifier 
   -> Ptr H5EType -- ^ @[out]@ @type@ The type of the error message
   -> Ptr CChar   -- ^ @msg@ Error message buffer

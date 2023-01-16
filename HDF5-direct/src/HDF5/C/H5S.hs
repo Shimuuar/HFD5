@@ -68,7 +68,7 @@ pattern H5S_NULL <- ((==h5s_NULL) -> True) where H5S_NULL = h5s_NULL
 --
 --   Returns a non-negative value if successful; otherwise returns a
 --   negative value.
-foreign import capi "hdf5.h H5Sclose" h5s_close
+foreign import capi "hdf5-hs.h hs_H5Sclose" h5s_close
   :: HID     -- ^ Dataspace identifier
   -> HIO HErr
 
@@ -86,7 +86,7 @@ foreign import capi "hdf5.h H5Sclose" h5s_close
 --
 --   The dataspace identifier returned by this function can be
 --   released with H5Sclose() so that resource leaks will not occur.
-foreign import capi "hdf5.h H5Screate" h5s_create
+foreign import capi "hdf5-hs.h hs_H5Screate" h5s_create
   :: H5SClass -- ^ Type of dataspace to be created
   -> HIO HID
 
@@ -116,7 +116,7 @@ foreign import capi "hdf5.h H5Screate" h5s_create
 --
 --   The dataspace identifier returned from this function must be
 --   released with @H5Sclose@ or resource leaks will occur.
-foreign import capi "hdf5.h H5Screate_simple" h5s_create_simple
+foreign import capi "hdf5-hs.h hs_H5Screate_simple" h5s_create_simple
   :: CInt      -- ^ @rank@ Number of dimensions of dataspace
   -> Ptr HSize -- ^ @dims@ Array specifying the size of each dimension
   -> Ptr HSize -- ^ @maxdims@ Array specifying the maximum size of each dimension
@@ -125,13 +125,13 @@ foreign import capi "hdf5.h H5Screate_simple" h5s_create_simple
 -- | @H5Sis_simple@ determines whether or not a dataspace is a simple dataspace.
 --
 --   Returns zero (false), a positive (true) or a negative (failure) value.
-foreign import capi "hdf5.h H5Sis_simple" h5s_is_simple
+foreign import capi "hdf5-hs.h hs_H5Sis_simple" h5s_is_simple
   :: HID
   -> HIO HTri
 
 -- | Returns the number of dimensions in the dataspace if successful;
 --   otherwise returns a negative value.
-foreign import capi "hdf5.h H5Sget_simple_extent_ndims" h5s_get_simple_extent_ndims
+foreign import capi "hdf5-hs.h hs_H5Sget_simple_extent_ndims" h5s_get_simple_extent_ndims
   :: HID    -- ^ Space ID
   -> HIO CInt
 
@@ -141,7 +141,7 @@ foreign import capi "hdf5.h H5Sget_simple_extent_ndims" h5s_get_simple_extent_nd
 --
 --   Returns the number of dimensions in the dataspace if successful;
 --   otherwise returns a negative value.
-foreign import capi "hdf5.h H5Sget_simple_extent_dims" h5s_get_simple_extent_dims
+foreign import capi "hdf5-hs.h hs_H5Sget_simple_extent_dims" h5s_get_simple_extent_dims
   :: HID       -- ^ Space ID
   -> Ptr HSize -- ^ @[out]@ Pointer to array to store the size of each dimension
   -> Ptr HSize -- ^ @[out]@ Pointer to array to store the maximum size of each dimension
@@ -153,12 +153,12 @@ foreign import capi "hdf5.h H5Sget_simple_extent_dims" h5s_get_simple_extent_dim
 --
 --   Returns the number of elements in the dataspace if successful;
 --   otherwise returns a negative value.
-foreign import capi "hdf5.h H5Sget_simple_extent_npoints" h5s_get_simple_extent_npoints
+foreign import capi "hdf5-hs.h hs_H5Sget_simple_extent_npoints" h5s_get_simple_extent_npoints
   :: HID       -- ^ Dataspace identifier
   -> HIO HSSize
 
 -- | Determines the current class of a dataspace.
-foreign import capi "hdf5.h H5Sget_simple_extent_type" h5s_get_simple_extent_type
+foreign import capi "hdf5-hs.h hs_H5Sget_simple_extent_type" h5s_get_simple_extent_type
   :: HID          -- ^ Dataspace identifier
   -> HIO H5SClass -- ^ Returns a dataspace class name if successful; otherwise @H5S_NO_CLASS@ (-1).
 

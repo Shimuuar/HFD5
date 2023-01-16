@@ -24,7 +24,7 @@ import HDF5.C.Types
 --
 --   The attribute identifier returned by this function must be
 --   released with @H5Aclose@ or resource leaks will develop.
-foreign import capi "hdf5.h H5Aopen" h5a_open
+foreign import capi "hdf5-hs.h hs_H5Aopen" h5a_open
   :: HID     -- ^ @obj_id@ Location identifier. The identifier may be
              --   that of a file, group, dataset, or named datatype.
   -> CString -- ^ Name of attribute to open
@@ -43,7 +43,7 @@ foreign import capi "hdf5.h H5Aopen" h5a_open
 --
 --   The acpl parameter is currently not used; specify H5P_DEFAULT.
 
-foreign import capi "hdf5.h H5Acreate2" h5a_create
+foreign import capi "hdf5-hs.h hs_H5Acreate2" h5a_create
   :: HID     -- ^ @loc_id@ Location identifier. The identifier may be that of a file, group, dataset, or named datatype.
   -> CString -- ^ @attr_name@ Name of attribute
   -> HID     -- ^ @type_id@ Attribute datatype identifier
@@ -54,7 +54,7 @@ foreign import capi "hdf5.h H5Acreate2" h5a_create
              --   otherwise returns a negative value.
 
 -- | Closes the specified attribute.
-foreign import capi "hdf5.h H5Aclose" h5a_close
+foreign import capi "hdf5-hs.h hs_H5Aclose" h5a_close
   :: HID     -- ^ Attribute identifier
   -> HIO HErr
 
@@ -66,7 +66,7 @@ foreign import capi "hdf5.h H5Aclose" h5a_close
 --
 --   Datatype conversion takes place at the time of a read or write
 --   and is automatic.
-foreign import capi "hdf5.h H5Aread" h5a_read
+foreign import capi "hdf5-hs.h hs_H5Aread" h5a_read
   :: HID      -- ^ @attr_id@ Attribute identifier
   -> HID      -- ^ @type_id@ Datatype (in-memory) identifier
   -> Ptr ()   -- ^ @buf@     Buffer for data to be read
@@ -79,7 +79,7 @@ foreign import capi "hdf5.h H5Aread" h5a_read
 --
 --   Datatype conversion takes place at the time of a read or write
 --   and is automatic.
-foreign import capi "hdf5.h H5Awrite" h5a_write
+foreign import capi "hdf5-hs.h hs_H5Awrite" h5a_write
   :: HID      -- ^ @attr_id@ Attribute identifier
   -> HID      -- ^ @type_id@ Datatype (in-memory) identifier
   -> Ptr ()   -- ^ @buf@ Data to be written
@@ -87,7 +87,7 @@ foreign import capi "hdf5.h H5Awrite" h5a_write
               --   otherwise returns a negative
 
 -- | Determines whether an attribute with a given name exists on an object.
-foreign import capi "hdf5.h H5Aexists" h5a_exists
+foreign import capi "hdf5-hs.h hs_H5Aexists" h5a_exists
   :: HID      -- ^ @obj_id@ Location identifier. The identifier may be
               --   that of a file, group, dataset, or named datatype.
   -> CString  -- ^ @attr_name@ Attribute name
@@ -97,14 +97,14 @@ foreign import capi "hdf5.h H5Aexists" h5a_exists
 --   datatype is reopened if it is a named type before returning it to
 --   the application. The datatypes returned by this function are
 --   always read-only.
-foreign import capi "hdf5.h H5Aget_type" h5a_get_type
+foreign import capi "hdf5-hs.h hs_H5Aget_type" h5a_get_type
   :: HID    -- ^ @attr_id@ Attribute identifier
   -> HIO HID
 
 -- | @H5Aget_space@ retrieves a copy of the dataspace for an
 --   attribute. The dataspace identifier returned from this function
 --   must be released with @H5Sclose@ or resource leaks will develop.
-foreign import capi "hdf5.h H5Aget_space" h5a_get_space
+foreign import capi "hdf5-hs.h hs_H5Aget_space" h5a_get_space
   :: HID     -- ^ @attr_id@ Attribute identifier
   -> HIO HID -- ^ Returns an attribute dataspace identifier if
              --   successful; otherwise returns a negative value.

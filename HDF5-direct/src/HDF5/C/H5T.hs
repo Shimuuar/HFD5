@@ -295,7 +295,7 @@ foreign import capi "hdf5.h value H5T_NATIVE_HBOOL" h5t_NATIVE_HBOOL :: HID
 --
 --   Returns a non-negative value if successful; otherwise returns a
 --   negative value.
-foreign import capi "hdf5.h H5Tclose" h5t_close
+foreign import capi "hdf5-hs.h hs_H5Tclose" h5t_close
   :: HID     -- ^ Datatype identifier
   -> HIO HErr
 
@@ -315,14 +315,14 @@ foreign import capi "hdf5.h H5Tclose" h5t_close
 --     @sizeof(hvl_t)@. The hvl_t struct contains a pointer to the
 --     actual data and a size value. This function does not return the
 --     size of actual variable-length sequence data.
-foreign import capi "hdf5.h H5Tget_size" h5t_get_size
+foreign import capi "hdf5-hs.h hs_H5Tget_size" h5t_get_size
   :: HID      -- ^ Datatype identifier
   -> HIO CSize
 
 -- | @H5Tget_class@ returns the class of the datatype type_id.
 --
 --   Returns the datatype class if successful; otherwise @H5T_NO_CLASS@.
-foreign import capi "hdf5.h H5Tget_class" h5t_get_class
+foreign import capi "hdf5-hs.h hs_H5Tget_class" h5t_get_class
   :: HID -- ^ Datatype identifier
   -> HIO H5TClass
 
@@ -338,7 +338,7 @@ foreign import capi "hdf5.h H5Tget_class" h5t_get_class
 --    H5T_ORDER_NONE but all other members have byte order
 --    H5T_ORDER_LE, H5Tget_order() will return H5T_ORDER_LE for the
 --    compound datatype.
-foreign import capi "hdf5.h H5Tget_order" h5t_get_order
+foreign import capi "hdf5-hs.h hs_H5Tget_order" h5t_get_order
   :: HID -- ^ Datatype identifier
   -> HIO H5TOrder
 
@@ -351,11 +351,11 @@ foreign import capi "hdf5.h H5Tget_order" h5t_get_order
 --   H5Tget_size().
 --
 --   Returns the number of significant bits if successful; otherwise 0
-foreign import capi "hdf5.h H5Tget_precision" h5t_get_precision
+foreign import capi "hdf5-hs.h hs_H5Tget_precision" h5t_get_precision
   :: HID        -- ^ Datatype identifier
   -> HIO CSize
 
-foreign import capi "hdf5.h H5Tget_sign" h5t_get_sign
+foreign import capi "hdf5-hs.h hs_H5Tget_sign" h5t_get_sign
   :: HID        -- ^ Datatype identifier
   -> HIO H5TSign
 
@@ -369,7 +369,7 @@ foreign import capi "hdf5.h H5Tget_sign" h5t_get_sign
 --
 --   Returns a datatype identifier if successful; otherwise returns
 --   @H5I_INVALID_HID@.
-foreign import capi "hdf5.h H5Tget_super" h5t_get_super
+foreign import capi "hdf5-hs.h hs_H5Tget_super" h5t_get_super
   :: HID     -- ^ Datatype identifier
   -> HIO HID
 
@@ -386,7 +386,7 @@ foreign import capi "hdf5.h H5Tget_super" h5t_get_super
 --
 --   Returns a array datatype identifier if successful; otherwise
 --   returns @H5I_INVALID_HID@.
-foreign import capi "hdf5.h H5Tarray_create2" h5t_array_create
+foreign import capi "hdf5-hs.h hs_H5Tarray_create2" h5t_array_create
   :: HID       -- ^ @base_id@
   -> CUInt     -- ^ @ndims@
   -> Ptr HSize -- ^ @dim@
@@ -394,7 +394,7 @@ foreign import capi "hdf5.h H5Tarray_create2" h5t_array_create
 
 -- | Returns the non-negative number of dimensions of the array type
 --   if successful; otherwise returns a negative value.
-foreign import capi "hdf5.h H5Tget_array_ndims" h5t_get_array_ndims
+foreign import capi "hdf5-hs.h hs_H5Tget_array_ndims" h5t_get_array_ndims
   :: HID     -- ^ Type ID
   -> HIO CInt
 
@@ -403,7 +403,7 @@ foreign import capi "hdf5.h H5Tget_array_ndims" h5t_get_array_ndims
 --
 --   Returns the non-negative number of dimensions of the array type
 --   if successful; otherwise returns a negative value.
-foreign import capi "hdf5.h H5Tget_array_dims2" h5t_get_array_dims
+foreign import capi "hdf5-hs.h hs_H5Tget_array_dims2" h5t_get_array_dims
   :: HID       -- ^ Type ID
   -> Ptr HSize -- ^ @[out]@ Sizes of array dimensions
   -> HIO CInt

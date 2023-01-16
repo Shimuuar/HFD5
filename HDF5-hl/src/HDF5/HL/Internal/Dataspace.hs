@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ViewPatterns        #-}
 -- |
@@ -19,7 +20,9 @@ module HDF5.HL.Internal.Dataspace
     -- * Helpers for working with datasets
   , DSpaceWriter
   , putDimension
-  , withDSpace
+    -- * Creation of dataspaces
+  , createDataspace
+  , withCreateDataspace
   ) where
 
 import Control.Applicative
@@ -32,6 +35,8 @@ import Data.Int
 import Data.Functor
 import Foreign.Ptr
 import Foreign.Storable
+import Foreign.Marshal
+import GHC.Stack
 
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Error
@@ -98,30 +103,31 @@ endOfExtent = ParserDim $ \uncons s -> uncons s >>= \case
   Nothing -> pure $ Just (s,())
   Just _  -> pure Nothing
 
-runParseFromDataspace :: IsExtent a => Dataspace -> HIO (Maybe a)
-runParseFromDataspace (getHID -> hid) =
-  h5s_get_simple_extent_type hid >>= \case
+runParseFromDataspace :: IsExtent a => Dataspace -> IO (Maybe a)
+runParseFromDataspace (getHID -> hid) = withFrozenCallStack $ evalContT $ do
+  p_err <- ContT alloca
+  lift (h5s_get_simple_extent_type hid p_err) >>= \case
     H5S_NULL   -> pure $ decodeNullExtent
-    H5S_SCALAR -> pure $ undefined
-    H5S_SIMPLE -> evalContT $ do
-      n_dim <- fmap fromIntegral
-             $ lift $ h5s_get_simple_extent_ndims hid
-      when (n_dim < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
+    H5S_SCALAR -> unParserDim decodeExtent (\() -> pure Nothing) () <&> fmap snd
+    H5S_SIMPLE -> do
+      rank <- lift
+            $ fmap fromIntegral
+            $ checkCInt p_err "Cannot get rank of simple extent"
+            $ h5s_get_simple_extent_ndims hid
       -- Allocate buffers
-      p_dim <- ContT $ hioAllocaArray n_dim
-      p_max <- ContT $ hioAllocaArray n_dim
+      p_dim <- ContT $ allocaArray rank
+      p_max <- ContT $ allocaArray rank
       lift $ do
-        do r <- h5s_get_simple_extent_dims hid p_dim p_max
-           when (r < 0) $ throwM $ InternalErr "Cannot get dimensions of simple extent"
+        _ <- checkCInt p_err "Cannot get rank of simple extent"
+           $ h5s_get_simple_extent_dims hid p_dim p_max
         --
-        let uncons i | i >= n_dim = pure Nothing
-                     | otherwise  = do dim <- Dim <$> (fromIntegral <$> hioPeekElemOff p_dim i)
-                                                  <*> (fromIntegral <$> hioPeekElemOff p_max i)
-                                       pure $ Just (i+1, dim)
-        unParserDim decodeExtent uncons 0 <&> \case
-          Nothing    -> Nothing
-          Just (_,a) -> Just a
-    _ -> error "getDataspace: Cannot obtain dataspace dimension"
+        let uncons i | i >= rank = pure Nothing
+                     | otherwise = do dim <- Dim <$> (fromIntegral <$> peekElemOff p_dim i)
+                                                 <*> (fromIntegral <$> peekElemOff p_max i)
+                                      pure $ Just (i+1, dim)
+        unParserDim decodeExtent uncons 0 <&> fmap snd
+    _ -> lift $ throwM =<< decodeError p_err "Cannot get class of dataspace"
+
 
 
 instance IsExtent () where
@@ -164,7 +170,7 @@ newtype DSpaceWriter = DSpaceWriter
   -> Ptr HSize -- Pointer to maxsize
   -> Int         -- Guard ptr
   -> Int
-  -> HIO Int
+  -> IO Int
   )
 
 instance Semigroup DSpaceWriter where
@@ -178,31 +184,47 @@ instance Monoid DSpaceWriter where
 putDimension :: Dim -> DSpaceWriter
 putDimension (Dim sz sz_max) = DSpaceWriter go where
   go p_sz p_max i_max i
-    | i >= i_max = throwM $ InternalErr "putDimension: buffer overrun"
-    | otherwise  = do hioPokeElemOff p_sz  i (fromIntegral sz)
-                      hioPokeElemOff p_max i (fromIntegral sz_max)
+    | i >= i_max = throwM $ Error [Left "Internal error: buffer overrun"]
+    | otherwise  = do pokeElemOff p_sz  i (fromIntegral sz)
+                      pokeElemOff p_max i (fromIntegral sz_max)
                       pure $! i + 1
 
 
--- | Create simple dataspace which could e used in bracket-like
---   context
-withDSpace
-  :: IsExtent dim
+----------------------------------------------------------------
+-- Dataspace creation
+----------------------------------------------------------------
+
+-- | Create dataspace for a given extent
+createDataspace
+  :: (IsExtent dim, HasCallStack)
   => dim
-  -> (Dataspace -> HIO a)
-  -> HIO a
-withDSpace dim action = case encodeExtent dim of
-  Nothing  -> evalContT $ do
-    spc <- ContT $ bracket (h5s_create H5S_NULL) h5s_close
-    lift $ action $ Dataspace spc
-  Just fld -> evalContT $ do
-    let DSpaceWriter write = fld putDimension
-    -- -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
-    let max_rank = 32
-    ptr <- ContT $ hioAllocaArray (max_rank * 2)
-    let ptr_max = plusPtr ptr $ sz * max_rank
-    rank <- lift  $ write ptr ptr_max max_rank 0
-    spc  <- ContT $ bracket (h5s_create_simple (fromIntegral rank) ptr ptr_max) h5s_close
-    lift $ action $ Dataspace spc
+  -> IO Dataspace
+createDataspace dim = withFrozenCallStack $ evalContT $ do
+  p_err <- ContT $ alloca
+  case encodeExtent dim of
+    Nothing  -> lift $ fmap Dataspace
+                     $ checkHID p_err "Unable to create dataspace with NULL extent"
+                     $ h5s_create H5S_NULL
+    Just fld -> do
+      -- First encode extents and maximum extents for given shape.
+      --
+      -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
+      let DSpaceWriter write = fld putDimension
+          max_rank = 32
+      ptr  <- ContT $ allocaArray (max_rank * 2)
+      let ptr_max = plusPtr ptr $ sz * max_rank
+      rank  <- lift $ write ptr ptr_max max_rank 0
+      lift $ fmap Dataspace
+           $ checkHID p_err "Unable to create simple dataspace"
+           $ h5s_create_simple (fromIntegral rank) ptr ptr_max
   where
     sz = sizeOf (undefined :: HSize) 
+
+-- | Create simple dataspace which could e used in bracket-like
+--   context
+withCreateDataspace
+  :: IsExtent dim
+  => dim
+  -> (Dataspace -> IO a)
+  -> IO a
+withCreateDataspace dim = bracket (createDataspace dim) basicClose

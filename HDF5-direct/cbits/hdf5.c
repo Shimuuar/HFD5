@@ -612,3 +612,17 @@ herr_t	H5Tset_inpad(hid_t type_id, H5T_pad_t pad)
 herr_t	H5Tset_cset(hid_t type_id, H5T_cset_t cset)
 herr_t	H5Tset_strpad(hid_t type_id, H5T_str_t strpad)
 */
+
+// ----------------------------------------------------------------
+// H5L
+// ----------------------------------------------------------------
+
+herr_t hs_H5Literate2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t* error) {
+    CHECK_ERR(H5Literate2(grp_id, idx_type, order, idx, op, op_data));
+}
+
+/*
+herr_t H5Literate_by_name2(hid_t loc_id, const char *group_name, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t lapl_id)
+herr_t H5Lvisit2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, H5L_iterate2_t op, void *op_data)
+herr_t H5Lvisit_by_name2(hid_t loc_id, const char *group_name, H5_index_t idx_type, H5_iter_order_t order, H5L_iterate2_t op, void *op_data, hid_t lapl_id)
+*/

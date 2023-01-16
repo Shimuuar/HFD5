@@ -49,6 +49,15 @@ static pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 #define FINI do { pthread_mutex_unlock(&mutex); } while(0)
 
+#define CHECK_CSTR(expr)                                \
+    do {                                                \
+        INI;                                            \
+        char* res = expr;                               \
+        if( !res ) { *error = H5Eget_current_stack(); } \
+        FINI;                                           \
+        return res;                                     \
+    } while(0)
+
 #define CHECK_ERR(expr)                                    \
     do {                                                   \
         INI;                                               \
@@ -77,14 +86,6 @@ static pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
     do {                                                   \
         INI;                                               \
         ssize_t res = expr;                                \
-        if( res < 0 ) { *error = H5Eget_current_stack(); } \
-        FINI;                                              \
-        return res;                                        \
-    } while(0)
-#define CHECK_INT(expr)                                    \
-    do {                                                   \
-        INI;                                               \
-        int res = expr;                                    \
         if( res < 0 ) { *error = H5Eget_current_stack(); } \
         FINI;                                              \
         return res;                                        \
@@ -468,11 +469,11 @@ htri_t hs_H5Sis_simple(hid_t space_id, hid_t *error) {
 }
 
 int hs_H5Sget_simple_extent_dims(hid_t space_id, hsize_t dims[], hsize_t maxdims[], hid_t *error) {
-    CHECK_INT(H5Sget_simple_extent_dims(space_id, dims, maxdims));
+    CHECK(int,H5Sget_simple_extent_dims(space_id, dims, maxdims));
 }
 
 int	hs_H5Sget_simple_extent_ndims(hid_t space_id, hid_t *error) {
-    CHECK_INT(H5Sget_simple_extent_ndims(space_id));
+    CHECK(int,H5Sget_simple_extent_ndims(space_id));
 }
 
 hssize_t hs_H5Sget_simple_extent_npoints(hid_t space_id, hid_t *error) {
@@ -566,6 +567,25 @@ int	hs_H5Tget_array_dims2(hid_t type_id, hsize_t dims[], hid_t *error) {
     CHECK_HID(H5Tget_array_dims2(type_id, dims));
 }
 
+int hs_H5Tget_nmembers(hid_t type_id, hid_t *error) {
+    CHECK(int, H5Tget_nmembers(type_id));
+}
+
+char *hs_H5Tget_member_name(hid_t type_id, unsigned membno, hid_t *error) {
+    CHECK_CSTR(H5Tget_member_name(type_id, membno));
+}
+
+int hs_H5Tget_member_index(hid_t type_id, const char *name, hid_t *error) {
+    CHECK(int, H5Tget_member_index(type_id, name));
+}
+
+herr_t hs_H5Tinsert(hid_t parent_id, const char *name, size_t offset, hid_t member_id, hid_t *error) {
+    CHECK_ERR(H5Tinsert(parent_id, name, offset, member_id));
+}
+
+hid_t hs_H5Tget_member_type(hid_t type_id, unsigned membno, hid_t *error) {
+    CHECK_HID(H5Tget_member_type(type_id, membno));
+}
 
 /*
 hid_t	H5Tcreate(H5T_class_t type, size_t size)
@@ -611,6 +631,16 @@ herr_t	H5Tset_norm(hid_t type_id, H5T_norm_t norm)
 herr_t	H5Tset_inpad(hid_t type_id, H5T_pad_t pad)
 herr_t	H5Tset_cset(hid_t type_id, H5T_cset_t cset)
 herr_t	H5Tset_strpad(hid_t type_id, H5T_str_t strpad)
+
+hid_t   H5Tenum_create(hid_t base_id)
+herr_t  H5Tenum_insert(hid_t type, const char *name, const void *value)
+herr_t  H5Tenum_nameof(hid_t type, const void *value, char *name, size_t size)
+herr_t  H5Tenum_valueof(hid_t type, const char *name, void *value)
+herr_t  H5Tget_member_value(hid_t type_id, unsigned membno, void *value)
+
+herr_t  H5Tpack(hid_t type_id)
+size_t  H5Tget_member_offset(hid_t type_id, unsigned membno)
+H5T_class_t H5Tget_member_class(hid_t type_id, unsigned membno)
 */
 
 // ----------------------------------------------------------------

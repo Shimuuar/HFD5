@@ -67,13 +67,20 @@ module HDF5.C.H5T
   , h5t_get_size
     -- ** Atomic types
   , h5t_get_order
-  , h5t_get_precision  
+  , h5t_get_precision
   , h5t_get_sign
   , h5t_get_super
     -- ** Array types
   , h5t_array_create
   , h5t_get_array_ndims
   , h5t_get_array_dims
+    -- ** Enumerations and compound types
+  , h5t_get_nmembers
+  , h5t_get_member_name
+  , h5t_get_member_index
+    -- *** Compound types
+  , h5t_insert
+  , h5t_get_member_type
   ) where
 
 import Foreign.C
@@ -105,40 +112,40 @@ pattern H5T_NO_CLASS :: H5TClass
 pattern H5T_NO_CLASS <- ((==h5t_NO_CLASS) -> True) where H5T_NO_CLASS = h5t_NO_CLASS
 
 pattern H5T_INTEGER :: H5TClass
-pattern H5T_INTEGER <- ((==h5t_INTEGER) -> True) where H5T_INTEGER = h5t_INTEGER  
+pattern H5T_INTEGER <- ((==h5t_INTEGER) -> True) where H5T_INTEGER = h5t_INTEGER
 
 pattern H5T_FLOAT :: H5TClass
-pattern H5T_FLOAT <- ((==h5t_FLOAT) -> True) where H5T_FLOAT = h5t_FLOAT  
+pattern H5T_FLOAT <- ((==h5t_FLOAT) -> True) where H5T_FLOAT = h5t_FLOAT
 
 pattern H5T_TIME :: H5TClass
-pattern H5T_TIME <- ((==h5t_TIME) -> True) where H5T_TIME = h5t_TIME  
+pattern H5T_TIME <- ((==h5t_TIME) -> True) where H5T_TIME = h5t_TIME
 
 pattern H5T_STRING :: H5TClass
-pattern H5T_STRING <- ((==h5t_STRING) -> True) where H5T_STRING = h5t_STRING  
+pattern H5T_STRING <- ((==h5t_STRING) -> True) where H5T_STRING = h5t_STRING
 
 pattern H5T_BITFIELD :: H5TClass
-pattern H5T_BITFIELD <- ((==h5t_BITFIELD) -> True) where H5T_BITFIELD = h5t_BITFIELD  
+pattern H5T_BITFIELD <- ((==h5t_BITFIELD) -> True) where H5T_BITFIELD = h5t_BITFIELD
 
 pattern H5T_OPAQUE :: H5TClass
-pattern H5T_OPAQUE <- ((==h5t_OPAQUE) -> True) where H5T_OPAQUE = h5t_OPAQUE  
+pattern H5T_OPAQUE <- ((==h5t_OPAQUE) -> True) where H5T_OPAQUE = h5t_OPAQUE
 
 pattern H5T_COMPOUND :: H5TClass
-pattern H5T_COMPOUND <- ((==h5t_COMPOUND) -> True) where H5T_COMPOUND = h5t_COMPOUND  
+pattern H5T_COMPOUND <- ((==h5t_COMPOUND) -> True) where H5T_COMPOUND = h5t_COMPOUND
 
 pattern H5T_REFERENCE :: H5TClass
-pattern H5T_REFERENCE <- ((==h5t_REFERENCE) -> True) where H5T_REFERENCE = h5t_REFERENCE  
+pattern H5T_REFERENCE <- ((==h5t_REFERENCE) -> True) where H5T_REFERENCE = h5t_REFERENCE
 
 pattern H5T_ENUM :: H5TClass
-pattern H5T_ENUM <- ((==h5t_ENUM) -> True) where H5T_ENUM = h5t_ENUM  
+pattern H5T_ENUM <- ((==h5t_ENUM) -> True) where H5T_ENUM = h5t_ENUM
 
 pattern H5T_VLEN :: H5TClass
-pattern H5T_VLEN <- ((==h5t_VLEN) -> True) where H5T_VLEN = h5t_VLEN  
+pattern H5T_VLEN <- ((==h5t_VLEN) -> True) where H5T_VLEN = h5t_VLEN
 
 pattern H5T_ARRAY :: H5TClass
-pattern H5T_ARRAY <- ((==h5t_ARRAY) -> True) where H5T_ARRAY = h5t_ARRAY  
+pattern H5T_ARRAY <- ((==h5t_ARRAY) -> True) where H5T_ARRAY = h5t_ARRAY
 
 pattern H5T_NCLASSES :: H5TClass
-pattern H5T_NCLASSES <- ((==h5t_NCLASSES) -> True) where H5T_NCLASSES = h5t_NCLASSES  
+pattern H5T_NCLASSES <- ((==h5t_NCLASSES) -> True) where H5T_NCLASSES = h5t_NCLASSES
 
 
 ----------------------------------------
@@ -408,6 +415,70 @@ foreign import capi "hdf5-hs.h hs_H5Tget_array_dims2" h5t_get_array_dims
   -> Ptr HSize -- ^ @[out]@ Sizes of array dimensions
   -> HIO CInt
 
+-- | Retrieves the number of elements in a compound or enumeration
+--   datatype.
+foreign import capi "hdf5-hs.h hs_H5Tget_nmembers" h5t_get_nmembers
+  :: HID      -- ^ Datatype identifier
+  -> HIO CInt -- ^ Returns the number of elements if successful;
+              --   otherwise returns a negative value.
+
+-- | @H5Tget_member_name@ retrieves the name of a field of a compound
+--   datatype or an element of an enumeration datatype.
+--
+--   The index of the target field or element is specified in
+--   @member_no@. Compound datatype fields and enumeration datatype
+--   elements are stored in no particular order with index values of 0
+--   through @N-1@, where @N@ is the value returned by @H5Tget_nmembers@.
+--
+--   The HDF5 library allocates a buffer to receive the name of the
+--   field. The caller must subsequently free the buffer with
+--   @H5free_memory@.
+foreign import capi "hdf5-hs.h hs_H5Tget_member_name" h5t_get_member_name
+  :: HID         -- ^ Datatype identifier
+  -> CUInt       -- ^ @membno@ Zero-based index of the field or element
+  -> HIO CString -- ^ Returns a valid pointer to a string allocated
+                 --   with malloc() if successful; otherwise returns
+                 --   NULL.
+
+-- | @H5Tget_member_index@ retrieves the index of a field of a
+--   compound datatype or an element of an enumeration datatype.
+--
+--   The name of the target field or element is specified by name.
+--
+--   Fields are stored in no particular order with index values of 0
+--   through @N-1@, where @N@ is the value returned by @H5Tget_nmembers@.
+foreign import capi "hdf5-hs.h hs_H5Tget_member_index" h5t_get_member_index
+  :: HID      -- ^ @type_id@ Datatype identifier
+  -> CString  -- ^ @name@ Name of the field or member
+  -> HIO CInt -- ^ Returns a non-negative value if successful;
+              --   otherwise returns a negative value.
+
+
+-- ^ @H5Tinsert@ adds another member to the compound datatype,
+--   specified @type_id@.
+--
+--   The new member has a name which must be unique within the
+--   compound datatype. The offset argument defines the start of the
+--   member in an instance of the compound datatype, and @member_id@
+--   is the datatype identifier of the new member.
+foreign import capi "hdf5-hs.h hs_H5Tinsert" h5t_insert
+  :: HID      -- ^ @parent_id@ Datatype identifier
+  -> CString  -- ^ @name@ Name of the field to insert
+  -> CSize    -- ^ @offset@ Offset in memory structure of the field to insert
+  -> HID      -- ^ @member_id@ Datatype identifier of the field to insert
+  -> HIO HErr -- ^ Returns a non-negative value if successful;
+              --   otherwise returns a negative value.
+
+
+-- | Returns the datatype of the specified member.
+foreign import capi "hdf5-hs.h hs_H5Tget_member_type" h5t_get_member_type
+  :: HID     -- ^ @type_id@ Datatype identifier
+  -> CUInt   -- ^ @membno@ Zero-based index of the field or element
+  -> HIO HID -- ^ Returns the identifier of a copy of the datatype of
+             --   the field if successful; otherwise returns a
+             --   negative value.
+
+
 {-
 hid_t       H5Tcreate (H5T_class_t type, size_t size)
 hid_t       H5Tcopy (hid_t type_id)
@@ -455,4 +526,23 @@ herr_t      H5Tset_norm (hid_t type_id, H5T_norm_t norm)
 herr_t      H5Tset_inpad (hid_t type_id, H5T_pad_t pad)
 herr_t      H5Tset_cset (hid_t type_id, H5T_cset_t cset)
 herr_t      H5Tset_strpad (hid_t type_id, H5T_str_t strpad)
+-}
+
+
+{- ENUM & COMPOUND
+int     H5Tget_nmembers(hid_t type_id)
+char *  H5Tget_member_name(hid_t type_id, unsigned membno)
+int     H5Tget_member_index(hid_t type_id, const char *name)
+
+hid_t   H5Tenum_create(hid_t base_id)
+herr_t  H5Tenum_insert(hid_t type, const char *name, const void *value)
+herr_t  H5Tenum_nameof(hid_t type, const void *value, char *name, size_t size)
+herr_t  H5Tenum_valueof(hid_t type, const char *name, void *value)
+
+herr_t  H5Tget_member_value(hid_t type_id, unsigned membno, void *value)
+herr_t  H5Tinsert(hid_t parent_id, const char *name, size_t offset, hid_t member_id)
+herr_t  H5Tpack(hid_t type_id)
+size_t  H5Tget_member_offset(hid_t type_id, unsigned membno)
+H5T_class_t H5Tget_member_class(hid_t type_id, unsigned membno)
+hid_t   H5Tget_member_type(hid_t type_id, unsigned membno)
 -}

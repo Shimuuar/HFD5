@@ -80,5 +80,10 @@ H5T_sign_t hs_H5Tget_sign(hid_t type_id, hid_t *error);
 hid_t hs_H5Tarray_create2(hid_t base_id, unsigned ndims, const hsize_t dim[], hid_t *error);
 int hs_H5Tget_array_ndims(hid_t type_id, hid_t *error);
 int hs_H5Tget_array_dims2(hid_t type_id, hsize_t dims[], hid_t *error);
+int hs_H5Tget_nmembers(hid_t type_id, hid_t *error);
+char *hs_H5Tget_member_name(hid_t type_id, unsigned membno, hid_t *error);
+int hs_H5Tget_member_index(hid_t type_id, const char *name, hid_t *error);
+herr_t hs_H5Tinsert(hid_t parent_id, const char *name, size_t offset, hid_t member_id, hid_t *error);
+hid_t hs_H5Tget_member_type(hid_t type_id, unsigned membno, hid_t *error);
 
 herr_t hs_H5Literate2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t* error);

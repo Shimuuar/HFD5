@@ -71,6 +71,7 @@ hssize_t hs_H5Sget_simple_extent_npoints(hid_t space_id, hid_t *error);
 H5S_class_t hs_H5Sget_simple_extent_type(hid_t space_id, hid_t *error);
 
 herr_t hs_H5Tclose(hid_t type_id, hid_t *error);
+hid_t hs_H5Tcreate(H5T_class_t type, size_t size, hid_t *error);
 hid_t hs_H5Tget_super(hid_t type, hid_t *error);
 size_t hs_H5Tget_size(hid_t type_id, hid_t *error);
 H5T_class_t hs_H5Tget_class(hid_t type_id, hid_t *error);

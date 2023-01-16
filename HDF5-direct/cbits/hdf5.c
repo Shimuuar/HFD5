@@ -531,6 +531,10 @@ herr_t hs_H5Tclose(hid_t type_id, hid_t *error) {
     CHECK_ERR(H5Tclose(type_id));
 }
 
+hid_t hs_H5Tcreate(H5T_class_t type, size_t size, hid_t *error) {
+    CHECK_HID(H5Tcreate(type, size));
+}
+
 hid_t hs_H5Tget_super(hid_t type, hid_t *error) {
     CHECK_HID(H5Tget_super(type));
 }
@@ -588,7 +592,6 @@ hid_t hs_H5Tget_member_type(hid_t type_id, unsigned membno, hid_t *error) {
 }
 
 /*
-hid_t	H5Tcreate(H5T_class_t type, size_t size)
 hid_t	H5Tcopy(hid_t type_id)
 herr_t	H5Tclose_async(hid_t type_id, hid_t es_id)
 htri_t	H5Tequal(hid_t type1_id, hid_t type2_id)

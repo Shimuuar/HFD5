@@ -63,6 +63,7 @@ module HDF5.C.H5T
   , h5t_NATIVE_HBOOL
     -- * Functions
   , h5t_close
+  , h5t_create
   , h5t_get_class
   , h5t_get_size
     -- ** Atomic types
@@ -306,6 +307,40 @@ foreign import capi "hdf5-hs.h hs_H5Tclose" h5t_close
   :: HID     -- ^ Datatype identifier
   -> HIO HErr
 
+
+-- | @H5Tcreate@ creates a new datatype of the specified class with
+--   the specified number of bytes. This function is used only with the
+--   following datatype classes:
+--
+-- > H5T_COMPOUND
+-- > H5T_OPAQUE
+-- > H5T_ENUM
+-- > H5T_STRING
+--
+-- Other datatypes, including integer and floating-point datatypes,
+-- are typically created by using @H5Tcopy@ to copy and modify a
+-- predefined datatype.
+--
+-- When creating a variable-length string datatype, size must be
+-- @H5T_VARIABLE@; see Creating variable-length string datatypes.
+--
+-- When creating a fixed-length string datatype, size will be the
+-- length of the string in bytes. The length of the string in
+-- characters will depend on i the encoding used; see
+-- H5Pset_char_encoding.
+--
+-- ENUMs created with this function have a signed native integer base
+-- datatype. Use @H5Tenum_create@ if a different integer base datatype
+-- is required.
+--
+-- The datatype identifier returned from this function should be
+-- released with H5Tclose or resource leaks will result.
+foreign import capi "hdf5-hs.h hs_H5Tcreate" h5t_create
+  :: H5TClass -- ^ @type@ Class of datatype to create
+  -> CSize    -- ^ @size@ Size, in bytes, of the datatype being created
+  -> HIO HID  -- ^ Returns a datatype identifier if successful;
+              --   otherwise returns H5I_INVALID_HID.
+
 -- | @H5Tget_size@ returns the size of a datatype in bytes.
 --
 --   * For atomic datatypes, array datatypes, compound datatypes, and
@@ -323,8 +358,9 @@ foreign import capi "hdf5-hs.h hs_H5Tclose" h5t_close
 --     actual data and a size value. This function does not return the
 --     size of actual variable-length sequence data.
 foreign import capi "hdf5-hs.h hs_H5Tget_size" h5t_get_size
-  :: HID      -- ^ Datatype identifier
-  -> HIO CSize
+  :: HID       -- ^ Datatype identifier
+  -> HIO CSize -- ^ Returns the size of the datatype in bytes if
+               --   successful; otherwise, returns 0.
 
 -- | @H5Tget_class@ returns the class of the datatype type_id.
 --
@@ -480,7 +516,6 @@ foreign import capi "hdf5-hs.h hs_H5Tget_member_type" h5t_get_member_type
 
 
 {-
-hid_t       H5Tcreate (H5T_class_t type, size_t size)
 hid_t       H5Tcopy (hid_t type_id)
 herr_t      H5Tclose_async (hid_t type_id, hid_t es_id)
 htri_t      H5Tequal (hid_t type1_id, hid_t type2_id)

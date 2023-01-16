@@ -15,6 +15,8 @@ module HDF5.C
   , h5p_DEFAULT
   , h5i_INVALID_HID
   , h5s_ALL
+    -- * General library
+  , h5_free_memory
     -- * Attributes API
   , module HDF5.C.H5A
     -- * Group API
@@ -36,6 +38,9 @@ module HDF5.C
     -- * IO wrapper
   , is_threadsafe
   ) where
+
+import Foreign.Ptr
+import Foreign.C
 
 import HDF5.C.Types
 import HDF5.C.H5A
@@ -59,10 +64,15 @@ foreign import capi "hdf5.h value H5S_ALL"            h5s_ALL         :: HID
 
 foreign import capi "hdf5-hs.h value HS_H5_THREADSAFE" is_threadsafe :: Int
 
-{-
-disabledAutoPrint :: HErr
-{-# NOINLINE disabledAutoPrint #-}
-disabledAutoPrint
-  = unsafePerformIO
-  $ h5e_set_auto h5e_DEFAULT nullFunPtr nullPtr
--}
+-- | @H5free_memory@ frees memory that has been allocated by the
+--   caller with @H5allocate_memory@ or by the HDF5 library on behalf
+--   of the caller.
+--
+--   @H5Tget_member_name@ provides an example of memory allocation on
+--   behalf of the caller: The function returns a buffer containing
+--   the name of a compound datatype member. It is the caller’s
+--   responsibility to eventually free that buffer with
+--   @H5free_memory@.
+foreign import capi "hdf5.h H5free_memory" h5_free_memory
+  :: Ptr x
+  -> IO HErr

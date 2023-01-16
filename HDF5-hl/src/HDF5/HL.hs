@@ -95,8 +95,10 @@ module HDF5.HL
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Catch
--- import Control.Monad.Trans.Class
--- import Control.Monad.Trans.Cont
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Cont
+import Foreign.C.String
+import Foreign.Marshal
 import GHC.Stack
 
 import HDF5.HL.Internal            qualified as HIO
@@ -105,8 +107,9 @@ import HDF5.HL.Internal            ( Element(..), SerializeAttr(..), Serialize(.
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
+import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.Dataspace
--- import HDF5.C
+import HDF5.C
 import Prelude hiding (read,readIO)
 
 
@@ -132,7 +135,12 @@ getDataspace = liftIO . getDataspaceIO
 --   doesn't exists even if it's open for writing. Use 'createFile' to
 --   create new file. Returned handle must be closed using 'close'.
 openFile :: (MonadIO m, HasCallStack) => FilePath -> OpenMode -> m File
-openFile path mode = liftIO $ HIO.openFile path mode
+openFile path mode = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  lift $ fmap File
+       $ checkHID p_err ("Cannot open file " ++ path)
+       $ h5f_open c_path (toCParam mode) h5p_DEFAULT
 
 -- | Open file using 'openFile' and pass handle to continuation. It
 --   will be closed when continuation finish execution normally or
@@ -146,7 +154,12 @@ withOpenFile path mode = bracket (openFile path mode) close
 --   open existing file for modification. Returned handle must be
 --   closed using 'close'.
 createFile :: (MonadIO m, HasCallStack) => FilePath -> CreateMode -> m File
-createFile path mode = liftIO $ HIO.createFile path mode
+createFile path mode = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  lift $ fmap File
+       $ checkHID p_err ("Cannot create file " ++ path)
+       $ h5f_create c_path (toCParam mode) h5p_DEFAULT h5p_DEFAULT
 
 -- | Create file using 'createFile' and pass handle to
 --   continuation. It will be closed when continuation finish
@@ -161,14 +174,19 @@ withCreateFile path mode = bracket (createFile path mode) close
 ----------------------------------------------------------------
 
 openGroup
-  :: (IsDirectory dir, MonadIO m)
+  :: (IsDirectory dir, MonadIO m, HasCallStack)
   => dir      -- ^ Location
   -> FilePath -- ^ Name of group
   -> m Group
-openGroup dir path = liftIO $ HIO.openGroup dir path
+openGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  lift $ fmap Group
+       $ checkHID p_err ("Cannot open group " ++ path)
+       $ h5g_open (getHID dir) c_path h5p_DEFAULT
 
 withOpenGroup
-  :: (IsDirectory dir, MonadIO m, MonadMask m)
+  :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
   => dir              -- ^ Location
   -> FilePath         -- ^ Name of group
   -> (Group -> m a)
@@ -176,14 +194,19 @@ withOpenGroup
 withOpenGroup dir path = bracket (openGroup dir path) close
 
 createGroup
-  :: (IsDirectory dir, MonadIO m)
+  :: (IsDirectory dir, MonadIO m, HasCallStack)
   => dir       -- ^ Location
   -> FilePath  -- ^ Name of group
   -> m Group
-createGroup dir path = liftIO $ HIO.createGroup dir path
+createGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  lift $ fmap Group
+       $ checkHID p_err ("Cannot create group " ++ path)
+       $ h5g_create (getHID dir) c_path h5p_DEFAULT h5p_DEFAULT h5p_DEFAULT
 
 withCreateGroup
-  :: (IsDirectory dir, MonadIO m, MonadMask m)
+  :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
   => dir              -- ^ Location
   -> FilePath         -- ^ Name of group
   -> (Group -> m a)
@@ -202,7 +225,12 @@ openDataset
   => dir      -- ^ Location
   -> FilePath -- ^ Path relative to location
   -> m Dataset
-openDataset dir path = liftIO $ HIO.openDataset dir path
+openDataset dir path = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  lift $  Dataset
+      <$> ( checkHID p_err ("Cannot open dataset " ++ path)
+          $ h5d_open2 (getHID dir) c_path h5p_DEFAULT)
 
 -- | Create new dataset at given location without writing any data to
 --   it. Returned 'Dataset' must be closed by call to 'close'.
@@ -213,19 +241,32 @@ createEmptyDataset
   -> Type     -- ^ Element type
   -> ext      -- ^ Dataspace, that is size of dataset
   -> m Dataset
-createEmptyDataset dir path ty ext
-  = liftIO $ HIO.createEmptyDataset dir path ty ext
+createEmptyDataset dir path ty ext = liftIO $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  space  <- ContT $ withCreateDataspace ext
+  tid    <- ContT $ withType ty
+  lift $ withFrozenCallStack
+       $ fmap Dataset
+       $ checkHID p_err ("Unable to create dataset")
+       $ h5d_create (getHID dir) c_path tid (getHID space)
+         h5p_DEFAULT
+         h5p_DEFAULT
+         h5p_DEFAULT
+
 
 -- | Create new dataset at given location and write provided data to
 --   it. Shape of data is inferred from data to write.
 createDataset
-  :: (SerializeDSet a, IsDirectory dir, MonadIO m, HasCallStack)
+  :: forall a dir m. (SerializeDSet a, IsDirectory dir, MonadIO m, HasCallStack)
   => dir      -- ^ File (root will be used) or group
   -> FilePath -- ^ Path to dataset
   -> a        -- ^ Value to write
   -> m ()
-createDataset dir path a
-  = liftIO $ HIO.basicCreateDataset dir path a
+createDataset dir path a = liftIO $ evalContT $ do
+  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a)
+  lift $ basicWriteDSet dset a
+
 
 -- | Open dataset and pass handle to continuation. Dataset will be
 --   closed when continuation finish execution normally or with an
@@ -256,11 +297,11 @@ withCreateEmptyDataset dir path ty ext = bracket
 --   specifically with datasets and can use its attributes. Use 'read'
 --   to be able to read from attributes as well.
 readDataset :: (SerializeDSet a, MonadIO m, HasCallStack) => Dataset -> m a
-readDataset d = liftIO $ HIO.readDataset d
+readDataset d = liftIO $ withDataspace d $ \spc -> basicReadDSet d spc
 
 -- | Read value from already opened dataset or attribute.
 readObject :: (Serialize a, HasData d, MonadIO m, HasCallStack) => d -> m a
-readObject d = liftIO $ bracket (getDataspaceIO d) basicClose (basicRead d)
+readObject = liftIO . HIO.basicReadObject
 
 -- | Open dataset and read it using 'readDSet'.
 readAt
@@ -268,7 +309,7 @@ readAt
   => dir      -- ^ File (root will be used) or group
   -> FilePath -- ^ Path to dataset
   -> m a
-readAt dir path = liftIO $ HIO.withOpenDataset dir path HIO.readDataset
+readAt dir path = liftIO $ withOpenDataset dir path readDataset
 
 
 ----------------------------------------------------------------

@@ -1,5 +1,12 @@
 This library is attempt to provide convenient high level API for working with
-HDF5 in haskell
+HDF5 in haskell. It contains two packages:
+
+ - `HDF5-direct` provides very thin wrappers for C API of HDF5.
+ - `HDF5-hl` is high level API which is should be used
+ 
+API is still very much in flux and could change without warning since I'm still
+in process in figuring out how to map huge feature set of HDF5 on haskell.
+
 
 # Internal API
 

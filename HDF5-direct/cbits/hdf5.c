@@ -591,6 +591,26 @@ hid_t hs_H5Tget_member_type(hid_t type_id, unsigned membno, hid_t *error) {
     CHECK_HID(H5Tget_member_type(type_id, membno));
 }
 
+hid_t hs_H5Tenum_create(hid_t base_id, hid_t *error) {
+    CHECK_HID(H5Tenum_create(base_id));
+}
+
+herr_t hs_H5Tenum_insert(hid_t type, const char *name, const void *value, hid_t *error) {
+    CHECK_ERR(H5Tenum_insert(type, name, value));
+}
+
+herr_t hs_H5Tenum_nameof(hid_t type, const void *value, char *name, size_t size, hid_t *error) {
+    CHECK_ERR(H5Tenum_nameof(type, value, name, size));
+}
+
+herr_t hs_H5Tenum_valueof(hid_t type, const char *name, void *value, hid_t *error) {
+    CHECK_ERR(H5Tenum_valueof(type, name, value));
+}
+
+herr_t hs_H5Tget_member_value(hid_t type_id, unsigned membno, void *value, hid_t *error) {
+    CHECK_ERR(H5Tget_member_value(type_id, membno, value));
+}
+
 /*
 hid_t	H5Tcopy(hid_t type_id)
 herr_t	H5Tclose_async(hid_t type_id, hid_t es_id)
@@ -634,12 +654,6 @@ herr_t	H5Tset_norm(hid_t type_id, H5T_norm_t norm)
 herr_t	H5Tset_inpad(hid_t type_id, H5T_pad_t pad)
 herr_t	H5Tset_cset(hid_t type_id, H5T_cset_t cset)
 herr_t	H5Tset_strpad(hid_t type_id, H5T_str_t strpad)
-
-hid_t   H5Tenum_create(hid_t base_id)
-herr_t  H5Tenum_insert(hid_t type, const char *name, const void *value)
-herr_t  H5Tenum_nameof(hid_t type, const void *value, char *name, size_t size)
-herr_t  H5Tenum_valueof(hid_t type, const char *name, void *value)
-herr_t  H5Tget_member_value(hid_t type_id, unsigned membno, void *value)
 
 herr_t  H5Tpack(hid_t type_id)
 size_t  H5Tget_member_offset(hid_t type_id, unsigned membno)

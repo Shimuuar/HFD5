@@ -82,6 +82,12 @@ module HDF5.C.H5T
     -- *** Compound types
   , h5t_insert
   , h5t_get_member_type
+    -- *** Enumerations
+  , h5t_enum_create
+  , h5t_enum_insert
+  , h5t_enum_nameof
+  , h5t_enum_valueof
+  , h5t_get_member_value
   ) where
 
 import Foreign.C
@@ -515,6 +521,96 @@ foreign import capi "hdf5-hs.h hs_H5Tget_member_type" h5t_get_member_type
              --   negative value.
 
 
+-- | @H5Tenum_create@ creates a new enumeration datatype based on the
+--   specified base datatype, dtype_id, which must be an integer
+--   datatype.
+--
+--   If a particular architecture datatype is required, a little
+--   endian or big endian datatype for example, use a native datatype
+--   as the base datatype and use @H5Tconvert@ on values as they are
+--   read from or written to a dataset.
+foreign import capi "hdf5-hs.h hs_H5Tenum_create" h5t_enum_create
+  :: HID     -- ^ @base_id@ Datatype identifier for the base
+             --   datatype. Must be an integer datatype
+  -> HIO HID -- ^ Returns a enumeration datatype identifier if
+             --   successful; otherwise returns H5I_INVALID_HID.
+
+
+-- | @H5Tenum_insert@ inserts a new enumeration datatype member into
+--   an enumeration datatype.
+--
+--   @type_id@ is the datatype identifier for the enumeration
+--   datatype, name is the name of the new member, and value points to
+--   the value of the new member.
+--
+--   @name@ and @value@ must both be unique within dtype_id.
+--
+--   @value@ points to data which must be of the integer base datatype
+--   used when the enumeration datatype was created. If a particular
+--   architecture datatype is required, a little endian or big endian
+--   datatype for example, use a native datatype as the base datatype
+--   and use @H5Tconvert@ on values as they are read from or written
+--   to a dataset.
+foreign import capi "hdf5-hs.h hs_H5Tenum_insert" h5t_enum_insert
+  :: HID      -- ^ @type@ Datatype identifier 
+  -> CString  -- ^ @name@ Name of the new member 
+  -> Ptr x    -- ^ @value@ Pointer to the value of the new member
+  -> HIO HErr -- ^ Returns a non-negative value if successful;
+              --   otherwise returns a negative value.
+
+-- | @H5Tenum_nameof@ finds the symbol name that corresponds to the
+--   specified value of the enumeration datatype type.
+--
+--   At most size characters of the symbol name are copied into the
+--   name buffer. If the entire symbol name and null terminator do not
+--   fit in the name buffer, then as many characters as possible are
+--   copied (not null terminated) and the function fails.
+foreign import capi "hdf5-hs.h hs_H5Tenum_nameof" h5t_enum_nameof
+  :: HID      -- ^ @type@ Datatype identifier 
+  -> Ptr x    -- ^ @value@ Value of the enumeration datatype 
+  -> CString  -- ^ @[out]@ @name@ Buffer for output of the symbol name 
+  -> CSize    -- ^ @size@ Anticipated size of the symbol name, in bytes
+  -> HIO HErr -- ^ Returns a non-negative value if
+              --   successful. Otherwise returns a negative value
+
+
+-- | @H5Tenum_valueof@ finds the value that corresponds to the
+--   specified name of the enumeration datatype dtype_id.
+--
+--   Values returned in value will be of the enumerated type’s base
+--   type, that is, the datatype used by @H5Tenum_create@ when the
+--   enumerated type was created.
+--
+--   The value buffer must be at least large enough to hold a value of
+--   that base type. If the size is unknown, you can determine it with
+--   @H5Tget_size@.
+foreign import capi "hdf5-hs.h hs_H5Tenum_valueof" h5t_enum_valueof
+  :: HID      -- ^ @type@ Datatype identifier 
+  -> CString  -- ^ @name@ Symbol name of the enumeration datatype 
+  -> Ptr x    -- ^ @[out]@ @value@ Buffer for the value of the
+              --   enumeration datatype
+  -> HIO HErr -- ^ Returns a non-negative value if successful;
+              --   otherwise returns a negative value.
+
+
+-- | @H5Tget_member_value@ returns the value of the enumeration
+--   datatype member member_no.
+--
+--   The member value is returned in a user-supplied buffer pointed to
+--   by value. Values returned in value will be of the enumerated
+--   type’s base type, that is, the datatype used by @H5Tenum_create@
+--   when the enumerated type was created.
+--
+--   The value buffer must be at least large enough to hold a value of
+--   that base type. If the size is unknown, you can determine it with
+--   @H5Tget_size@.
+foreign import capi "hdf5-hs.h hs_H5Tget_member_value" h5t_get_member_value
+  :: HID      -- ^ @type_id@ Datatype identifier 
+  -> CUInt    -- ^ @membno@ Number of the enumeration datatype member 
+  -> Ptr x    -- ^ @[out]@ @value@ Buffer for the value of the enumeration datatype member
+  -> HIO HErr -- ^ Returns a non-negative value if successful;
+              --   otherwise returns a negative value.
+
 {-
 hid_t       H5Tcopy (hid_t type_id)
 herr_t      H5Tclose_async (hid_t type_id, hid_t es_id)
@@ -569,12 +665,6 @@ int     H5Tget_nmembers(hid_t type_id)
 char *  H5Tget_member_name(hid_t type_id, unsigned membno)
 int     H5Tget_member_index(hid_t type_id, const char *name)
 
-hid_t   H5Tenum_create(hid_t base_id)
-herr_t  H5Tenum_insert(hid_t type, const char *name, const void *value)
-herr_t  H5Tenum_nameof(hid_t type, const void *value, char *name, size_t size)
-herr_t  H5Tenum_valueof(hid_t type, const char *name, void *value)
-
-herr_t  H5Tget_member_value(hid_t type_id, unsigned membno, void *value)
 herr_t  H5Tinsert(hid_t parent_id, const char *name, size_t offset, hid_t member_id)
 herr_t  H5Tpack(hid_t type_id)
 size_t  H5Tget_member_offset(hid_t type_id, unsigned membno)

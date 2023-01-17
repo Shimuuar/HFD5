@@ -86,5 +86,10 @@ char *hs_H5Tget_member_name(hid_t type_id, unsigned membno, hid_t *error);
 int hs_H5Tget_member_index(hid_t type_id, const char *name, hid_t *error);
 herr_t hs_H5Tinsert(hid_t parent_id, const char *name, size_t offset, hid_t member_id, hid_t *error);
 hid_t hs_H5Tget_member_type(hid_t type_id, unsigned membno, hid_t *error);
+hid_t hs_H5Tenum_create(hid_t base_id, hid_t *error);
+herr_t hs_H5Tenum_insert(hid_t type, const char *name, const void *value, hid_t *error);
+herr_t hs_H5Tenum_nameof(hid_t type, const void *value, char *name, size_t size, hid_t *error);
+herr_t hs_H5Tenum_valueof(hid_t type, const char *name, void *value, hid_t *error);
+herr_t hs_H5Tget_member_value(hid_t type_id, unsigned membno, void *value, hid_t *error);
 
 herr_t hs_H5Literate2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t* error);

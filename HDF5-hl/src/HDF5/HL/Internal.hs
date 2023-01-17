@@ -328,6 +328,11 @@ deriving via SerializeAsScalar Float  instance Serialize    Float
 deriving via SerializeAsScalar Double instance SerializeArr Double
 deriving via SerializeAsScalar Double instance Serialize    Double
 
+deriving via SerializeAsScalar (Complex a)
+    instance Element a => SerializeArr (Complex a)
+deriving via SerializeAsScalar (Complex a)
+    instance Element a => Serialize (Complex a)
+
 deriving via SerializeAsScalar (FB.Vec n a)
     instance (F.Arity n, Element a) => Serialize (FB.Vec n a)
 deriving via SerializeAsScalar (FB.Vec n a)

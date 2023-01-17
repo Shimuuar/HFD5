@@ -108,7 +108,7 @@ import Foreign.Storable
 import GHC.Stack
 
 import HDF5.HL.Internal            qualified as HIO
-import HDF5.HL.Internal            ( Element(..), SerializeAttr(..), Serialize(..), SerializeArr(..)
+import HDF5.HL.Internal            ( SerializeAttr(..), Serialize(..), SerializeArr(..)
                                    , basicReadBuffer, basicReadScalar)
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Wrappers

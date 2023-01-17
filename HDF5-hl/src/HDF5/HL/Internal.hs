@@ -1,4 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes        #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DerivingVia                #-}
@@ -28,8 +27,6 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Catch
 import Control.Monad.Trans.Class
--- import Data.Coerce
-import Data.Bits                   (finiteBitSize)
 import Data.Functor.Identity
 import Data.Complex                (Complex)
 import Data.Vector                 qualified as V
@@ -158,48 +155,6 @@ basicReadAttr a name = withAttr a name $ \case
 -- Type class for elements
 ----------------------------------------------------------------
 
--- | Data type which corresponds to some HDF data type and could read
---   from buffer using 'Storable'.
-class Storable a => Element a where
-  typeH5 :: Type
-
-instance Element Int8   where typeH5 = tyI8
-instance Element Int16  where typeH5 = tyI16
-instance Element Int32  where typeH5 = tyI32
-instance Element Int64  where typeH5 = tyI64
-instance Element Word8  where typeH5 = tyU8
-instance Element Word16 where typeH5 = tyU16
-instance Element Word32 where typeH5 = tyU32
-instance Element Word64 where typeH5 = tyU64
-
-instance Element Float  where typeH5 = tyF32
-instance Element Double where typeH5 = tyF64
-
--- | Uses same convention as @h5py@ by default.
-instance Element a => Element (Complex a) where
-  typeH5 = makePackedRecord [("r",ty), ("i",ty)] where ty = typeH5 @a
-
-
-instance (Element a, F.Arity n) => Element (FB.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
-instance (Element a, F.Arity n, FU.Unbox n a) => Element (FU.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
-instance (Element a, F.Arity n) => Element (FS.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
-instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
-
-instance Element a => Element (Identity a) where typeH5 = typeH5 @a
-
-instance Element Int where
-  typeH5 | wordSizeInBits == 64 = tyI64
-         | otherwise            = tyI32
-instance Element Word where
-  typeH5 | wordSizeInBits == 64 = tyU64
-         | otherwise            = tyU32
-
-wordSizeInBits :: Int
-wordSizeInBits = finiteBitSize (0 :: Word)
 
 
 ----------------------------------------------------------------

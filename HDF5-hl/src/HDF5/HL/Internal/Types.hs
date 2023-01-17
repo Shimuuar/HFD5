@@ -1,11 +1,17 @@
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE MagicHash           #-}
-{-# LANGUAGE PatternSynonyms     #-}
-{-# LANGUAGE UnboxedTuples       #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE AllowAmbiguousTypes  #-}
+{-# LANGUAGE BangPatterns         #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE ImportQualifiedPost  #-}
+{-# LANGUAGE LambdaCase           #-}
+{-# LANGUAGE MagicHash            #-}
+{-# LANGUAGE PatternSynonyms      #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TypeApplications     #-}
+{-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE UnboxedTuples        #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns         #-}
 -- |
 -- API for working with HDF5 data types. We treat them as immutable
 -- while they're mutable in HDF5.
@@ -22,6 +28,8 @@ module HDF5.HL.Internal.Types
     -- * Patterns
   , pattern Array
   , makePackedRecord
+    -- * Element
+  , Element(..)
   ) where
 
 import Control.Monad
@@ -29,8 +37,18 @@ import Control.Monad.Catch
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
+import Data.Bits                  (finiteBitSize)
 import Data.IORef
-import Foreign.Marshal (alloca, allocaArray, allocaArray0, withArray, peekArray)
+import Data.Complex
+import Data.Int
+import Data.Word
+import Data.Functor.Identity
+import Data.Vector.Fixed           qualified as F
+import Data.Vector.Fixed.Unboxed   qualified as FU
+import Data.Vector.Fixed.Boxed     qualified as FB
+import Data.Vector.Fixed.Storable  qualified as FS
+import Data.Vector.Fixed.Primitive qualified as FP
+import Foreign.Marshal             (alloca, allocaArray, allocaArray0, withArray, peekArray)
 import Foreign.Ptr
 import Foreign.C.String
 import Foreign.Storable
@@ -187,3 +205,49 @@ makePackedRecord fields = unsafePerformIO $ withFrozenCallStack $ unsafeNewType 
     computeOff !off ((nm,ty):rest) = (sz, (nm,ty,off) : rest') where
       (sz,rest') = computeOff (off + sizeOfH5 ty) rest
     (size, fields_sz) = computeOff 0 fields
+----------------------------------------------------------------
+-- Type class for deriving HDF5 types
+----------------------------------------------------------------
+
+-- | Data type which corresponds to some HDF data type and could read
+--   from buffer using 'Storable'.
+class Storable a => Element a where
+  typeH5 :: Type
+
+instance Element Int8   where typeH5 = tyI8
+instance Element Int16  where typeH5 = tyI16
+instance Element Int32  where typeH5 = tyI32
+instance Element Int64  where typeH5 = tyI64
+instance Element Word8  where typeH5 = tyU8
+instance Element Word16 where typeH5 = tyU16
+instance Element Word32 where typeH5 = tyU32
+instance Element Word64 where typeH5 = tyU64
+
+instance Element Float  where typeH5 = tyF32
+instance Element Double where typeH5 = tyF64
+
+-- | Uses same convention as @h5py@ by default.
+instance Element a => Element (Complex a) where
+  typeH5 = makePackedRecord [("r",ty), ("i",ty)] where ty = typeH5 @a
+
+
+instance (Element a, F.Arity n) => Element (FB.Vec n a) where
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
+instance (Element a, F.Arity n, FU.Unbox n a) => Element (FU.Vec n a) where
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
+instance (Element a, F.Arity n) => Element (FS.Vec n a) where
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
+instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
+  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
+
+instance Element a => Element (Identity a) where typeH5 = typeH5 @a
+
+instance Element Int where
+  typeH5 | wordSizeInBits == 64 = tyI64
+         | otherwise            = tyI32
+instance Element Word where
+  typeH5 | wordSizeInBits == 64 = tyU64
+         | otherwise            = tyU32
+
+wordSizeInBits :: Int
+wordSizeInBits = finiteBitSize (0 :: Word)

@@ -69,8 +69,8 @@ import Prelude hiding (read,readIO)
 
 
 -- | Read value from already opened dataset or attribute.
-basicReadObject :: (Serialize a, HasData d, MonadIO m, HasCallStack) => d -> m a
-basicReadObject d = liftIO $ withDataspace d $ \spc -> basicRead d spc
+basicReadObject :: (SerializeArr a, HasData d, MonadIO m, HasCallStack) => d -> m a
+basicReadObject d = liftIO $ withDataspace d $ \spc -> basicReadArr d spc
 
 
 ----------------------------------------------------------------
@@ -124,7 +124,7 @@ withAttr
 withAttr a path = bracket (openAttr a path) (mapM_ basicClose)
 
 basicCreateAttr
-  :: forall a dir. (Serialize a, HasAttrs dir, HasCallStack)
+  :: forall a dir. (SerializeArr a, HasAttrs dir, HasCallStack)
   => dir    -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> a      -- ^ Value to store in attribute
@@ -142,10 +142,10 @@ basicCreateAttr dir path a = evalContT $ do
           h5p_DEFAULT
           h5p_DEFAULT)
     basicClose
-  lift $ basicWrite attr a
+  lift $ basicWriteArr attr a
 
 basicReadAttr
-  :: (Serialize a, HasAttrs d, HasCallStack)
+  :: (SerializeArr a, HasAttrs d, HasCallStack)
   => d      -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> IO (Maybe a)
@@ -207,26 +207,26 @@ wordSizeInBits = finiteBitSize (0 :: Word)
 ----------------------------------------------------------------
 
 -- | Data type which could be serialized to HDF5 dataset.
-class (Element (ElementOf a), IsExtent (ExtentOf a)) => SerializeDSet a where
+class (Element (ElementOf a), IsExtent (ExtentOf a)) => Serialize a where
   type ElementOf a
   type ExtentOf  a
   -- | Read object using object itself and dataspace associated with
   --   it. This method shouldn't be called directly
-  basicReadDSet :: HasCallStack => Dataset -> Dataspace -> IO a
-  default basicReadDSet :: (Serialize a) => Dataset -> Dataspace -> IO a
-  basicReadDSet = basicRead
+  basicRead :: HasCallStack => Dataset -> Dataspace -> IO a
+  default basicRead :: (SerializeArr a) => Dataset -> Dataspace -> IO a
+  basicRead = basicReadArr
   -- | Write object to HDF5 file. At this point dataset is already
   --   created with correct dataspace.
-  basicWriteDSet :: HasCallStack => Dataset -> a -> IO ()
-  default basicWriteDSet :: (Serialize a) => Dataset -> a -> IO ()
-  basicWriteDSet = basicWrite
+  basicWrite :: HasCallStack => Dataset -> a -> IO ()
+  default basicWrite :: (SerializeArr a) => Dataset -> a -> IO ()
+  basicWrite = basicWriteArr
   -- | Compute dimensions of an array
   getExtent :: a -> ExtentOf a
 
 -- | More restrictive version which could be used for both
-class SerializeDSet a => Serialize a where
-  basicRead  :: (HasData d, HasCallStack) => d -> Dataspace -> IO a
-  basicWrite :: (HasData d, HasCallStack) => d -> a -> IO ()
+class Serialize a => SerializeArr a where
+  basicReadArr  :: (HasData d, HasCallStack) => d -> Dataspace -> IO a
+  basicWriteArr :: (HasData d, HasCallStack) => d -> a -> IO ()
 
 -- | Values which could be serialized as set of attributes
 class SerializeAttr a where
@@ -252,11 +252,11 @@ instance Monad AttributeM where
 basicAttrSubset :: FilePath -> AttributeM a -> AttributeM a
 basicAttrSubset dir m = AttributeM $ \d fun -> unAttributeM m d ((dir++) . ('/':) . fun)
 
-basicEncodeAttr :: Serialize a => FilePath -> a -> AttributeM ()
+basicEncodeAttr :: SerializeArr a => FilePath -> a -> AttributeM ()
 basicEncodeAttr name a = AttributeM $ \d fun -> do
   basicCreateAttr d (fun name) a
 
-basicDecodeAttr :: Serialize a => FilePath -> AttributeM a
+basicDecodeAttr :: SerializeArr a => FilePath -> AttributeM a
 basicDecodeAttr name = AttributeM $ \d fun -> do
   basicReadAttr d (fun name) >>= \case
     Nothing -> error "No attribute" -- FIXME: proper error handling
@@ -264,107 +264,106 @@ basicDecodeAttr name = AttributeM $ \d fun -> do
 
 
 
-instance Element a => SerializeDSet [a] where
+instance Element a => Serialize [a] where
   type ElementOf [a] = a
   type ExtentOf  [a] = Int
   getExtent = length
-instance Element a => Serialize     [a] where
-  basicRead  dset spc = VS.toList <$> basicRead dset spc
-  basicWrite dset xs  = basicWrite dset (VS.fromList xs)
+instance Element a => SerializeArr [a] where
+  basicReadArr  dset spc = VS.toList <$> basicReadArr dset spc
+  basicWriteArr dset xs  = basicWriteArr dset (VS.fromList xs)
 
-instance (Element a, VU.Unbox a) => SerializeDSet (VU.Vector a) where
+instance (Element a, VU.Unbox a) => Serialize (VU.Vector a) where
   type ElementOf (VU.Vector a) = a
   type ExtentOf  (VU.Vector a) = Int
   getExtent = VU.length
-instance (Element a, VU.Unbox a) => Serialize (VU.Vector a) where
-  basicRead  dset spc = VG.convert <$> basicRead @(VS.Vector a) dset spc
-  basicWrite dset xs  = basicWrite dset (VG.convert xs :: VS.Vector a)
+instance (Element a, VU.Unbox a) => SerializeArr (VU.Vector a) where
+  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
+  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
 
-instance (Element a) => SerializeDSet (V.Vector a) where
+instance (Element a) => Serialize (V.Vector a) where
   type ElementOf (V.Vector a) = a
   type ExtentOf  (V.Vector a) = Int
   getExtent = V.length
-instance (Element a) => Serialize (V.Vector a) where
-  basicRead  dset spc = VG.convert <$> basicRead @(VS.Vector a) dset spc
-  basicWrite dset xs  = basicWrite dset (VG.convert xs :: VS.Vector a)
+instance (Element a) => SerializeArr (V.Vector a) where
+  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
+  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
 
 
-instance Element a => SerializeDSet (VS.Vector a) where
+instance Element a => Serialize (VS.Vector a) where
   type ElementOf (VS.Vector a) = a
   type ExtentOf  (VS.Vector a) = Int
   getExtent = VS.length
-instance Element a => Serialize     (VS.Vector a) where
-  basicRead dset spc = do
+instance Element a => SerializeArr (VS.Vector a) where
+  basicReadArr dset spc = do
     n <- dataspaceRank spc
     when (n /= Just 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
-  -- We don't have primitive we
-  basicWrite dset xs = VS.unsafeWith xs $ unsafeWriteAll dset (typeH5 @a)
+  basicWriteArr dset xs = VS.unsafeWith xs $ unsafeWriteAll dset (typeH5 @a)
 
 
-deriving via SerializeAsScalar Int8   instance SerializeDSet Int8
-deriving via SerializeAsScalar Int8   instance Serialize     Int8
-deriving via SerializeAsScalar Int16  instance SerializeDSet Int16
-deriving via SerializeAsScalar Int16  instance Serialize     Int16
-deriving via SerializeAsScalar Int32  instance SerializeDSet Int32
-deriving via SerializeAsScalar Int32  instance Serialize     Int32
-deriving via SerializeAsScalar Int64  instance SerializeDSet Int64
-deriving via SerializeAsScalar Int64  instance Serialize     Int64
-deriving via SerializeAsScalar Word8  instance SerializeDSet Word8
-deriving via SerializeAsScalar Word8  instance Serialize     Word8
-deriving via SerializeAsScalar Word16 instance SerializeDSet Word16
-deriving via SerializeAsScalar Word16 instance Serialize     Word16
-deriving via SerializeAsScalar Word32 instance SerializeDSet Word32
-deriving via SerializeAsScalar Word32 instance Serialize     Word32
-deriving via SerializeAsScalar Word64 instance SerializeDSet Word64
-deriving via SerializeAsScalar Word64 instance Serialize     Word64
+deriving via SerializeAsScalar Int8   instance SerializeArr Int8
+deriving via SerializeAsScalar Int8   instance Serialize    Int8
+deriving via SerializeAsScalar Int16  instance SerializeArr Int16
+deriving via SerializeAsScalar Int16  instance Serialize    Int16
+deriving via SerializeAsScalar Int32  instance SerializeArr Int32
+deriving via SerializeAsScalar Int32  instance Serialize    Int32
+deriving via SerializeAsScalar Int64  instance SerializeArr Int64
+deriving via SerializeAsScalar Int64  instance Serialize    Int64
+deriving via SerializeAsScalar Word8  instance SerializeArr Word8
+deriving via SerializeAsScalar Word8  instance Serialize    Word8
+deriving via SerializeAsScalar Word16 instance SerializeArr Word16
+deriving via SerializeAsScalar Word16 instance Serialize    Word16
+deriving via SerializeAsScalar Word32 instance SerializeArr Word32
+deriving via SerializeAsScalar Word32 instance Serialize    Word32
+deriving via SerializeAsScalar Word64 instance SerializeArr Word64
+deriving via SerializeAsScalar Word64 instance Serialize    Word64
 
-deriving via SerializeAsScalar Int  instance SerializeDSet Int
-deriving via SerializeAsScalar Int  instance Serialize     Int
-deriving via SerializeAsScalar Word instance SerializeDSet Word
-deriving via SerializeAsScalar Word instance Serialize     Word
+deriving via SerializeAsScalar Int  instance SerializeArr Int
+deriving via SerializeAsScalar Int  instance Serialize    Int
+deriving via SerializeAsScalar Word instance SerializeArr Word
+deriving via SerializeAsScalar Word instance Serialize    Word
 
-deriving via SerializeAsScalar Float  instance SerializeDSet Float
-deriving via SerializeAsScalar Float  instance Serialize     Float
-deriving via SerializeAsScalar Double instance SerializeDSet Double
-deriving via SerializeAsScalar Double instance Serialize     Double
+deriving via SerializeAsScalar Float  instance SerializeArr Float
+deriving via SerializeAsScalar Float  instance Serialize    Float
+deriving via SerializeAsScalar Double instance SerializeArr Double
+deriving via SerializeAsScalar Double instance Serialize    Double
 
 deriving via SerializeAsScalar (FB.Vec n a)
     instance (F.Arity n, Element a) => Serialize (FB.Vec n a)
 deriving via SerializeAsScalar (FB.Vec n a)
-    instance (F.Arity n, Element a) => SerializeDSet (FB.Vec n a)
+    instance (F.Arity n, Element a) => SerializeArr (FB.Vec n a)
 
 deriving via SerializeAsScalar (FU.Vec n a)
     instance (F.Arity n, Element a, FU.Unbox n a) => Serialize (FU.Vec n a)
 deriving via SerializeAsScalar (FU.Vec n a)
-    instance (F.Arity n, Element a, FU.Unbox n a) => SerializeDSet (FU.Vec n a)
+    instance (F.Arity n, Element a, FU.Unbox n a) => SerializeArr (FU.Vec n a)
 
 deriving via SerializeAsScalar (FS.Vec n a)
     instance (F.Arity n, Element a) => Serialize (FS.Vec n a)
 deriving via SerializeAsScalar (FS.Vec n a)
-    instance (F.Arity n, Element a) => SerializeDSet (FS.Vec n a)
+    instance (F.Arity n, Element a) => SerializeArr (FS.Vec n a)
 
 deriving via SerializeAsScalar (FP.Vec n a)
     instance (F.Arity n, Element a, FP.Prim a) => Serialize (FP.Vec n a)
 deriving via SerializeAsScalar (FP.Vec n a)
-    instance (F.Arity n, Element a, FP.Prim a) => SerializeDSet (FP.Vec n a)
+    instance (F.Arity n, Element a, FP.Prim a) => SerializeArr (FP.Vec n a)
 
-deriving newtype instance Serialize     a => Serialize     (Identity a)
-deriving newtype instance SerializeDSet a => SerializeDSet (Identity a)
+deriving newtype instance Serialize    a => Serialize    (Identity a)
+deriving newtype instance SerializeArr a => SerializeArr (Identity a)
 
 -- | Newtype wrapper for derivation of serialization instances as
 --   scalars.
 newtype SerializeAsScalar a = SerializeAsScalar a
   deriving newtype (Storable, Element)
 
-instance Element a => SerializeDSet (SerializeAsScalar a) where
+instance Element a => Serialize (SerializeAsScalar a) where
   type ElementOf (SerializeAsScalar a) = a
   type ExtentOf  (SerializeAsScalar a) = ()
   getExtent _ = ()
 
-instance Element a => Serialize (SerializeAsScalar a) where
-  basicRead  dset spc = basicReadScalar dset spc
-  basicWrite dset a   = evalContT $ do
+instance Element a => SerializeArr (SerializeAsScalar a) where
+  basicReadArr  dset spc = basicReadScalar dset spc
+  basicWriteArr dset a   = evalContT $ do
     p  <- ContT $ alloca
     lift $ do poke p a
               unsafeWriteAll dset (typeH5 @a) p

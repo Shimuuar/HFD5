@@ -79,8 +79,8 @@ module HDF5.HL
     -- * Serialization of haskell value
     -- ** Type classes
   , Element(..)
-  , SerializeDSet(..)
   , Serialize(..)
+  , SerializeArr(..)
     -- ** Primitives
   , basicReadBuffer
   , basicReadScalar
@@ -108,7 +108,7 @@ import Foreign.Storable
 import GHC.Stack
 
 import HDF5.HL.Internal            qualified as HIO
-import HDF5.HL.Internal            ( Element(..), SerializeAttr(..), Serialize(..), SerializeDSet(..)
+import HDF5.HL.Internal            ( Element(..), SerializeAttr(..), Serialize(..), SerializeArr(..)
                                    , basicReadBuffer, basicReadScalar)
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Wrappers
@@ -285,14 +285,14 @@ createEmptyDataset dir path ty ext = liftIO $ evalContT $ do
 -- | Create new dataset at given location and write provided data to
 --   it. Shape of data is inferred from data to write.
 createDataset
-  :: forall a dir m. (SerializeDSet a, IsDirectory dir, MonadIO m, HasCallStack)
+  :: forall a dir m. (Serialize a, IsDirectory dir, MonadIO m, HasCallStack)
   => dir      -- ^ File (root will be used) or group
   -> FilePath -- ^ Path to dataset
   -> a        -- ^ Value to write
   -> m ()
 createDataset dir path a = liftIO $ evalContT $ do
   dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a)
-  lift $ basicWriteDSet dset a
+  lift $ basicWrite dset a
 
 
 -- | Open dataset and pass handle to continuation. Dataset will be
@@ -323,16 +323,16 @@ withCreateEmptyDataset dir path ty ext = bracket
 -- | Read data from already opened dataset. This function work
 --   specifically with datasets and can use its attributes. Use 'read'
 --   to be able to read from attributes as well.
-readDataset :: (SerializeDSet a, MonadIO m, HasCallStack) => Dataset -> m a
-readDataset d = liftIO $ withDataspace d $ \spc -> basicReadDSet d spc
+readDataset :: (Serialize a, MonadIO m, HasCallStack) => Dataset -> m a
+readDataset d = liftIO $ withDataspace d $ \spc -> basicRead d spc
 
 -- | Read value from already opened dataset or attribute.
-readObject :: (Serialize a, HasData d, MonadIO m, HasCallStack) => d -> m a
+readObject :: (SerializeArr a, HasData d, MonadIO m, HasCallStack) => d -> m a
 readObject = liftIO . HIO.basicReadObject
 
 -- | Open dataset and read it using 'readDSet'.
 readAt
-  :: (SerializeDSet a, IsDirectory dir, MonadIO m, HasCallStack)
+  :: (Serialize a, IsDirectory dir, MonadIO m, HasCallStack)
   => dir      -- ^ File (root will be used) or group
   -> FilePath -- ^ Path to dataset
   -> m a
@@ -392,7 +392,7 @@ withAttr a path = bracket (openAttr a path) (mapM_ close)
 
 -- | Create attribute
 createAttr
-  :: forall a dir m. (Serialize a, HasAttrs dir, MonadIO m, HasCallStack)
+  :: forall a dir m. (SerializeArr a, HasAttrs dir, MonadIO m, HasCallStack)
   => dir    -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> a      -- ^ Value to store in attribute
@@ -400,7 +400,7 @@ createAttr
 createAttr dir path a = liftIO $ HIO.basicCreateAttr dir path a
 
 readAttr
-  :: (Serialize a, HasAttrs d, MonadIO m, HasCallStack)
+  :: (SerializeArr a, HasAttrs d, MonadIO m, HasCallStack)
   => d      -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> m (Maybe a)

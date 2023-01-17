@@ -28,6 +28,7 @@ module HDF5.HL.Internal.Types
     -- * Patterns
   , pattern Array
   , makePackedRecord
+  , makeEnumeration
     -- * Element
   , Element(..)
   ) where
@@ -205,6 +206,28 @@ makePackedRecord fields = unsafePerformIO $ withFrozenCallStack $ unsafeNewType 
     computeOff !off ((nm,ty):rest) = (sz, (nm,ty,off) : rest') where
       (sz,rest') = computeOff (off + sizeOfH5 ty) rest
     (size, fields_sz) = computeOff 0 fields
+
+-- | Make enumeration data type which is based on underlying type @a@.
+makeEnumeration :: forall a. (Element a, HasCallStack) => [(String,a)] -> Type
+makeEnumeration elems = unsafePerformIO $ withFrozenCallStack $ unsafeNewType $ evalContT $ do
+  p_err    <- ContT $ alloca
+  p_val    <- ContT $ alloca
+  base_tid <- ContT $ withType (typeH5 @a)
+  -- Create enumeration data type. We want to release it in case of
+  -- any exception
+  tid      <- ContT $ bracketOnError
+    ( checkHID p_err "Cannot create enumeration type"
+    $ h5t_enum_create base_tid )
+    (\tid -> void $ h5t_close tid p_err)
+  lift $ do
+    forM_ elems $ \(nm,a) -> do
+      poke p_val a
+      withCString nm $ \c_nm ->
+          checkHErr p_err "Cannot add member to enumeration"
+        $ h5t_enum_insert tid c_nm p_val
+    pure tid
+
+
 ----------------------------------------------------------------
 -- Type class for deriving HDF5 types
 ----------------------------------------------------------------

@@ -65,6 +65,7 @@ module HDF5.HL
   , tyF32, tyF64
   , pattern Array
   , makePackedRecord
+  , makeEnumeration
     -- ** Type classes
   , IsObject
   , IsDirectory

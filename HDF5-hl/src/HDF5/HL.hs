@@ -231,7 +231,6 @@ listGroup dir = liftIO $ withFrozenCallStack $ evalContT $ do
   names <- lift  $ newIORef []
   let readNode _hid cname _p_node _p_userdata = do
         name <- peekCString cname
-        print name
         modifyIORef' names (name:)
         pure $ HErr 0
   callback <- ContT $ bracket (makeH5LIterate2 readNode) freeHaskellFunPtr

@@ -13,6 +13,7 @@ module HDF5.C.H5S
   , pattern H5S_SCALAR
   , pattern H5S_SIMPLE
   , pattern H5S_NULL
+  , pattern H5S_UNLIMITED
     -- * Functions
   , h5s_close
   , h5s_create
@@ -39,10 +40,11 @@ foreign import capi "hdf5.h value H5S_ALL" h5s_ALL :: HID
 newtype H5SClass = H5SClass CInt
   deriving (Show,Eq,Ord)
 
-foreign import capi "hdf5.h value H5S_NO_CLASS" h5s_NO_CLASS :: H5SClass
-foreign import capi "hdf5.h value H5S_SCALAR" h5s_SCALAR :: H5SClass
-foreign import capi "hdf5.h value H5S_SIMPLE" h5s_SIMPLE :: H5SClass
-foreign import capi "hdf5.h value H5S_NULL" h5s_NULL :: H5SClass
+foreign import capi "hdf5.h value H5S_NO_CLASS"  h5s_NO_CLASS  :: H5SClass
+foreign import capi "hdf5.h value H5S_SCALAR"    h5s_SCALAR    :: H5SClass
+foreign import capi "hdf5.h value H5S_SIMPLE"    h5s_SIMPLE    :: H5SClass
+foreign import capi "hdf5.h value H5S_NULL"      h5s_NULL      :: H5SClass
+foreign import capi "hdf5.h value H5S_UNLIMITED" h5s_UNLIMITED :: HSize
 
 -- | Error
 pattern H5S_NO_CLASS :: H5SClass
@@ -60,6 +62,9 @@ pattern H5S_SIMPLE <- ((==h5s_SIMPLE) -> True) where H5S_SIMPLE = h5s_SIMPLE
 pattern H5S_NULL :: H5SClass
 pattern H5S_NULL <- ((==h5s_NULL) -> True) where H5S_NULL = h5s_NULL
 
+-- | Value for 'unlimited' dimensions
+pattern H5S_UNLIMITED :: HSize
+pattern H5S_UNLIMITED <- ((==h5s_UNLIMITED) -> True) where H5S_UNLIMITED = h5s_UNLIMITED
 
 
 ----------------------------------------------------------------

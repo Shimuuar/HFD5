@@ -98,7 +98,7 @@ openAttr (getHID -> hid) path = withFrozenCallStack $ evalContT $ do
       False -> pure Nothing
       True  -> Just . Attribute
             <$> ( checkHID p_err ("Cannot open attribute " ++ path)
-                $ h5a_open hid c_str h5p_DEFAULT)
+                $ h5a_open hid c_str H5P_DEFAULT)
 
 withAttr
   :: (HasAttrs a, HasCallStack)
@@ -124,8 +124,8 @@ basicCreateAttr dir path a = evalContT $ do
     $ fmap Attribute
     $ checkHID p_err ("Cannot create attribute " ++ path)
     $ h5a_create (getHID dir) c_path tid (getHID space)
-          h5p_DEFAULT
-          h5p_DEFAULT)
+          H5P_DEFAULT
+          H5P_DEFAULT)
     basicClose
   lift $ basicWriteArr attr a
 

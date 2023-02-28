@@ -645,3 +645,73 @@ herr_t H5Literate_by_name2(hid_t loc_id, const char *group_name, H5_index_t idx_
 herr_t H5Lvisit2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, H5L_iterate2_t op, void *op_data)
 herr_t H5Lvisit_by_name2(hid_t loc_id, const char *group_name, H5_index_t idx_type, H5_iter_order_t order, H5L_iterate2_t op, void *op_data, hid_t lapl_id)
 */
+
+// ----------------------------------------------------------------
+// H5P
+// ----------------------------------------------------------------
+
+herr_t hs_H5Pclose (hid_t plist_id, hid_t* error) {
+    CHECK_ERR(H5Pclose(plist_id));
+}
+
+hid_t hs_H5Pcreate (hid_t cls_id, hid_t* error) {
+    CHECK_HID(H5Pcreate(cls_id));
+}
+
+herr_t hs_H5Pset_chunk (hid_t plist_id, int ndims, const hsize_t dim[], hid_t* error) {
+    CHECK_ERR(H5Pset_chunk(plist_id, ndims, dim));
+}
+
+herr_t hs_H5Pset_chunk_opts (hid_t plist_id, unsigned opts, hid_t* error) {
+    CHECK_ERR(H5Pset_chunk_opts(plist_id, opts));
+}
+
+herr_t hs_H5Pset_deflate (hid_t plist_id, unsigned level, hid_t* error) {
+    CHECK_ERR(H5Pset_deflate(plist_id, level));
+}
+
+herr_t hs_H5Pset_layout (hid_t plist_id, H5D_layout_t layout, hid_t* error) {
+    CHECK_ERR(H5Pset_layout(plist_id, layout));
+}
+
+
+/*
+hid_t   H5Pcopy (hid_t plist_id)
+hid_t   H5Pdecode (const void *buf)
+herr_t  H5Pencode2 (hid_t plist_id, void *buf, size_t *nalloc, hid_t fapl_id)
+hid_t   H5Pget_class (hid_t plist_id)
+*/
+
+/*
+Dataset Creation Properties
+
+htri_t  H5Pall_filters_avail (hid_t plist_id)
+herr_t  H5Pfill_value_defined (hid_t plist, H5D_fill_value_t *status)
+herr_t  H5Pget_alloc_time (hid_t plist_id, H5D_alloc_time_t *alloc_time)
+int H5Pget_chunk (hid_t plist_id, int max_ndims, hsize_t dim[])
+herr_t  H5Pget_chunk_opts (hid_t plist_id, unsigned *opts)
+herr_t  H5Pget_dset_no_attrs_hint (hid_t dcpl_id, hbool_t *minimize)
+herr_t  H5Pget_external (hid_t plist_id, unsigned idx, size_t name_size, char *name, off_t *offset, hsize_t *size)
+int H5Pget_external_count (hid_t plist_id)
+herr_t  H5Pget_fill_time (hid_t plist_id, H5D_fill_time_t *fill_time)
+herr_t  H5Pget_fill_value (hid_t plist_id, hid_t type_id, void *value)
+H5D_layout_t    H5Pget_layout (hid_t plist_id)
+herr_t  H5Pget_virtual_count (hid_t dcpl_id, size_t *count)
+ssize_t H5Pget_virtual_dsetname (hid_t dcpl_id, size_t index, char *name, size_t size)
+ssize_t H5Pget_virtual_filename (hid_t dcpl_id, size_t index, char *name, size_t size)
+hid_t   H5Pget_virtual_srcspace (hid_t dcpl_id, size_t index)
+hid_t   H5Pget_virtual_vspace (hid_t dcpl_id, size_t index)
+herr_t  H5Pset_alloc_time (hid_t plist_id, H5D_alloc_time_t alloc_time)
+herr_t  H5Pset_dset_no_attrs_hint (hid_t dcpl_id, hbool_t minimize)
+herr_t  H5Pset_external (hid_t plist_id, const char *name, off_t offset, hsize_t size)
+herr_t  H5Pset_fill_time (hid_t plist_id, H5D_fill_time_t fill_time)
+herr_t  H5Pset_fill_value (hid_t plist_id, hid_t type_id, const void *value)
+herr_t  H5Pset_shuffle (hid_t plist_id)
+
+herr_t  H5Pset_nbit (hid_t plist_id)
+herr_t  H5Pset_scaleoffset (hid_t plist_id, H5Z_SO_scale_type_t scale_type, int scale_factor)
+herr_t  H5Pset_szip (hid_t plist_id, unsigned options_mask, unsigned pixels_per_block)
+herr_t  H5Pset_virtual (hid_t dcpl_id, hid_t vspace_id, const char *src_file_name, const char *src_dset_name, hid_t src_space_id)
+H5Z_filter_t    H5Pget_filter1 (hid_t plist_id, unsigned filter, unsigned int *flags, size_t *cd_nelmts, unsigned cd_values[], size_t namelen, char name[])
+herr_t  H5Pget_filter_by_id1 (hid_t plist_id, H5Z_filter_t id, unsigned int *flags, size_t *cd_nelmts, unsigned cd_values[], size_t namelen, char name[])
+*/

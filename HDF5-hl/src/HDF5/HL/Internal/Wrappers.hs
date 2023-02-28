@@ -153,13 +153,13 @@ instance HasData Dataset where
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Reading dataset data failed"
          $ h5d_read hid tid
-             h5s_ALL h5s_ALL h5p_DEFAULT (castPtr buf)
+             h5s_ALL h5s_ALL H5P_DEFAULT (castPtr buf)
   unsafeWriteAll (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
     p_err <- ContT $ alloca
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Writing dataset data failed"
          $ h5d_write hid tid
-             h5s_ALL h5s_ALL h5p_DEFAULT buf
+             h5s_ALL h5s_ALL H5P_DEFAULT buf
 
 instance HasAttrs Dataset
 

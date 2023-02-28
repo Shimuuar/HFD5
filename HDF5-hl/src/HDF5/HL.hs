@@ -146,7 +146,7 @@ openFile path mode = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $ fmap File
        $ checkHID p_err ("Cannot open file " ++ path)
-       $ h5f_open c_path (toCParam mode) h5p_DEFAULT
+       $ h5f_open c_path (toCParam mode) H5P_DEFAULT
 
 -- | Open file using 'openFile' and pass handle to continuation. It
 --   will be closed when continuation finish execution normally or
@@ -165,7 +165,7 @@ createFile path mode = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $ fmap File
        $ checkHID p_err ("Cannot create file " ++ path)
-       $ h5f_create c_path (toCParam mode) h5p_DEFAULT h5p_DEFAULT
+       $ h5f_create c_path (toCParam mode) H5P_DEFAULT H5P_DEFAULT
 
 -- | Create file using 'createFile' and pass handle to
 --   continuation. It will be closed when continuation finish
@@ -189,7 +189,7 @@ openGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $ fmap Group
        $ checkHID p_err ("Cannot open group " ++ path)
-       $ h5g_open (getHID dir) c_path h5p_DEFAULT
+       $ h5g_open (getHID dir) c_path H5P_DEFAULT
 
 withOpenGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
@@ -209,7 +209,7 @@ createGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $ fmap Group
        $ checkHID p_err ("Cannot create group " ++ path)
-       $ h5g_create (getHID dir) c_path h5p_DEFAULT h5p_DEFAULT h5p_DEFAULT
+       $ h5g_create (getHID dir) c_path H5P_DEFAULT H5P_DEFAULT H5P_DEFAULT
 
 withCreateGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
@@ -256,7 +256,7 @@ openDataset dir path = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $  Dataset
       <$> ( checkHID p_err ("Cannot open dataset " ++ path)
-          $ h5d_open2 (getHID dir) c_path h5p_DEFAULT)
+          $ h5d_open2 (getHID dir) c_path H5P_DEFAULT)
 
 -- | Create new dataset at given location without writing any data to
 --   it. Returned 'Dataset' must be closed by call to 'close'.
@@ -276,9 +276,9 @@ createEmptyDataset dir path ty ext = liftIO $ evalContT $ do
        $ fmap Dataset
        $ checkHID p_err ("Unable to create dataset")
        $ h5d_create (getHID dir) c_path tid (getHID space)
-         h5p_DEFAULT
-         h5p_DEFAULT
-         h5p_DEFAULT
+         H5P_DEFAULT
+         H5P_DEFAULT
+         H5P_DEFAULT
 
 
 -- | Create new dataset at given location and write provided data to

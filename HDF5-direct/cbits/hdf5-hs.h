@@ -93,3 +93,10 @@ herr_t hs_H5Tenum_valueof(hid_t type, const char *name, void *value, hid_t *erro
 herr_t hs_H5Tget_member_value(hid_t type_id, unsigned membno, void *value, hid_t *error);
 
 herr_t hs_H5Literate2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t* error);
+
+herr_t hs_H5Pclose (hid_t plist_id, hid_t* error);
+hid_t hs_H5Pcreate (hid_t cls_id, hid_t* error);
+herr_t hs_H5Pset_chunk (hid_t plist_id, int ndims, const hsize_t dim[], hid_t* error);
+herr_t hs_H5Pset_chunk_opts (hid_t plist_id, unsigned opts, hid_t* error);
+herr_t hs_H5Pset_deflate (hid_t plist_id, unsigned level, hid_t* error);
+herr_t hs_H5Pset_layout (hid_t plist_id, H5D_layout_t layout, hid_t* error);

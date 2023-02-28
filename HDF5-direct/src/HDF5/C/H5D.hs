@@ -1,10 +1,19 @@
 {-# LANGUAGE CApiFFI                  #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE PatternSynonyms          #-}
+{-# LANGUAGE ViewPatterns             #-}
 -- |
 -- API for datasets
 module HDF5.C.H5D
-  ( -- * Functions
-    h5d_open2
+  ( -- * Enums
+    H5DLayout(..)
+  , pattern H5D_LAYOUT_ERROR
+  , pattern H5D_COMPACT
+  , pattern H5D_CONTIGUOUS
+  , pattern H5D_CHUNKED
+  , pattern H5D_VIRTUAL
+    -- * Functions
+  , h5d_open2
   , h5d_create
   , h5d_close
   , h5d_get_type
@@ -16,6 +25,38 @@ module HDF5.C.H5D
 import Foreign.C
 import Foreign.Ptr
 import HDF5.C.Types
+
+
+-- | Types of dataset layouts
+newtype H5DLayout = H5DLayout CInt
+  deriving (Show,Eq,Ord)
+
+foreign import capi "hdf5.h value H5D_LAYOUT_ERROR" h5d_LAYOUT_ERROR :: H5DLayout
+foreign import capi "hdf5.h value H5D_COMPACT"      h5d_COMPACT      :: H5DLayout
+foreign import capi "hdf5.h value H5D_CONTIGUOUS"   h5d_CONTIGUOUS   :: H5DLayout
+foreign import capi "hdf5.h value H5D_CHUNKED"      h5d_CHUNKED      :: H5DLayout
+foreign import capi "hdf5.h value H5D_VIRTUAL"      h5d_VIRTUAL      :: H5DLayout
+
+-- | error
+pattern H5D_LAYOUT_ERROR :: H5DLayout
+pattern H5D_LAYOUT_ERROR <- ((==h5d_LAYOUT_ERROR) -> True) where H5D_LAYOUT_ERROR = h5d_LAYOUT_ERROR
+
+-- | raw data is small (< 64KB)
+pattern H5D_COMPACT :: H5DLayout
+pattern H5D_COMPACT <- ((==h5d_COMPACT) -> True) where H5D_COMPACT = h5d_COMPACT
+
+-- | contiguous layout
+pattern H5D_CONTIGUOUS :: H5DLayout
+pattern H5D_CONTIGUOUS <- ((==h5d_CONTIGUOUS) -> True) where H5D_CONTIGUOUS = h5d_CONTIGUOUS
+
+-- | chunked or tiled layout
+pattern H5D_CHUNKED :: H5DLayout
+pattern H5D_CHUNKED <- ((==h5d_CHUNKED) -> True) where H5D_CHUNKED = h5d_CHUNKED
+
+-- | actual data is stored in other datasets
+pattern H5D_VIRTUAL :: H5DLayout
+pattern H5D_VIRTUAL <- ((==h5d_VIRTUAL) -> True) where H5D_VIRTUAL = h5d_VIRTUAL
+
 
 
 ----------------------------------------------------------------
@@ -109,7 +150,7 @@ foreign import capi "hdf5-hs.h hs_H5Dget_type" h5d_get_type
 --   specified by @dset_id@. The function returns an identifier for the
 --   new copy of the dataspace.
 --
---   A dataspace identifier returned from this function should be 
+--   A dataspace identifier returned from this function should be
 --   released with 'h5s_close' when the identifier is no longer needed
 --   so that resource leaks will not occur.
 --

@@ -22,6 +22,7 @@ module HDF5.HL.Internal.Dataspace
     -- * Creation of dataspaces
   , createDataspace
   , withCreateDataspace
+  , withEncodedExtent
   ) where
 
 import Control.Applicative
@@ -181,6 +182,19 @@ putDimension sz = DSpaceWriter go where
 -- Dataspace creation
 ----------------------------------------------------------------
 
+withEncodedExtent
+  :: (IsExtent dim)
+  => dim -> ContT r IO (Maybe (Int, Ptr HSize))
+withEncodedExtent dim = case encodeExtent dim of
+  Nothing  -> pure Nothing
+  Just fld -> do let DSpaceWriter write = fld putDimension
+                 ptr  <- ContT $ allocaArray max_rank
+                 rank <- lift  $ write ptr max_rank 0
+                 pure $ Just (rank, ptr)
+  where
+    -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
+    max_rank = 32
+
 -- | Create dataspace for a given extent
 createDataspace
   :: (IsExtent dim, HasCallStack)
@@ -189,33 +203,23 @@ createDataspace
   -> IO Dataspace
 createDataspace dim dim_max = withFrozenCallStack $ evalContT $ do
   p_err <- ContT $ alloca
-  case encodeExtent dim of
+  -- Encode dataset extent
+  withEncodedExtent dim >>= \case
     Nothing  -> lift $ fmap Dataspace
                      $ checkHID p_err "Unable to create dataspace with NULL extent"
                      $ h5s_create H5S_NULL
-    Just fld -> do
-      -- First encode extents and maximum extents for given shape.
-      --
-      let DSpaceWriter write = fld putDimension
-      -- Encode dimensions
-      ptr  <- ContT $ allocaArray (max_rank * 2)
-      rank <- lift $ write ptr max_rank 0
-      -- Encode max dimetnsions
+    Just (rank,ptr) -> do
+      -- Encode optional max extent
       ptr_max <- case dim_max of
         Nothing -> pure nullPtr
-        Just d  -> do let ptr_max = plusPtr ptr $ sz * max_rank
-                      r <- case encodeExtent d of
-                        Nothing -> throwM $ Error [Left "Maximum extent must have same rank"]
-                        Just f  -> let DSpaceWriter wr = f putDimension in lift $ wr ptr_max max_rank 0
-                      when (r /= rank) $ throwM $ Error [Left "Maximum extent must have same rank"]
-                      pure ptr_max
+        Just d  -> withEncodedExtent d >>= \case
+          Nothing                -> throwM $ Error [Left "Maximum extent must have same rank"]
+          Just (r,_) | r /= rank -> throwM $ Error [Left "Maximum extent must have same rank"]
+          Just (_,p) -> pure p
       lift $ fmap Dataspace
            $ checkHID p_err "Unable to create simple dataspace"
            $ h5s_create_simple (fromIntegral rank) ptr ptr_max
-  where
-    sz = sizeOf (undefined :: HSize) 
-    -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
-    max_rank = 32
+
 
 -- | Create simple dataspace which could e used in bracket-like
 --   context

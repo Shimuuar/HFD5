@@ -45,7 +45,6 @@ module HDF5.HL
   , readAt
     -- ** Dataspace information
   , Dataspace
-  , Dim(..)
   , Extent(..)
   , rank
   , extent
@@ -271,7 +270,7 @@ createEmptyDataset
 createEmptyDataset dir path ty ext = liftIO $ evalContT $ do
   p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspace ext
+  space  <- ContT $ withCreateDataspace ext Nothing
   tid    <- ContT $ withType ty
   lift $ withFrozenCallStack
        $ fmap Dataset
@@ -350,7 +349,7 @@ rank a = liftIO $ withDataspace a HIO.dataspaceRank
 --   unexpected shape. E.g. if 2D array is expected but object is 1D
 --   array.
 extent :: (HasData a, IsExtent ext, MonadIO m, HasCallStack) => a -> m (Maybe ext)
-extent a = liftIO $ withDataspace a runParseFromDataspace
+extent a = liftIO $ fmap fst <$> withDataspace a runParseFromDataspace
 
 dataspaceRank
   :: (MonadIO m, HasCallStack)
@@ -364,7 +363,7 @@ dataspaceExt
   :: (MonadIO m, IsExtent ext, HasCallStack)
   => Dataspace
   -> m (Maybe ext)
-dataspaceExt spc = liftIO $ runParseFromDataspace spc
+dataspaceExt spc = liftIO $ fmap fst <$> runParseFromDataspace spc
 
 ----------------------------------------------------------------
 -- Attributes

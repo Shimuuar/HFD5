@@ -55,24 +55,12 @@ import HDF5.HL.Internal.Dataspace
 import HDF5.C
 import Prelude hiding (read,readIO)
 
-----------------------------------------------------------------
--- File API
-----------------------------------------------------------------
-
-----------------------------------------------------------------
--- Dataset API
-----------------------------------------------------------------
-
 
 
 -- | Read value from already opened dataset or attribute.
 basicReadObject :: (SerializeArr a, HasData d, MonadIO m, HasCallStack) => d -> m a
 basicReadObject d = liftIO $ withDataspace d $ \spc -> basicReadArr d spc
 
-
-----------------------------------------------------------------
--- Dataspace
-----------------------------------------------------------------
 
 dataspaceRank
   :: (HasCallStack)
@@ -129,7 +117,7 @@ basicCreateAttr
 basicCreateAttr dir path a = evalContT $ do
   p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspace (getExtent a)
+  space  <- ContT $ withCreateDataspace (getExtent a) Nothing
   tid    <- ContT $ withType $ typeH5 @(ElementOf a)
   attr   <- ContT $ bracket
     ( withFrozenCallStack

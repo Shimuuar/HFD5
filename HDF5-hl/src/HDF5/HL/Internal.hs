@@ -166,7 +166,8 @@ class (Element (ElementOf a), IsExtent (ExtentOf a)) => Serialize a where
   -- | Compute dimensions of an array
   getExtent :: a -> ExtentOf a
 
--- | More restrictive version which could be used for both
+-- | More restrictive version which could be used for writing both
+--   datasets and attributes.
 class Serialize a => SerializeArr a where
   basicReadArr  :: (HasData d, HasCallStack) => d -> Dataspace -> IO a
   basicWriteArr :: (HasData d, HasCallStack) => d -> a -> IO ()

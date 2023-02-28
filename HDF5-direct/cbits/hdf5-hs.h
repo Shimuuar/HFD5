@@ -69,6 +69,10 @@ int hs_H5Sget_simple_extent_dims(hid_t space_id, hsize_t dims[], hsize_t maxdims
 int hs_H5Sget_simple_extent_ndims(hid_t space_id, hid_t *error);
 hssize_t hs_H5Sget_simple_extent_npoints(hid_t space_id, hid_t *error);
 H5S_class_t hs_H5Sget_simple_extent_type(hid_t space_id, hid_t *error);
+herr_t hs_H5Sselect_hyperslab(hid_t space_id, H5S_seloper_t op,
+                              const hsize_t start[], const hsize_t stride[],
+                              const hsize_t count[], const hsize_t block[],
+                              hid_t *error);
 
 herr_t hs_H5Tclose(hid_t type_id, hid_t *error);
 hid_t hs_H5Tcreate(H5T_class_t type, size_t size, hid_t *error);

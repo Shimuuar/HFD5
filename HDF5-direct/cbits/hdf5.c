@@ -456,6 +456,13 @@ H5S_class_t	hs_H5Sget_simple_extent_type(hid_t space_id, hid_t *error) {
     CHECK(H5S_class_t, H5Sget_simple_extent_type(space_id));
 }
 
+herr_t hs_H5Sselect_hyperslab(hid_t space_id, H5S_seloper_t op,
+                              const hsize_t start[], const hsize_t stride[],
+                              const hsize_t count[], const hsize_t block[],
+                              hid_t *error) {
+    CHECK_ERR(H5Sselect_hyperslab(space_id, op, start, stride, count, block));
+}
+
 /*
 hid_t	H5Scombine_hyperslab(hid_t space_id, H5S_seloper_t op, const hsize_t start[], const hsize_t stride[], const hsize_t count[], const hsize_t block[])
 hid_t	H5Scombine_select(hid_t space1_id, H5S_seloper_t op, hid_t space2_id)
@@ -483,7 +490,6 @@ herr_t	H5Sselect_adjust(hid_t spaceid, const hssize_t *offset)
 herr_t	H5Sselect_all(hid_t spaceid)
 herr_t	H5Sselect_copy(hid_t dst_id, hid_t src_id)
 herr_t	H5Sselect_elements(hid_t space_id, H5S_seloper_t op, size_t num_elem, const hsize_t *coord)
-herr_t	H5Sselect_hyperslab(hid_t space_id, H5S_seloper_t op, const hsize_t start[], const hsize_t stride[], const hsize_t count[], const hsize_t block[])
 htri_t	H5Sselect_intersect_block(hid_t space_id, const hsize_t *start, const hsize_t *end)
 herr_t	H5Sselect_none(hid_t spaceid)
 hid_t	H5Sselect_project_intersection(hid_t src_space_id, hid_t dst_space_id, hid_t src_intersect_space_id)

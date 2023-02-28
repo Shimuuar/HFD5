@@ -48,6 +48,8 @@ static pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
     } while(0)
 
 #define FINI do { pthread_mutex_unlock(&mutex); } while(0)
+#endif
+
 
 #define CHECK_CSTR(expr)                                \
     do {                                                \
@@ -56,39 +58,6 @@ static pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
         if( !res ) { *error = H5Eget_current_stack(); } \
         FINI;                                           \
         return res;                                     \
-    } while(0)
-
-#define CHECK_ERR(expr)                                    \
-    do {                                                   \
-        INI;                                               \
-        herr_t res = expr;                                 \
-        if( res < 0 ) { *error = H5Eget_current_stack(); } \
-        FINI;                                              \
-        return res;                                        \
-    } while(0)
-#define CHECK_TRI(expr)                                    \
-    do {                                                   \
-        INI;                                               \
-        htri_t res = expr;                                 \
-        if( res < 0 ) { *error = H5Eget_current_stack(); } \
-        FINI;                                              \
-        return res;                                        \
-    } while(0)
-#define CHECK_HID(expr)                                    \
-    do {                                                   \
-        INI;                                               \
-        hid_t res = expr;                                  \
-        if( res < 0 ) { *error = H5Eget_current_stack(); } \
-        FINI;                                              \
-        return res;                                        \
-    } while(0)
-#define CHECK_SSIZE(expr)                                  \
-    do {                                                   \
-        INI;                                               \
-        ssize_t res = expr;                                \
-        if( res < 0 ) { *error = H5Eget_current_stack(); } \
-        FINI;                                              \
-        return res;                                        \
     } while(0)
 #define CHECK(ty, expr)                                    \
     do {                                                   \
@@ -99,7 +68,10 @@ static pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
         return res;                                        \
     } while(0)
 
-#endif
+#define CHECK_ERR(expr)   CHECK(herr_t,  expr)
+#define CHECK_TRI(expr)   CHECK(htri_t,  expr)
+#define CHECK_HID(expr)   CHECK(hid_t,   expr)
+#define CHECK_SSIZE(expr) CHECK(ssize_t, expr)
 
 
 // ----------------------------------------------------------------

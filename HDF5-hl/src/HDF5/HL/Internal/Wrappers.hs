@@ -20,6 +20,7 @@ module HDF5.HL.Internal.Wrappers
   , Attribute(..)
   , Dataspace(..)
   , Type(..)
+  , PropertyHID(..)
     -- * Type classes
   , Closable(..)
   , IsObject(..)
@@ -123,6 +124,10 @@ newtype Dataspace = Dataspace HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
+-- | Property list for values of type @p@
+newtype PropertyHID p = PropertyHID HID
+  deriving stock (Show,Eq,Ord)
+  deriving newtype IsObject
 
 ----------------
 
@@ -209,4 +214,9 @@ instance Closable Group where
   basicClose (Group hid) = alloca $ \p_err ->
       checkHErr p_err "Failed to close Group"
     $ h5g_close hid
+
+instance Closable (PropertyHID p) where
+  basicClose (PropertyHID hid) = alloca $ \p_err ->
+      checkHErr p_err "Failed to close PropertyHID"
+    $ h5p_close hid
 

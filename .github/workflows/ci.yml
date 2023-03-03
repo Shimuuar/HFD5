@@ -1,0 +1,92 @@
+name: CI
+
+# Trigger the workflow on push or pull request, but only for the master branch
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cabal:
+    name: ${{ matrix.os }} / ghc ${{ matrix.ghc }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+#          - { cabal: "3.6", os: ubuntu-latest,  ghc: "8.8.4"  }
+#          - { cabal: "3.6", os: ubuntu-latest,  ghc: "8.10.7" }
+#          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.0.1"  }
+          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.2.7"  }
+#          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.4.4"  }
+      fail-fast: false
+    steps:
+    # ----------------
+    - uses: actions/checkout@v2
+    # ----------------
+    - uses: haskell/actions/setup@v1
+      id: setup-haskell-cabal
+      name: Setup Haskell
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: ${{ matrix.cabal }}
+    # ----------------
+    - name: "HDF5"
+      run:  "sudo apt-get install libhdf5-dev"
+    # ----------------
+    - uses: actions/cache@v1
+      name: Cache ~/.cabal/store
+      with:
+        path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
+        key: ${{ runner.os }}-${{ matrix.ghc }}--${{ github.Shah }}
+    # ----------------
+    - name: Versions
+      run: |
+        cabal -V
+        ghc -V
+    # ----------------
+    - name: Make sdist
+      run: |
+        mkdir sdist
+        for nm in HDF5-hl HDF5-direct; do cabal sdist $nm -o sdist; done
+    # ----------------
+    - name: Unpack
+      run: |
+        pwd
+        mkdir unpacked
+        for nm in sdist/*; do tar -C unpacked -xf $nm; done
+        cd unpacked
+        
+        cat > cabal.project <<EOF
+        packages:           */*.cabal
+        tests:              true
+        extra-include-dirs: /usr/include/hdf5/serial/
+        extra-lib-dirs:     /usr/lib/x86_64-linux-gnu/hdf5/serial/
+        EOF
+        pwd
+    # ----------------
+    - name: cabal check
+      run: |
+        pwd
+        ls -lF
+        cd unpacked
+        for nm in HDF5-*; do (cd $nm; cabal -vnormal check); done
+    # ----------------
+    - name: Build
+      run: |
+        cd unpacked
+        pwd
+        cat cabal.project
+        if [ "${{ matrix.skip-test  }}" == "" ]; then FLAG_TEST=--enable-test; fi
+        if [ "${{ matrix.skip-bench }}" == "" ]; then FLAG_BENCH=--enable-benchmarks; fi
+        cabal configure $FLAG_TEST $FLAG_BENCH -v2
+        cabal build all --write-ghc-environment-files=always
+    # ----------------
+    - name: Test
+      run: |
+        pwd
+        cd unpacked
+        if [ "${{ matrix.skip-test }}" == "" ]; then cabal test all; fi

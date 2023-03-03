@@ -78,8 +78,8 @@ pattern HOK      <- HErr ((>=0) -> True)
 {-# COMPLETE HErrored, HOK #-}
 
 
-type HSize  = CULong
-type HSSize = CLong
+type HSize  = CULLong
+type HSSize = CLLong
 
 -- | We use standard approach where last parameter of wrapper function
 --   is always pointer where we return error stack in case of error.

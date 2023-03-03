@@ -393,7 +393,7 @@ basicReadBuffer
 basicReadBuffer dset (Dataspace spc) = do
   alloca $ \p_err -> do
     n   <- withFrozenCallStack
-         $ checkCLong p_err "Cannot get number of points for dataspace"
+         $ checkCLLong p_err "Cannot get number of points for dataspace"
          $ h5s_get_simple_extent_npoints spc
     buf <- mallocForeignPtrArray (fromIntegral n)
     evalContT $ do

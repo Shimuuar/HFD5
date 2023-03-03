@@ -16,7 +16,7 @@ module HDF5.HL.Internal.Error
   , checkHErr
   , checkHTri
   , checkCInt
-  , checkCLong
+  , checkCLLong
   ) where
 
 import Control.Monad.Catch
@@ -126,9 +126,9 @@ checkCInt p_err msg action =
     n | n < 0     -> throwM =<< decodeError p_err msg
       | otherwise -> pure n 
 
-checkCLong :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO CLong) -> IO CLong
-{-# INLINE checkCLong #-}
-checkCLong p_err msg action =
+checkCLLong :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO CLLong) -> IO CLLong
+{-# INLINE checkCLLong #-}
+checkCLLong p_err msg action =
   action p_err >>= \case
     n | n < 0     -> throwM =<< decodeError p_err msg
       | otherwise -> pure n 

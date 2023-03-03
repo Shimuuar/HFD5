@@ -74,6 +74,7 @@ module HDF5.HL
   , Property
   , Layout(..)
   , propDatasetLayout
+  , propDatasetChunking
     -- ** Type classes
   , IsObject
   , IsDirectory
@@ -273,16 +274,18 @@ openDataset dir path = liftIO $ withFrozenCallStack $ evalContT $ do
 --   it. Returned 'Dataset' must be closed by call to 'close'.
 createEmptyDataset
   :: (MonadIO m, IsDirectory dir, IsExtent ext, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> Type     -- ^ Element type
-  -> ext      -- ^ Dataspace, that is size of dataset
+  => dir       -- ^ Location
+  -> FilePath  -- ^ Path relative to location
+  -> Type      -- ^ Element type
+  -> ext       -- ^ Extent of dataset
+  -> Maybe ext -- ^ Maximum extent of dataset. If @Nothing@ it's same as extent
   -> [Property Dataset]
+  -- ^ Dataset creation properties
   -> m Dataset
-createEmptyDataset dir path ty ext props = liftIO $ evalContT $ do
+createEmptyDataset dir path ty ext ext_max props = liftIO $ evalContT $ do
   p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspace ext Nothing
+  space  <- ContT $ withCreateDataspace ext ext_max
   tid    <- ContT $ withType ty
   plist  <- ContT $ withDatasetProps $ mconcat props
   lift $ withFrozenCallStack
@@ -303,7 +306,7 @@ createDataset
   -> a        -- ^ Value to write
   -> m ()
 createDataset dir path a = liftIO $ evalContT $ do
-  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a)
+  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) Nothing []
   lift $ basicWrite dset a
 
 
@@ -322,14 +325,17 @@ withOpenDataset dir path = bracket (openDataset dir path) close
 --   closed by call to 'close'.
 withCreateEmptyDataset
   :: (MonadIO m, MonadMask m, IsDirectory dir, IsExtent ext, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> Type     -- ^ Element type
-  -> ext      -- ^ Dataspace, that is size of dataset
+  => dir       -- ^ Location
+  -> FilePath  -- ^ Path relative to location
+  -> Type      -- ^ Element type
+  -> ext       -- ^ Dataspace, that is size of dataset
+  -> Maybe ext -- ^ Maximum extent of dataset. If @Nothing@ it's same as extent
+  -> [Property Dataset]
+  -- ^ Dataset creation properties
   -> (Dataset -> m a)
   -> m a
-withCreateEmptyDataset dir path ty ext = bracket
-  (createEmptyDataset dir path ty ext [])
+withCreateEmptyDataset dir path ty ext ext_max props = bracket
+  (createEmptyDataset dir path ty ext ext_max props)
   close
 
 -- | Create new dataset at given location and populate it using data
@@ -342,7 +348,7 @@ withCreateDataset
   -> (Dataset -> m r)
   -> m r
 withCreateDataset dir path a action = evalContT $ do
-  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a)
+  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) Nothing []
   liftIO $ basicWrite dset a
   lift   $ action dset
 
@@ -395,9 +401,10 @@ setDatasetExtent dset dim = liftIO $ evalContT $ do
   (r_ext,p_ext) <- withEncodedExtent dim >>= \case
     Nothing -> throwM $ Error [Left "Extent must be non-null"]
     Just x  -> pure x
+  spc    <- ContT $ withDataspace dset
   r_dset <- lift
           $ checkCInt p_err "Cannot get rank of dataspace's extent"
-          $ h5s_get_simple_extent_ndims (getHID dset)
+          $ h5s_get_simple_extent_ndims (getHID spc)
   when (fromIntegral r_ext /= r_dset) $ throwM $
     Error [Left "Rank of dataset and rank of new extent do not match"]
   lift $ checkHErr p_err "Failed to set new extent for a dataset"

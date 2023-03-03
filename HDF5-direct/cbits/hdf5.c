@@ -23,15 +23,23 @@
 #ifdef H5_HAVE_THREADSAFE
 // ----------------------------------------------------------------
 // Thread safe build
-#error We do not support threadsafe build yet
+static __thread printing_disabled = 0;
 
+#define INI                                       \
+    do {                                          \
+        if( 0 == printing_disabled ) {            \
+            H5Eset_auto(H5E_DEFAULT, NULL, NULL); \
+            printing_disabled = 1;                \
+        }                                         \
+    } while(0)
+
+#define FINI do {} while(0)
 
 #else
 // ----------------------------------------------------------------
 // Thread unsafe build
 
-
-// Global flag which is used to ensure that we truned off printing
+// Global flag which is used to ensure that we turned off printing
 // (and do it only once.
 static int printing_disabled = 0;
 
@@ -49,7 +57,7 @@ static pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 #define FINI do { pthread_mutex_unlock(&mutex); } while(0)
 #endif
-
+// ----------------------------------------------------------------
 
 #define CHECK_CSTR(expr)                                \
     do {                                                \

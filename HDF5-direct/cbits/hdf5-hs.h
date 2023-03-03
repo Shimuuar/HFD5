@@ -6,7 +6,6 @@
 // thread safety
 #ifdef H5_HAVE_THREADSAFE
 #define HS_H5_THREADSAFE 1
-#error Support for thread-safe variant of HDF5 is not implemented yet
 #else
 #define HS_H5_THREADSAFE 0
 #endif

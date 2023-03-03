@@ -40,6 +40,7 @@ module HDF5.HL
   , withOpenDataset
   , withCreateEmptyDataset
   , withCreateDataset
+  , setDatasetExtent
     -- ** Reading and writing
   , readDataset
   , readObject
@@ -379,6 +380,29 @@ writeSlab
   -> a          -- ^ Data to write (will write all)
   -> m ()
 writeSlab dset off xs = liftIO $ basicWriteSlab dset off xs
+
+-- | Set new extent of dataspace. This function could be applied to
+--   following datasets:
+--
+--   * Chunked dataset with unlimited dimensions
+--
+--   * A chunked dataset with fixed dimensions if the new dimension
+--     sizes are less than the maximum sizes set with maxdims
+setDatasetExtent :: (HasCallStack, IsExtent dim, MonadIO m) => Dataset -> dim -> m ()
+setDatasetExtent dset dim = liftIO $ evalContT $ do
+  p_err         <- ContT $ alloca
+  (r_ext,p_ext) <- withEncodedExtent dim >>= \case
+    Nothing -> throwM $ Error [Left "Extent must be non-null"]
+    Just x  -> pure x
+  r_dset <- lift
+          $ checkCInt p_err "Cannot get rank of dataspace's extent"
+          $ h5s_get_simple_extent_ndims (getHID dset)
+  when (fromIntegral r_ext /= r_dset) $ throwM $
+    Error [Left "Rank of dataset and rank of new extent do not match"]
+  lift $ checkHErr p_err "Failed to set new extent for a dataset"
+       $ h5d_set_extent (getHID dset) p_ext
+
+
 
 
 ----------------------------------------------------------------

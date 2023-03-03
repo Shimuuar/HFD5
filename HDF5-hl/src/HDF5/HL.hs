@@ -49,6 +49,7 @@ module HDF5.HL
   , writeSlab
     -- ** Dataspace information
   , Dataspace
+  , pattern UNLIMITED
   , Extent(..)
   , rank
   , extent

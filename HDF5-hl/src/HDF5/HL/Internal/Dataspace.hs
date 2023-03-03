@@ -1,8 +1,10 @@
 {-# LANGUAGE DeriveFunctor       #-}
 {-# LANGUAGE DerivingStrategies  #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ViewPatterns        #-}
 -- |
@@ -12,6 +14,7 @@ module HDF5.HL.Internal.Dataspace
     Extent(..)
     -- * Encoding of extents
   , IsExtent(..)
+  , pattern UNLIMITED
   , ParserDim
   , parseDim
   , endOfExtent
@@ -32,11 +35,14 @@ import Control.Monad.Catch
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Maybe
+import Data.Coerce
 import Data.Int
+import Data.Word
 import Data.Functor
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.Marshal
+import Foreign.C.Types
 import GHC.Stack
 
 import HDF5.HL.Internal.Wrappers
@@ -51,8 +57,8 @@ import HDF5.C
 -- | Generic extent of dataspace. It could encode all possible
 --   extents.
 data Extent
-  = Simple [Int64] -- ^ Simple dataspace.
-  | Null           -- ^ Null extent for dataset which do not contain any actual data.
+  = Simple [Word64] -- ^ Simple dataspace.
+  | Null            -- ^ Null extent for dataset which do not contain any actual data.
   deriving stock (Show,Eq,Ord)
 
 
@@ -63,7 +69,7 @@ data Extent
 class IsExtent a where
   -- | Encode extent. This fold over all dimensions of dataset for
   --   simple and scalar extents. Null extents should return @Nothing@.
-  encodeExtent :: Monoid m => a -> Maybe ((Int64 -> m) -> m)
+  encodeExtent :: Monoid m => a -> Maybe ((Word64 -> m) -> m)
   -- | Parser for dataset which could be used to decode from sequence
   --   of Dims.
   decodeExtent :: Monad m => ParserDim m a
@@ -74,8 +80,8 @@ class IsExtent a where
 
 newtype ParserDim m a = ParserDim
   { unParserDim :: forall s.
-                   (s -> m (Maybe (s, Int64))) -- Uncons (possibly monadic)
-                -> (s -> m (Maybe (s, a)))     -- State monad with failure
+                   (s -> m (Maybe (s, Word64))) -- Uncons (possibly monadic)
+                -> (s -> m (Maybe (s, a)))      -- State monad with failure
   }
   deriving Functor
 
@@ -90,7 +96,7 @@ instance Monad m => Alternative (ParserDim m) where
   empty = ParserDim $ \_ _ -> pure Nothing
   ParserDim pa <|> ParserDim pb = ParserDim $ \uncons s -> runMaybeT (MaybeT (pa uncons s) <|> MaybeT (pb uncons s))
 
-parseDim :: ParserDim m Int64
+parseDim :: ParserDim m Word64
 parseDim = ParserDim id
 
 endOfExtent :: Monad m => ParserDim m ()
@@ -135,12 +141,22 @@ instance IsExtent Extent where
   decodeExtent     = Simple <$> many parseDim
   decodeNullExtent = Just Null
 
-instance IsExtent Int64 where
+instance IsExtent Word64 where
   encodeExtent i = Just $ \f -> f i
   decodeExtent   = parseDim
 
-instance IsExtent Int where
+instance IsExtent Word where
   encodeExtent i = Just $ \f -> f (fromIntegral i)
+  decodeExtent   = fromIntegral <$> parseDim
+
+instance IsExtent Int64 where
+  encodeExtent i = Just $ \f -> f (if i < 0 then error "Negative extent" else fromIntegral i)
+  -- FIXME: Deal with overflows???
+  decodeExtent   = fromIntegral <$> parseDim
+
+instance IsExtent Int where
+  encodeExtent i = Just $ \f -> f (if i < 0 then error "Negative extent" else fromIntegral i)
+  -- FIXME: Deal with overflows???
   decodeExtent   = fromIntegral <$> parseDim
 
 instance (IsExtent a, IsExtent b) => IsExtent (a,b) where
@@ -149,6 +165,8 @@ instance (IsExtent a, IsExtent b) => IsExtent (a,b) where
                           Just $ \f -> encA f <> encB f
   decodeExtent = (,) <$> decodeExtent <*> decodeExtent
 
+pattern UNLIMITED :: Word64
+pattern UNLIMITED <- (coerce -> H5S_UNLIMITED) where UNLIMITED = coerce H5S_UNLIMITED
 
 ----------------------------------------------------------------
 -- Data types
@@ -171,11 +189,11 @@ instance Monoid DSpaceWriter where
   mempty = DSpaceWriter $ \_ _ -> pure
 
 
-putDimension :: Int64 -> DSpaceWriter
+putDimension :: Word64 -> DSpaceWriter
 putDimension sz = DSpaceWriter go where
   go p_sz i_max i
     | i >= i_max = throwM $ Error [Left "Internal error: buffer overrun"]
-    | otherwise  = do pokeElemOff p_sz i (fromIntegral sz)
+    | otherwise  = do pokeElemOff p_sz i (coerce sz)
                       pure $! i + 1
 
 

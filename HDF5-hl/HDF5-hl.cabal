@@ -3,7 +3,10 @@ Name:           HDF5-hl
 Version:        0.1
 Synopsis:       High level API for HDF5 library
 Description:
-
+  Hihb level bindings to HDF5 library. This library aims to provide
+  nice and idiomatic API for working with HDF5 libabry. Since library
+  is huge this comes at the cost of exhaustiveness. Only subset of
+  features is supported.
 
 License:        BSD-3-Clause
 License-File:   LICENSE

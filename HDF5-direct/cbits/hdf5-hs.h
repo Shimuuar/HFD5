@@ -48,12 +48,12 @@ herr_t hs_H5Eset_auto2(hid_t estack_id, H5E_auto2_t func, void *client_data, hid
 herr_t hs_H5Ewalk2(hid_t err_stack, H5E_direction_t direction, H5E_walk2_t func, void *client_data, hid_t *error);
 ssize_t hs_H5Eget_msg(hid_t msg_id, H5E_type_t *type, char *msg, size_t size, hid_t *error);
 
-htri_t hs_H5Fis_accessible(const char *container_name, hid_t fapl_id, hid_t *error);
+/* htri_t hs_H5Fis_accessible(const char *container_name, hid_t fapl_id, hid_t *error); */
 hid_t hs_H5Fcreate(const char *filename, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t *error);
 hid_t hs_H5Fopen(const char *filename, unsigned flags, hid_t fapl_id, hid_t *error);
 hid_t hs_H5Freopen(hid_t file_id, hid_t *error);
 herr_t hs_H5Fclose(hid_t file_id, hid_t *error);
-herr_t hs_H5Fdelete(const char *filename, hid_t fapl_id, hid_t *error);
+/* herr_t hs_H5Fdelete(const char *filename, hid_t fapl_id, hid_t *error); */
 
 hid_t hs_H5Gcreate2(hid_t loc_id, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t *error);
 hid_t hs_H5Gopen2(hid_t loc_id, const char *name, hid_t gapl_id, hid_t *error);

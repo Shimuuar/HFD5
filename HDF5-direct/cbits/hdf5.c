@@ -270,9 +270,9 @@ herr_t	H5Eset_auto1(H5E_auto1_t func, void *client_data)
 // H5F
 // ----------------------------------------------------------------
 
-htri_t hs_H5Fis_accessible(const char *container_name, hid_t fapl_id, hid_t *error) {
-    CHECK_TRI(H5Fis_accessible(container_name, fapl_id));
-}
+// htri_t hs_H5Fis_accessible(const char *container_name, hid_t fapl_id, hid_t *error) {
+//     CHECK_TRI(H5Fis_accessible(container_name, fapl_id));
+// }
 
 hid_t hs_H5Fcreate(const char *filename, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t *error) {
     CHECK_HID(H5Fcreate(filename, flags, fcpl_id, fapl_id));
@@ -290,9 +290,9 @@ herr_t hs_H5Fclose(hid_t file_id, hid_t *error) {
     CHECK_ERR(H5Fclose(file_id));
 }
 
-herr_t hs_H5Fdelete(const char *filename, hid_t fapl_id, hid_t *error) {
-    CHECK_ERR(H5Fdelete(filename, fapl_id));
-}
+// herr_t hs_H5Fdelete(const char *filename, hid_t fapl_id, hid_t *error) {
+//     CHECK_ERR(H5Fdelete(filename, fapl_id));
+// }
 
 /*
 herr_t	H5Fflush(hid_t object_id, H5F_scope_t scope)

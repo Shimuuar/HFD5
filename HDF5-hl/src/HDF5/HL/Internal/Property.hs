@@ -5,8 +5,8 @@ module HDF5.HL.Internal.Property
     Property(..)
     -- * Dataset properties
   , withDatasetProps
-  , datasetLayout
-  , datasetChunking
+  , propDatasetLayout
+  , propDatasetChunking
   ) where
 
 import Control.Applicative
@@ -55,14 +55,14 @@ withDatasetProps prop action = case prop of
     bracket open basicClose $ \p -> f p_err p >> action p
 
 -- | Set up dataset layout
-datasetLayout :: HasCallStack => Layout -> Property Dataset
-datasetLayout l = Property $ \p_err p -> withFrozenCallStack
+propDatasetLayout :: HasCallStack => Layout -> Property Dataset
+propDatasetLayout l = Property $ \p_err p -> withFrozenCallStack
   $ checkHErr p_err "Unable to set layout for dataset"
   $ h5p_set_layout (getHID p) (toCEnum l)
   
 -- | Set chunking for a dataset
-datasetChunking :: (HasCallStack, IsExtent dim) => dim -> Property Dataset
-datasetChunking dim = Property $ \p_err prop -> withFrozenCallStack $ evalContT $ do
+propDatasetChunking :: (HasCallStack, IsExtent dim) => dim -> Property Dataset
+propDatasetChunking dim = Property $ \p_err prop -> withFrozenCallStack $ evalContT $ do
   withEncodedExtent dim >>= \case
     Nothing       -> throwM $ Error [Left "Extent must be non-null"]
     Just (rank,p) -> lift

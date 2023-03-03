@@ -68,6 +68,10 @@ module HDF5.HL
   , pattern Array
   , makePackedRecord
   , makeEnumeration
+    -- ** Property lists
+  , Property
+  , Layout(..)
+  , propDatasetLayout
     -- ** Type classes
   , IsObject
   , IsDirectory
@@ -119,6 +123,7 @@ import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.Dataspace
+import HDF5.HL.Internal.Property
 import HDF5.C
 import Prelude hiding (read,readIO)
 
@@ -270,18 +275,20 @@ createEmptyDataset
   -> FilePath -- ^ Path relative to location
   -> Type     -- ^ Element type
   -> ext      -- ^ Dataspace, that is size of dataset
+  -> [Property Dataset]
   -> m Dataset
-createEmptyDataset dir path ty ext = liftIO $ evalContT $ do
+createEmptyDataset dir path ty ext props = liftIO $ evalContT $ do
   p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
   space  <- ContT $ withCreateDataspace ext Nothing
   tid    <- ContT $ withType ty
+  plist  <- ContT $ withDatasetProps $ mconcat props
   lift $ withFrozenCallStack
        $ fmap Dataset
        $ checkHID p_err ("Unable to create dataset")
        $ h5d_create (getHID dir) c_path tid (getHID space)
          H5P_DEFAULT
-         H5P_DEFAULT
+         (getHID plist)
          H5P_DEFAULT
 
 
@@ -320,7 +327,7 @@ withCreateEmptyDataset
   -> (Dataset -> m a)
   -> m a
 withCreateEmptyDataset dir path ty ext = bracket
-  (createEmptyDataset dir path ty ext)
+  (createEmptyDataset dir path ty ext [])
   close
 
 -- | Create new dataset at given location and populate it using data

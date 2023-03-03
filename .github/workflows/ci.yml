@@ -17,11 +17,11 @@ jobs:
     strategy:
       matrix:
         include:
-#          - { cabal: "3.6", os: ubuntu-latest,  ghc: "8.8.4"  }
-#          - { cabal: "3.6", os: ubuntu-latest,  ghc: "8.10.7" }
-#          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.0.1"  }
+          - { cabal: "3.6", os: ubuntu-latest,  ghc: "8.8.4"  }
+          - { cabal: "3.6", os: ubuntu-latest,  ghc: "8.10.7" }
+          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.0.1"  }
           - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.2.7"  }
-#          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.4.4"  }
+          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.4.4"  }
       fail-fast: false
     steps:
     # ----------------
@@ -55,7 +55,6 @@ jobs:
     # ----------------
     - name: Unpack
       run: |
-        pwd
         mkdir unpacked
         for nm in sdist/*; do tar -C unpacked -xf $nm; done
         cd unpacked
@@ -66,19 +65,15 @@ jobs:
         extra-include-dirs: /usr/include/hdf5/serial/
         extra-lib-dirs:     /usr/lib/x86_64-linux-gnu/hdf5/serial/
         EOF
-        pwd
     # ----------------
     - name: cabal check
       run: |
-        pwd
-        ls -lF
         cd unpacked
         for nm in HDF5-*; do (cd $nm; cabal -vnormal check); done
     # ----------------
     - name: Build
       run: |
         cd unpacked
-        pwd
         cat cabal.project
         if [ "${{ matrix.skip-test  }}" == "" ]; then FLAG_TEST=--enable-test; fi
         if [ "${{ matrix.skip-bench }}" == "" ]; then FLAG_BENCH=--enable-benchmarks; fi
@@ -87,6 +82,5 @@ jobs:
     # ----------------
     - name: Test
       run: |
-        pwd
         cd unpacked
         if [ "${{ matrix.skip-test }}" == "" ]; then cabal test all; fi

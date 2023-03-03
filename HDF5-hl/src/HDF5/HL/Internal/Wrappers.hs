@@ -1,12 +1,13 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DerivingStrategies  #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE AllowAmbiguousTypes        #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImportQualifiedPost        #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE ViewPatterns               #-}
 -- |
 -- Data types for working with HDF5 files
 module HDF5.HL.Internal.Wrappers
@@ -19,6 +20,7 @@ module HDF5.HL.Internal.Wrappers
   , Attribute(..)
   , Dataspace(..)
   , Type(..)
+  , PropertyHID(..)
     -- * Type classes
   , Closable(..)
   , IsObject(..)
@@ -31,7 +33,6 @@ module HDF5.HL.Internal.Wrappers
 import Control.Monad.Catch
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
-import Data.Coerce
 import Foreign.Ptr
 import Foreign.Marshal
 import GHC.Stack
@@ -57,6 +58,10 @@ class Closable a where
 class IsObject a where
   getHID        :: a -> HID
   unsafeFromHID :: HID -> a
+
+instance IsObject HID where
+  getHID        = id
+  unsafeFromHID = id
 
 
 -- | HDF5 entities that could be used in context where group is
@@ -97,47 +102,44 @@ withDataspace a = bracket (getDataspaceIO a) basicClose
 -- | Handle for working with HDF5 file
 newtype File = File HID
   deriving stock (Show,Eq,Ord)
+  deriving newtype IsObject
 
 -- | Handle for working with group (directory)
 newtype Group = Group HID
   deriving stock (Show,Eq,Ord)
+  deriving newtype IsObject
 
 -- | Handle for dataset
 newtype Dataset = Dataset HID
   deriving stock (Show,Eq,Ord)
+  deriving newtype IsObject
 
 -- | Handle for attribute
 newtype Attribute = Attribute HID
   deriving stock (Show,Eq,Ord)
+  deriving newtype IsObject
 
 -- | Handle for dataspace
 newtype Dataspace = Dataspace HID
   deriving stock (Show,Eq,Ord)
+  deriving newtype IsObject
 
+-- | Property list for values of type @p@
+newtype PropertyHID p = PropertyHID HID
+  deriving stock (Show,Eq,Ord)
+  deriving newtype IsObject
 
 ----------------
-
-instance IsObject File where
-  getHID        = coerce
-  unsafeFromHID = coerce
 
 instance IsDirectory File
 instance HasAttrs    File
 
 ----------------
 
-instance IsObject Group where
-  getHID        = coerce
-  unsafeFromHID = coerce
-
 instance IsDirectory Group
 instance HasAttrs    Group
 
 ----------------
-
-instance IsObject Dataset where
-  getHID        = coerce
-  unsafeFromHID = coerce
 
 instance HasData Dataset where
   getTypeIO (Dataset hid) = withFrozenCallStack $ alloca $ \p_err ->
@@ -153,21 +155,17 @@ instance HasData Dataset where
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Reading dataset data failed"
          $ h5d_read hid tid
-             h5s_ALL h5s_ALL h5p_DEFAULT (castPtr buf)
+             h5s_ALL h5s_ALL H5P_DEFAULT (castPtr buf)
   unsafeWriteAll (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
     p_err <- ContT $ alloca
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Writing dataset data failed"
          $ h5d_write hid tid
-             h5s_ALL h5s_ALL h5p_DEFAULT buf
+             h5s_ALL h5s_ALL H5P_DEFAULT buf
 
 instance HasAttrs Dataset
 
 ----------------
-
-instance IsObject Attribute where
-  getHID        = coerce
-  unsafeFromHID = coerce
 
 instance HasData Attribute where
   getTypeIO (Attribute hid) = alloca $ \p_err -> withFrozenCallStack
@@ -188,12 +186,6 @@ instance HasData Attribute where
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Writing Attribute data failed"
          $ h5a_write hid tid (castPtr buf)
-
-----------------
-
-instance IsObject Dataspace where
-  getHID        = coerce
-  unsafeFromHID = coerce
 
 
 ----------------------------------------------------------------
@@ -222,4 +214,9 @@ instance Closable Group where
   basicClose (Group hid) = alloca $ \p_err ->
       checkHErr p_err "Failed to close Group"
     $ h5g_close hid
+
+instance Closable (PropertyHID p) where
+  basicClose (PropertyHID hid) = alloca $ \p_err ->
+      checkHErr p_err "Failed to close PropertyHID"
+    $ h5p_close hid
 

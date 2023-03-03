@@ -11,12 +11,13 @@ module HDF5.C.H5F
   , h5f_ACC_SWMR_WRITE
   , h5f_ACC_SWMR_READ
     -- * Functions
-  , h5f_is_accessible
+
+  -- , h5f_is_accessible
   , h5f_create
   , h5f_open
   , h5f_reopen
   , h5f_close
-  , h5f_delete
+  -- , h5f_delete
   ) where
 
 import Foreign.C
@@ -38,6 +39,7 @@ foreign import capi "hdf5.h value H5F_ACC_SWMR_READ"  h5f_ACC_SWMR_READ  :: CUIn
 -- Functions
 ----------------------------------------------------------------
 
+{-
 -- | Checks if a file can be opened with a given file access property
 --   list. Returns zero (false), a positive (true) or a negative
 --   (failure) value.
@@ -45,6 +47,7 @@ foreign import capi "hdf5-hs.h hs_H5Fis_accessible" h5f_is_accessible
   :: CString -- ^ Name of a file
   -> HID     -- ^ File access property list identifier
   -> HIO HTri
+-}
 
 -- | @H5Fcreate@ is the primary function for creating HDF5 files; it
 --   creates a new HDF5 file with the specified name and property lists.
@@ -114,6 +117,7 @@ foreign import capi "hdf5-hs.h hs_H5Fclose" h5f_close
   :: HID     -- ^ File identifier
   -> HIO HErr
 
+{-
 -- | Deletes an HDF5 file filename with a file access property list
 --   @fapl_id@. The @fapl_id@ should be configured with the same VOL
 --   connector or VFD that was used to open the file.
@@ -143,6 +147,7 @@ foreign import capi "hdf5-hs.h hs_H5Fdelete" h5f_delete
   :: CString -- ^ Name of file to delete
   -> HID     -- ^ @fapl_id@ File access property list identifier
   -> HIO HErr
+-}
 
 {-
 herr_t   H5Fflush (hid_t object_id, H5F_scope_t scope)

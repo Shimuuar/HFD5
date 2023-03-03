@@ -55,24 +55,12 @@ import HDF5.HL.Internal.Dataspace
 import HDF5.C
 import Prelude hiding (read,readIO)
 
-----------------------------------------------------------------
--- File API
-----------------------------------------------------------------
-
-----------------------------------------------------------------
--- Dataset API
-----------------------------------------------------------------
-
 
 
 -- | Read value from already opened dataset or attribute.
 basicReadObject :: (SerializeArr a, HasData d, MonadIO m, HasCallStack) => d -> m a
 basicReadObject d = liftIO $ withDataspace d $ \spc -> basicReadArr d spc
 
-
-----------------------------------------------------------------
--- Dataspace
-----------------------------------------------------------------
 
 dataspaceRank
   :: (HasCallStack)
@@ -110,7 +98,7 @@ openAttr (getHID -> hid) path = withFrozenCallStack $ evalContT $ do
       False -> pure Nothing
       True  -> Just . Attribute
             <$> ( checkHID p_err ("Cannot open attribute " ++ path)
-                $ h5a_open hid c_str h5p_DEFAULT)
+                $ h5a_open hid c_str H5P_DEFAULT)
 
 withAttr
   :: (HasAttrs a, HasCallStack)
@@ -129,15 +117,15 @@ basicCreateAttr
 basicCreateAttr dir path a = evalContT $ do
   p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspace (getExtent a)
+  space  <- ContT $ withCreateDataspace (getExtent a) Nothing
   tid    <- ContT $ withType $ typeH5 @(ElementOf a)
   attr   <- ContT $ bracket
     ( withFrozenCallStack
     $ fmap Attribute
     $ checkHID p_err ("Cannot create attribute " ++ path)
     $ h5a_create (getHID dir) c_path tid (getHID space)
-          h5p_DEFAULT
-          h5p_DEFAULT)
+          H5P_DEFAULT
+          H5P_DEFAULT)
     basicClose
   lift $ basicWriteArr attr a
 
@@ -149,12 +137,6 @@ basicReadAttr
 basicReadAttr a name = withAttr a name $ \case
   Just x  -> Just <$> basicReadObject x
   Nothing -> pure Nothing
-
-
-----------------------------------------------------------------
--- Type class for elements
-----------------------------------------------------------------
-
 
 
 ----------------------------------------------------------------
@@ -178,10 +160,25 @@ class (Element (ElementOf a), IsExtent (ExtentOf a)) => Serialize a where
   -- | Compute dimensions of an array
   getExtent :: a -> ExtentOf a
 
--- | More restrictive version which could be used for both
+-- | More restrictive version which could be used for writing both
+--   datasets and attributes.
 class Serialize a => SerializeArr a where
   basicReadArr  :: (HasData d, HasCallStack) => d -> Dataspace -> IO a
   basicWriteArr :: (HasData d, HasCallStack) => d -> a -> IO ()
+
+-- | Data types which could be read and written using simple hyperslabs
+class SerializeArr a => SerializeSlab a where
+  -- | Read part of dataset into given data structure
+  basicReadSlab :: Dataset
+                -> ExtentOf a -- ^ Offset into on-disk data structure
+                -> ExtentOf a -- ^ Size of data to read
+                -> IO a
+  -- | Write content of array to a dataspace
+  basicWriteSlab :: Dataset    -- ^ Dataset to write to
+                 -> ExtentOf a -- ^ Offset into dataset
+                 -> a          -- ^ Data to write
+                 -> IO ()
+
 
 -- | Values which could be serialized as set of attributes
 class SerializeAttr a where
@@ -223,37 +220,93 @@ instance Element a => Serialize [a] where
   type ElementOf [a] = a
   type ExtentOf  [a] = Int
   getExtent = length
+
 instance Element a => SerializeArr [a] where
   basicReadArr  dset spc = VS.toList <$> basicReadArr dset spc
   basicWriteArr dset xs  = basicWriteArr dset (VS.fromList xs)
+
+instance Element a => SerializeSlab [a] where
+  basicReadSlab  dset off sz = VS.toList <$> basicReadSlab dset off sz
+  basicWriteSlab dset off xs = basicWriteSlab dset off (VS.fromList xs)
+
 
 instance (Element a, VU.Unbox a) => Serialize (VU.Vector a) where
   type ElementOf (VU.Vector a) = a
   type ExtentOf  (VU.Vector a) = Int
   getExtent = VU.length
+
 instance (Element a, VU.Unbox a) => SerializeArr (VU.Vector a) where
   basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
   basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
+
+instance (Element a, VU.Unbox a) => SerializeSlab (VU.Vector a) where
+  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VS.Vector a) dset off sz
+  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VS.Vector a)
+
 
 instance (Element a) => Serialize (V.Vector a) where
   type ElementOf (V.Vector a) = a
   type ExtentOf  (V.Vector a) = Int
   getExtent = V.length
+
 instance (Element a) => SerializeArr (V.Vector a) where
   basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
   basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
 
+instance (Element a) => SerializeSlab (V.Vector a) where
+  basicReadSlab dset off sz = VG.convert <$> basicReadSlab @(VS.Vector a) dset off sz
+  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VS.Vector a)
+
+
+----------------------------------------------------------------
+-- Storable vector
+----------------------------------------------------------------
 
 instance Element a => Serialize (VS.Vector a) where
   type ElementOf (VS.Vector a) = a
   type ExtentOf  (VS.Vector a) = Int
   getExtent = VS.length
+
 instance Element a => SerializeArr (VS.Vector a) where
   basicReadArr dset spc = do
     n <- dataspaceRank spc
     when (n /= Just 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
   basicWriteArr dset xs = VS.unsafeWith xs $ unsafeWriteAll dset (typeH5 @a)
+
+instance Element a => SerializeSlab (VS.Vector a) where
+  basicReadSlab dset off sz = evalContT $ do
+    p_err <- ContT alloca
+    -- File dataspace
+    spc_file <- lift $ getDataspaceIO dset
+    lift $ setSlabSelection spc_file off sz
+    -- Memory dataspace
+    spc_mem <- ContT $ withCreateDataspace sz Nothing
+    -- Prepare reading
+    tid     <- ContT $ withType (typeH5 @a)
+    buf     <- lift  $ mallocForeignPtrArray sz
+    ptr     <- ContT $ withForeignPtr buf
+    lift $ checkHErr p_err "Reading dataset data failed"
+         $ h5d_read (getHID dset) tid
+             (getHID spc_mem) (getHID spc_file)
+             H5P_DEFAULT (castPtr ptr)
+    pure $! VS.unsafeFromForeignPtr0 buf sz
+  --
+  basicWriteSlab dset off vec = evalContT $ do
+    p_err <- ContT alloca
+    -- File dataspace
+    spc_file <- lift $ getDataspaceIO dset
+    lift $ setSlabSelection spc_file off sz
+    -- Memory dataspace
+    spc_mem <- ContT $ withCreateDataspace sz Nothing
+    -- Writing
+    tid <- ContT $ withType (typeH5 @a)
+    ptr <- ContT $ VS.unsafeWith vec
+    lift $ checkHErr p_err "Writing dataset data failed"
+         $ h5d_write (getHID dset) tid
+             (getHID spc_mem) (getHID spc_file) H5P_DEFAULT ptr
+    where
+      sz = VS.length vec
 
 
 deriving via SerializeAsScalar Int8   instance SerializeArr Int8
@@ -340,7 +393,7 @@ basicReadBuffer
 basicReadBuffer dset (Dataspace spc) = do
   alloca $ \p_err -> do
     n   <- withFrozenCallStack
-         $ checkCLong p_err "Cannot get number of points for dataspace"
+         $ checkCLLong p_err "Cannot get number of points for dataspace"
          $ h5s_get_simple_extent_npoints spc
     buf <- mallocForeignPtrArray (fromIntegral n)
     evalContT $ do

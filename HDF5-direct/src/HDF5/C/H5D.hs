@@ -1,14 +1,24 @@
 {-# LANGUAGE CApiFFI                  #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE PatternSynonyms          #-}
+{-# LANGUAGE ViewPatterns             #-}
 -- |
 -- API for datasets
 module HDF5.C.H5D
-  ( -- * Functions
-    h5d_open2
+  ( -- * Enums
+    H5DLayout(..)
+  , pattern H5D_LAYOUT_ERROR
+  , pattern H5D_COMPACT
+  , pattern H5D_CONTIGUOUS
+  , pattern H5D_CHUNKED
+  , pattern H5D_VIRTUAL
+    -- * Functions
+  , h5d_open2
   , h5d_create
   , h5d_close
   , h5d_get_type
   , h5d_get_space
+  , h5d_set_extent
   , h5d_read
   , h5d_write
   ) where
@@ -16,6 +26,38 @@ module HDF5.C.H5D
 import Foreign.C
 import Foreign.Ptr
 import HDF5.C.Types
+
+
+-- | Types of dataset layouts
+newtype H5DLayout = H5DLayout CInt
+  deriving (Show,Eq,Ord)
+
+foreign import capi "hdf5.h value H5D_LAYOUT_ERROR" h5d_LAYOUT_ERROR :: H5DLayout
+foreign import capi "hdf5.h value H5D_COMPACT"      h5d_COMPACT      :: H5DLayout
+foreign import capi "hdf5.h value H5D_CONTIGUOUS"   h5d_CONTIGUOUS   :: H5DLayout
+foreign import capi "hdf5.h value H5D_CHUNKED"      h5d_CHUNKED      :: H5DLayout
+foreign import capi "hdf5.h value H5D_VIRTUAL"      h5d_VIRTUAL      :: H5DLayout
+
+-- | error
+pattern H5D_LAYOUT_ERROR :: H5DLayout
+pattern H5D_LAYOUT_ERROR <- ((==h5d_LAYOUT_ERROR) -> True) where H5D_LAYOUT_ERROR = h5d_LAYOUT_ERROR
+
+-- | raw data is small (< 64KB)
+pattern H5D_COMPACT :: H5DLayout
+pattern H5D_COMPACT <- ((==h5d_COMPACT) -> True) where H5D_COMPACT = h5d_COMPACT
+
+-- | contiguous layout
+pattern H5D_CONTIGUOUS :: H5DLayout
+pattern H5D_CONTIGUOUS <- ((==h5d_CONTIGUOUS) -> True) where H5D_CONTIGUOUS = h5d_CONTIGUOUS
+
+-- | chunked or tiled layout
+pattern H5D_CHUNKED :: H5DLayout
+pattern H5D_CHUNKED <- ((==h5d_CHUNKED) -> True) where H5D_CHUNKED = h5d_CHUNKED
+
+-- | actual data is stored in other datasets
+pattern H5D_VIRTUAL :: H5DLayout
+pattern H5D_VIRTUAL <- ((==h5d_VIRTUAL) -> True) where H5D_VIRTUAL = h5d_VIRTUAL
+
 
 
 ----------------------------------------------------------------
@@ -109,7 +151,7 @@ foreign import capi "hdf5-hs.h hs_H5Dget_type" h5d_get_type
 --   specified by @dset_id@. The function returns an identifier for the
 --   new copy of the dataspace.
 --
---   A dataspace identifier returned from this function should be 
+--   A dataspace identifier returned from this function should be
 --   released with 'h5s_close' when the identifier is no longer needed
 --   so that resource leaks will not occur.
 --
@@ -187,6 +229,48 @@ foreign import capi "hdf5-hs.h hs_H5Dwrite" h5d_write
   -> Ptr x -- ^ @buf@ Buffer with data to be written to the file
   -> HIO HErr
 
+
+-- | @H5Dset_extent@ sets the current dimensions of the chunked
+--   dataset dset_id to the sizes specified in size.
+--
+--   size is a 1-dimensional array with n elements, where n is the
+--   rank of the dataset’s current dataspace.
+--
+--   This function can be applied to the following datasets:
+--
+--   * A chunked dataset with unlimited dimensions
+--
+--   * A chunked dataset with fixed dimensions if the new dimension
+--     sizes are less than the maximum sizes set with maxdims (see
+--     H5Screate_simple())
+--
+--   * An external dataset with unlimited dimensions
+--
+--   * An external dataset with fixed dimensions if the new dimension
+--     sizes are less than the maximum sizes set with maxdims
+--
+--   Note that external datasets are always contiguous and can be
+--   extended only along the first dimension.
+--
+--   Space on disk is immediately allocated for the new dataset extent
+--   if the dataset’s space allocation time is set to
+--   @H5D_ALLOC_TIME_EARLY@.
+--
+--   Fill values will be written to the dataset in either of the
+--   following situations, but not otherwise:
+--
+--   If the dataset’s fill time is set to H5D_FILL_TIME_IFSET and a
+--   fill value is defined (see H5Pset_fill_time() and
+--   H5Pset_fill_value())
+--
+--   If the dataset’s fill time is set to H5D_FILL_TIME_ALLOC (see
+--   H5Pset_alloc_time())
+foreign import capi "hdf5-hs.h hs_H5Dset_extent" h5d_set_extent
+  :: HID       -- ^ @dset_id@ Dataset identifier 
+  -> Ptr HSize -- ^ @size@ Array containing the new magnitude of each dimension of the dataset
+  -> HIO HErr
+
+
 {-
 hid_t   H5Dcreate_anon (hid_t loc_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id)
 hid_t   H5Dopen1 (hid_t loc_id, const char *name)
@@ -208,7 +292,6 @@ herr_t  H5Dread_chunk (hid_t dset_id, hid_t dxpl_id, const hsize_t *offset, uint
 herr_t  H5Diterate (void *buf, hid_t type_id, hid_t space_id, H5D_operator_t op, void *operator_data)
 herr_t  H5Dvlen_get_buf_size (hid_t dset_id, hid_t type_id, hid_t space_id, hsize_t *size)
 herr_t  H5Dfill (const void *fill, hid_t fill_type_id, void *buf, hid_t buf_type_id, hid_t space_id)
-herr_t  H5Dset_extent (hid_t dset_id, const hsize_t size[])
 herr_t  H5Dflush (hid_t dset_id)
 herr_t  H5Drefresh (hid_t dset_id)
 herr_t  H5Dscatter (H5D_scatter_func_t op, void *op_data, hid_t type_id, hid_t dst_space_id, void *dst_buf)

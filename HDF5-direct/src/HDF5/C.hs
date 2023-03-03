@@ -12,7 +12,6 @@ module HDF5.C
     module HDF5.C.Types
     -- * Properties API
     -- ** Constants
-  , h5p_DEFAULT
   , h5i_INVALID_HID
     -- * General library
   , h5_free_memory
@@ -34,6 +33,8 @@ module HDF5.C
   , module HDF5.C.H5LT
     -- * Error handling API
   , module HDF5.C.H5E
+    -- * Property lists
+  , module HDF5.C.H5P
     -- * IO wrapper
   , is_threadsafe
   ) where
@@ -50,15 +51,14 @@ import HDF5.C.H5G
 import HDF5.C.H5S
 import HDF5.C.H5L
 import HDF5.C.H5F
+import HDF5.C.H5P
 import HDF5.C.H5LT
 
 ----------------------------------------------------------------
 -- Constants
 ----------------------------------------------------------------
 
-foreign import capi "hdf5.h value H5P_DEFAULT"        h5p_DEFAULT     :: HID
 foreign import capi "hdf5.h value H5I_INVALID_HID"    h5i_INVALID_HID :: HID
-
 
 foreign import capi "hdf5-hs.h value HS_H5_THREADSAFE" is_threadsafe :: Int
 

@@ -6,7 +6,6 @@
 // thread safety
 #ifdef H5_HAVE_THREADSAFE
 #define HS_H5_THREADSAFE 1
-#error Support for thread-safe variant of HDF5 is not implemented yet
 #else
 #define HS_H5_THREADSAFE 0
 #endif
@@ -38,6 +37,7 @@ hid_t hs_H5Dget_type(hid_t dset_id, hid_t *error);
 hid_t hs_H5Dget_space(hid_t dset_id, hid_t *error);
 herr_t hs_H5Dread(hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, void *buf, hid_t *error);
 herr_t hs_H5Dwrite(hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, const void *buf, hid_t *error);
+herr_t hs_H5Dset_extent(hid_t dset_id, const hsize_t size[], hid_t *error);
 
 herr_t hs_H5Eclose_msg(hid_t err_id, hid_t *error);
 herr_t hs_H5Eclose_stack(hid_t stack_id, hid_t *error);
@@ -48,12 +48,12 @@ herr_t hs_H5Eset_auto2(hid_t estack_id, H5E_auto2_t func, void *client_data, hid
 herr_t hs_H5Ewalk2(hid_t err_stack, H5E_direction_t direction, H5E_walk2_t func, void *client_data, hid_t *error);
 ssize_t hs_H5Eget_msg(hid_t msg_id, H5E_type_t *type, char *msg, size_t size, hid_t *error);
 
-htri_t hs_H5Fis_accessible(const char *container_name, hid_t fapl_id, hid_t *error);
+/* htri_t hs_H5Fis_accessible(const char *container_name, hid_t fapl_id, hid_t *error); */
 hid_t hs_H5Fcreate(const char *filename, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t *error);
 hid_t hs_H5Fopen(const char *filename, unsigned flags, hid_t fapl_id, hid_t *error);
 hid_t hs_H5Freopen(hid_t file_id, hid_t *error);
 herr_t hs_H5Fclose(hid_t file_id, hid_t *error);
-herr_t hs_H5Fdelete(const char *filename, hid_t fapl_id, hid_t *error);
+/* herr_t hs_H5Fdelete(const char *filename, hid_t fapl_id, hid_t *error); */
 
 hid_t hs_H5Gcreate2(hid_t loc_id, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t *error);
 hid_t hs_H5Gopen2(hid_t loc_id, const char *name, hid_t gapl_id, hid_t *error);
@@ -69,6 +69,10 @@ int hs_H5Sget_simple_extent_dims(hid_t space_id, hsize_t dims[], hsize_t maxdims
 int hs_H5Sget_simple_extent_ndims(hid_t space_id, hid_t *error);
 hssize_t hs_H5Sget_simple_extent_npoints(hid_t space_id, hid_t *error);
 H5S_class_t hs_H5Sget_simple_extent_type(hid_t space_id, hid_t *error);
+herr_t hs_H5Sselect_hyperslab(hid_t space_id, H5S_seloper_t op,
+                              const hsize_t start[], const hsize_t stride[],
+                              const hsize_t count[], const hsize_t block[],
+                              hid_t *error);
 
 herr_t hs_H5Tclose(hid_t type_id, hid_t *error);
 hid_t hs_H5Tcreate(H5T_class_t type, size_t size, hid_t *error);
@@ -92,4 +96,12 @@ herr_t hs_H5Tenum_nameof(hid_t type, const void *value, char *name, size_t size,
 herr_t hs_H5Tenum_valueof(hid_t type, const char *name, void *value, hid_t *error);
 herr_t hs_H5Tget_member_value(hid_t type_id, unsigned membno, void *value, hid_t *error);
 
-herr_t hs_H5Literate2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t* error);
+// NOTE: compatibility macro for HDF5-1.10
+herr_t hs_H5Literate(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate_t op, void *op_data, hid_t* error);
+
+herr_t hs_H5Pclose (hid_t plist_id, hid_t* error);
+hid_t hs_H5Pcreate (hid_t cls_id, hid_t* error);
+herr_t hs_H5Pset_chunk (hid_t plist_id, int ndims, const hsize_t dim[], hid_t* error);
+herr_t hs_H5Pset_chunk_opts (hid_t plist_id, unsigned opts, hid_t* error);
+herr_t hs_H5Pset_deflate (hid_t plist_id, unsigned level, hid_t* error);
+herr_t hs_H5Pset_layout (hid_t plist_id, H5D_layout_t layout, hid_t* error);

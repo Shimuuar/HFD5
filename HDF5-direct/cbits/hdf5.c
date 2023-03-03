@@ -23,15 +23,23 @@
 #ifdef H5_HAVE_THREADSAFE
 // ----------------------------------------------------------------
 // Thread safe build
-#error We do not support threadsafe build yet
+static __thread printing_disabled = 0;
 
+#define INI                                       \
+    do {                                          \
+        if( 0 == printing_disabled ) {            \
+            H5Eset_auto(H5E_DEFAULT, NULL, NULL); \
+            printing_disabled = 1;                \
+        }                                         \
+    } while(0)
+
+#define FINI do {} while(0)
 
 #else
 // ----------------------------------------------------------------
 // Thread unsafe build
 
-
-// Global flag which is used to ensure that we truned off printing
+// Global flag which is used to ensure that we turned off printing
 // (and do it only once.
 static int printing_disabled = 0;
 
@@ -48,6 +56,8 @@ static pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
     } while(0)
 
 #define FINI do { pthread_mutex_unlock(&mutex); } while(0)
+#endif
+// ----------------------------------------------------------------
 
 #define CHECK_CSTR(expr)                                \
     do {                                                \
@@ -56,39 +66,6 @@ static pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
         if( !res ) { *error = H5Eget_current_stack(); } \
         FINI;                                           \
         return res;                                     \
-    } while(0)
-
-#define CHECK_ERR(expr)                                    \
-    do {                                                   \
-        INI;                                               \
-        herr_t res = expr;                                 \
-        if( res < 0 ) { *error = H5Eget_current_stack(); } \
-        FINI;                                              \
-        return res;                                        \
-    } while(0)
-#define CHECK_TRI(expr)                                    \
-    do {                                                   \
-        INI;                                               \
-        htri_t res = expr;                                 \
-        if( res < 0 ) { *error = H5Eget_current_stack(); } \
-        FINI;                                              \
-        return res;                                        \
-    } while(0)
-#define CHECK_HID(expr)                                    \
-    do {                                                   \
-        INI;                                               \
-        hid_t res = expr;                                  \
-        if( res < 0 ) { *error = H5Eget_current_stack(); } \
-        FINI;                                              \
-        return res;                                        \
-    } while(0)
-#define CHECK_SSIZE(expr)                                  \
-    do {                                                   \
-        INI;                                               \
-        ssize_t res = expr;                                \
-        if( res < 0 ) { *error = H5Eget_current_stack(); } \
-        FINI;                                              \
-        return res;                                        \
     } while(0)
 #define CHECK(ty, expr)                                    \
     do {                                                   \
@@ -99,7 +76,10 @@ static pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
         return res;                                        \
     } while(0)
 
-#endif
+#define CHECK_ERR(expr)   CHECK(herr_t,  expr)
+#define CHECK_TRI(expr)   CHECK(htri_t,  expr)
+#define CHECK_HID(expr)   CHECK(hid_t,   expr)
+#define CHECK_SSIZE(expr) CHECK(ssize_t, expr)
 
 
 // ----------------------------------------------------------------
@@ -196,6 +176,10 @@ herr_t hs_H5Dwrite(hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t f
     CHECK_ERR(H5Dwrite(dset_id, mem_type_id, mem_space_id, file_space_id, dxpl_id, buf));
 }
 
+herr_t hs_H5Dset_extent(hid_t dset_id, const hsize_t size[], hid_t *error) {
+    CHECK_ERR(H5Dset_extent(dset_id, size));
+}
+
 /*
 hid_t H5Dcreate_anon(hid_t loc_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id)
 herr_t H5Dget_space_status(hid_t dset_id, H5D_space_status_t *allocation)
@@ -215,7 +199,6 @@ herr_t H5Dread_chunk(hid_t dset_id, hid_t dxpl_id, const hsize_t *offset, uint32
 herr_t H5Diterate(void *buf, hid_t type_id, hid_t space_id, H5D_operator_t op, void *operator_data)
 herr_t H5Dvlen_get_buf_size(hid_t dset_id, hid_t type_id, hid_t space_id, hsize_t *size)
 herr_t H5Dfill(const void *fill, hid_t fill_type_id, void *buf, hid_t buf_type_id, hid_t space_id)
-herr_t H5Dset_extent(hid_t dset_id, const hsize_t size[])
 herr_t H5Dflush(hid_t dset_id)
 herr_t H5Drefresh(hid_t dset_id)
 herr_t H5Dscatter(H5D_scatter_func_t op, void *op_data, hid_t type_id, hid_t dst_space_id, void *dst_buf)
@@ -287,9 +270,9 @@ herr_t	H5Eset_auto1(H5E_auto1_t func, void *client_data)
 // H5F
 // ----------------------------------------------------------------
 
-htri_t hs_H5Fis_accessible(const char *container_name, hid_t fapl_id, hid_t *error) {
-    CHECK_TRI(H5Fis_accessible(container_name, fapl_id));
-}
+// htri_t hs_H5Fis_accessible(const char *container_name, hid_t fapl_id, hid_t *error) {
+//     CHECK_TRI(H5Fis_accessible(container_name, fapl_id));
+// }
 
 hid_t hs_H5Fcreate(const char *filename, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t *error) {
     CHECK_HID(H5Fcreate(filename, flags, fcpl_id, fapl_id));
@@ -307,9 +290,9 @@ herr_t hs_H5Fclose(hid_t file_id, hid_t *error) {
     CHECK_ERR(H5Fclose(file_id));
 }
 
-herr_t hs_H5Fdelete(const char *filename, hid_t fapl_id, hid_t *error) {
-    CHECK_ERR(H5Fdelete(filename, fapl_id));
-}
+// herr_t hs_H5Fdelete(const char *filename, hid_t fapl_id, hid_t *error) {
+//     CHECK_ERR(H5Fdelete(filename, fapl_id));
+// }
 
 /*
 herr_t	H5Fflush(hid_t object_id, H5F_scope_t scope)
@@ -484,6 +467,13 @@ H5S_class_t	hs_H5Sget_simple_extent_type(hid_t space_id, hid_t *error) {
     CHECK(H5S_class_t, H5Sget_simple_extent_type(space_id));
 }
 
+herr_t hs_H5Sselect_hyperslab(hid_t space_id, H5S_seloper_t op,
+                              const hsize_t start[], const hsize_t stride[],
+                              const hsize_t count[], const hsize_t block[],
+                              hid_t *error) {
+    CHECK_ERR(H5Sselect_hyperslab(space_id, op, start, stride, count, block));
+}
+
 /*
 hid_t	H5Scombine_hyperslab(hid_t space_id, H5S_seloper_t op, const hsize_t start[], const hsize_t stride[], const hsize_t count[], const hsize_t block[])
 hid_t	H5Scombine_select(hid_t space1_id, H5S_seloper_t op, hid_t space2_id)
@@ -511,7 +501,6 @@ herr_t	H5Sselect_adjust(hid_t spaceid, const hssize_t *offset)
 herr_t	H5Sselect_all(hid_t spaceid)
 herr_t	H5Sselect_copy(hid_t dst_id, hid_t src_id)
 herr_t	H5Sselect_elements(hid_t space_id, H5S_seloper_t op, size_t num_elem, const hsize_t *coord)
-herr_t	H5Sselect_hyperslab(hid_t space_id, H5S_seloper_t op, const hsize_t start[], const hsize_t stride[], const hsize_t count[], const hsize_t block[])
 htri_t	H5Sselect_intersect_block(hid_t space_id, const hsize_t *start, const hsize_t *end)
 herr_t	H5Sselect_none(hid_t spaceid)
 hid_t	H5Sselect_project_intersection(hid_t src_space_id, hid_t dst_space_id, hid_t src_intersect_space_id)
@@ -664,12 +653,85 @@ H5T_class_t H5Tget_member_class(hid_t type_id, unsigned membno)
 // H5L
 // ----------------------------------------------------------------
 
-herr_t hs_H5Literate2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t* error) {
-    CHECK_ERR(H5Literate2(grp_id, idx_type, order, idx, op, op_data));
+// NOTE: compatibility macro for HDF5-1.10
+//
+// 1.12 introduced H5_iterate2_t
+herr_t hs_H5Literate(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate_t op, void *op_data, hid_t* error) {
+    CHECK_ERR(H5Literate(grp_id, idx_type, order, idx, op, op_data));
 }
 
 /*
 herr_t H5Literate_by_name2(hid_t loc_id, const char *group_name, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t lapl_id)
 herr_t H5Lvisit2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, H5L_iterate2_t op, void *op_data)
 herr_t H5Lvisit_by_name2(hid_t loc_id, const char *group_name, H5_index_t idx_type, H5_iter_order_t order, H5L_iterate2_t op, void *op_data, hid_t lapl_id)
+*/
+
+// ----------------------------------------------------------------
+// H5P
+// ----------------------------------------------------------------
+
+herr_t hs_H5Pclose (hid_t plist_id, hid_t* error) {
+    CHECK_ERR(H5Pclose(plist_id));
+}
+
+hid_t hs_H5Pcreate (hid_t cls_id, hid_t* error) {
+    CHECK_HID(H5Pcreate(cls_id));
+}
+
+herr_t hs_H5Pset_chunk (hid_t plist_id, int ndims, const hsize_t dim[], hid_t* error) {
+    CHECK_ERR(H5Pset_chunk(plist_id, ndims, dim));
+}
+
+herr_t hs_H5Pset_chunk_opts (hid_t plist_id, unsigned opts, hid_t* error) {
+    CHECK_ERR(H5Pset_chunk_opts(plist_id, opts));
+}
+
+herr_t hs_H5Pset_deflate (hid_t plist_id, unsigned level, hid_t* error) {
+    CHECK_ERR(H5Pset_deflate(plist_id, level));
+}
+
+herr_t hs_H5Pset_layout (hid_t plist_id, H5D_layout_t layout, hid_t* error) {
+    CHECK_ERR(H5Pset_layout(plist_id, layout));
+}
+
+
+/*
+hid_t   H5Pcopy (hid_t plist_id)
+hid_t   H5Pdecode (const void *buf)
+herr_t  H5Pencode2 (hid_t plist_id, void *buf, size_t *nalloc, hid_t fapl_id)
+hid_t   H5Pget_class (hid_t plist_id)
+*/
+
+/*
+Dataset Creation Properties
+
+htri_t  H5Pall_filters_avail (hid_t plist_id)
+herr_t  H5Pfill_value_defined (hid_t plist, H5D_fill_value_t *status)
+herr_t  H5Pget_alloc_time (hid_t plist_id, H5D_alloc_time_t *alloc_time)
+int H5Pget_chunk (hid_t plist_id, int max_ndims, hsize_t dim[])
+herr_t  H5Pget_chunk_opts (hid_t plist_id, unsigned *opts)
+herr_t  H5Pget_dset_no_attrs_hint (hid_t dcpl_id, hbool_t *minimize)
+herr_t  H5Pget_external (hid_t plist_id, unsigned idx, size_t name_size, char *name, off_t *offset, hsize_t *size)
+int H5Pget_external_count (hid_t plist_id)
+herr_t  H5Pget_fill_time (hid_t plist_id, H5D_fill_time_t *fill_time)
+herr_t  H5Pget_fill_value (hid_t plist_id, hid_t type_id, void *value)
+H5D_layout_t    H5Pget_layout (hid_t plist_id)
+herr_t  H5Pget_virtual_count (hid_t dcpl_id, size_t *count)
+ssize_t H5Pget_virtual_dsetname (hid_t dcpl_id, size_t index, char *name, size_t size)
+ssize_t H5Pget_virtual_filename (hid_t dcpl_id, size_t index, char *name, size_t size)
+hid_t   H5Pget_virtual_srcspace (hid_t dcpl_id, size_t index)
+hid_t   H5Pget_virtual_vspace (hid_t dcpl_id, size_t index)
+herr_t  H5Pset_alloc_time (hid_t plist_id, H5D_alloc_time_t alloc_time)
+herr_t  H5Pset_dset_no_attrs_hint (hid_t dcpl_id, hbool_t minimize)
+herr_t  H5Pset_external (hid_t plist_id, const char *name, off_t offset, hsize_t size)
+herr_t  H5Pset_fill_time (hid_t plist_id, H5D_fill_time_t fill_time)
+herr_t  H5Pset_fill_value (hid_t plist_id, hid_t type_id, const void *value)
+herr_t  H5Pset_shuffle (hid_t plist_id)
+
+herr_t  H5Pset_nbit (hid_t plist_id)
+herr_t  H5Pset_scaleoffset (hid_t plist_id, H5Z_SO_scale_type_t scale_type, int scale_factor)
+herr_t  H5Pset_szip (hid_t plist_id, unsigned options_mask, unsigned pixels_per_block)
+herr_t  H5Pset_virtual (hid_t dcpl_id, hid_t vspace_id, const char *src_file_name, const char *src_dset_name, hid_t src_space_id)
+H5Z_filter_t    H5Pget_filter1 (hid_t plist_id, unsigned filter, unsigned int *flags, size_t *cd_nelmts, unsigned cd_values[], size_t namelen, char name[])
+herr_t  H5Pget_filter_by_id1 (hid_t plist_id, H5Z_filter_t id, unsigned int *flags, size_t *cd_nelmts, unsigned cd_values[], size_t namelen, char name[])
 */

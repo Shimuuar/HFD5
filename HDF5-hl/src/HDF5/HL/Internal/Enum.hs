@@ -13,10 +13,11 @@ module HDF5.HL.Internal.Enum
   , CreateMode(..)
   , Sign(..)
   , Class(..)
+  , Layout(..)
   ) where
 
 import Foreign.C.Types
-import HDF5.C qualified as C
+import HDF5.C
 
 
 -- | Conversion to and from corresponding C enumeration
@@ -41,8 +42,8 @@ data OpenMode
 
 instance HDF5Param OpenMode where
   type CParam OpenMode = CUInt
-  toCParam OpenRO = C.h5f_ACC_RDONLY
-  toCParam OpenRW = C.h5f_ACC_RDWR
+  toCParam OpenRO = h5f_ACC_RDONLY
+  toCParam OpenRW = h5f_ACC_RDWR
 
 -- | Mode for opening files
 data CreateMode
@@ -53,8 +54,8 @@ data CreateMode
 
 instance HDF5Param CreateMode where
   type CParam CreateMode = CUInt
-  toCParam CreateTrunc = C.h5f_ACC_TRUNC
-  toCParam CreateExcl  = C.h5f_ACC_EXCL
+  toCParam CreateTrunc = h5f_ACC_TRUNC
+  toCParam CreateExcl  = h5f_ACC_EXCL
 
 
 -- | Whether integral value is signed or not
@@ -64,12 +65,12 @@ data Sign
   deriving stock (Show,Eq,Ord)
 
 instance HDF5Enum Sign where
-  type CEnum Sign = C.H5TSign
-  toCEnum Signed   = C.H5T_SGN_2
-  toCEnum Unsigned = C.H5T_SGN_NONE
+  type CEnum Sign = H5TSign
+  toCEnum Signed   = H5T_SGN_2
+  toCEnum Unsigned = H5T_SGN_NONE
   fromCEnum = \case
-    C.H5T_SGN_2    -> Just Signed
-    C.H5T_SGN_NONE -> Just Unsigned
+    H5T_SGN_2    -> Just Signed
+    H5T_SGN_NONE -> Just Unsigned
     _              -> Nothing
 
 
@@ -90,31 +91,56 @@ data Class
   deriving stock (Show,Eq,Ord)
 
 instance HDF5Enum Class where
-  type CEnum Class = C.H5TClass
+  type CEnum Class = H5TClass
   toCEnum = \case
-    NoClass   -> C.H5T_NO_CLASS
-    Integer   -> C.H5T_INTEGER
-    Float     -> C.H5T_FLOAT
-    Time      -> C.H5T_TIME
-    String    -> C.H5T_STRING
-    BitField  -> C.H5T_BITFIELD
-    Opaque    -> C.H5T_OPAQUE
-    Compound  -> C.H5T_COMPOUND
-    Reference -> C.H5T_REFERENCE
-    Enum      -> C.H5T_ENUM
-    Vlen      -> C.H5T_VLEN
-    ClsArray  -> C.H5T_ARRAY
+    NoClass   -> H5T_NO_CLASS
+    Integer   -> H5T_INTEGER
+    Float     -> H5T_FLOAT
+    Time      -> H5T_TIME
+    String    -> H5T_STRING
+    BitField  -> H5T_BITFIELD
+    Opaque    -> H5T_OPAQUE
+    Compound  -> H5T_COMPOUND
+    Reference -> H5T_REFERENCE
+    Enum      -> H5T_ENUM
+    Vlen      -> H5T_VLEN
+    ClsArray  -> H5T_ARRAY
   fromCEnum = \case
-    C.H5T_NO_CLASS  -> Just NoClass
-    C.H5T_INTEGER   -> Just Integer    
-    C.H5T_FLOAT     -> Just Float      
-    C.H5T_TIME      -> Just Time       
-    C.H5T_STRING    -> Just String     
-    C.H5T_BITFIELD  -> Just BitField   
-    C.H5T_OPAQUE    -> Just Opaque     
-    C.H5T_COMPOUND  -> Just Compound   
-    C.H5T_REFERENCE -> Just Reference  
-    C.H5T_ENUM      -> Just Enum       
-    C.H5T_VLEN      -> Just Vlen       
-    C.H5T_ARRAY     -> Just ClsArray      
-    _               -> Nothing
+    H5T_NO_CLASS  -> Just NoClass
+    H5T_INTEGER   -> Just Integer
+    H5T_FLOAT     -> Just Float
+    H5T_TIME      -> Just Time
+    H5T_STRING    -> Just String
+    H5T_BITFIELD  -> Just BitField
+    H5T_OPAQUE    -> Just Opaque
+    H5T_COMPOUND  -> Just Compound
+    H5T_REFERENCE -> Just Reference
+    H5T_ENUM      -> Just Enum
+    H5T_VLEN      -> Just Vlen
+    H5T_ARRAY     -> Just ClsArray
+    _             -> Nothing
+
+-- | Layout of dataset
+data Layout
+  = Compact   -- ^ Store raw data in the dataset object header in
+              --   file. This should only be used for datasets with
+              --   small amounts of raw data. The raw data size limit
+              --   is 64K (65520 bytes). Attempting to create a
+              --   dataset with raw data larger than this limit will
+              --   cause runtime exception.
+  | Contigous -- ^ Store raw data separately from the object header in
+              --   one large chunk in the file.
+  | Chunked   -- ^ Store raw data separately from the object header as
+              --   chunks of data in separate locations in the file.
+
+instance HDF5Enum Layout where
+  type CEnum Layout = H5DLayout
+  toCEnum = \case
+    Compact   -> H5D_COMPACT
+    Contigous -> H5D_CONTIGUOUS
+    Chunked   -> H5D_CHUNKED
+  fromCEnum = \case
+    H5D_COMPACT    -> Just Compact
+    H5D_CONTIGUOUS -> Just Contigous
+    H5D_CHUNKED    -> Just Chunked
+    _              -> Nothing

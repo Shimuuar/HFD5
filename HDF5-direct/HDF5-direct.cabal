@@ -3,7 +3,10 @@ Name:           HDF5-direct
 Version:        0.1
 Synopsis:       Low level warppers for HDF5 library
 Description:
-
+  These allows to directly call C function with little help for user. This
+  package exists in order to make development process easier: ghci doesn't
+  like foreign imports and to be able to handle single and multithreaded
+  builds of HDF5
 
 License:        BSD-3-Clause
 License-File:   LICENSE
@@ -12,6 +15,9 @@ Maintainer:     Aleksey Khudyakov <alexey.skladnoy@gmail.com>
 Category:       Data
 Build-Type:     Simple
 
+extra-source-files:
+  cbits/hdf5-hs.h
+
 Library
   Ghc-options:        -Wall -O2
   Default-Language:   Haskell2010
@@ -19,9 +25,8 @@ Library
   extra-libraries:    hdf5 hdf5_hl
   --
   include-dirs:       ./cbits
-  c-options:          -Wall
+  cc-options:         -Wall
   c-sources:          cbits/hdf5.c
-  extra-source-files: cbits/hdf5-hs.h
   --
   Build-Depends:    base         >=4.12 && <5
                   , exceptions   >=0.10
@@ -37,4 +42,5 @@ Library
         HDF5.C.H5S
         HDF5.C.H5T
         HDF5.C.H5L
+        HDF5.C.H5P
         HDF5.C.H5LT

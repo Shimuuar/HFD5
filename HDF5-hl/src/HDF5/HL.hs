@@ -39,13 +39,17 @@ module HDF5.HL
   , createDataset
   , withOpenDataset
   , withCreateEmptyDataset
+  , withCreateDataset
+  , setDatasetExtent
     -- ** Reading and writing
   , readDataset
   , readObject
   , readAt
+  , readSlab
+  , writeSlab
     -- ** Dataspace information
   , Dataspace
-  , Dim(..)
+  , pattern UNLIMITED
   , Extent(..)
   , rank
   , extent
@@ -66,6 +70,11 @@ module HDF5.HL
   , pattern Array
   , makePackedRecord
   , makeEnumeration
+    -- ** Property lists
+  , Property
+  , Layout(..)
+  , propDatasetLayout
+  , propDatasetChunking
     -- ** Type classes
   , IsObject
   , IsDirectory
@@ -82,6 +91,7 @@ module HDF5.HL
   , Element(..)
   , Serialize(..)
   , SerializeArr(..)
+  , SerializeSlab(..)
     -- ** Primitives
   , basicReadBuffer
   , basicReadScalar
@@ -109,13 +119,14 @@ import Foreign.Storable
 import GHC.Stack
 
 import HDF5.HL.Internal            qualified as HIO
-import HDF5.HL.Internal            ( SerializeAttr(..), Serialize(..), SerializeArr(..)
+import HDF5.HL.Internal            ( SerializeAttr(..), Serialize(..), SerializeArr(..), SerializeSlab(..)
                                    , basicReadBuffer, basicReadScalar)
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.Dataspace
+import HDF5.HL.Internal.Property
 import HDF5.C
 import Prelude hiding (read,readIO)
 
@@ -147,7 +158,7 @@ openFile path mode = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $ fmap File
        $ checkHID p_err ("Cannot open file " ++ path)
-       $ h5f_open c_path (toCParam mode) h5p_DEFAULT
+       $ h5f_open c_path (toCParam mode) H5P_DEFAULT
 
 -- | Open file using 'openFile' and pass handle to continuation. It
 --   will be closed when continuation finish execution normally or
@@ -166,7 +177,7 @@ createFile path mode = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $ fmap File
        $ checkHID p_err ("Cannot create file " ++ path)
-       $ h5f_create c_path (toCParam mode) h5p_DEFAULT h5p_DEFAULT
+       $ h5f_create c_path (toCParam mode) H5P_DEFAULT H5P_DEFAULT
 
 -- | Create file using 'createFile' and pass handle to
 --   continuation. It will be closed when continuation finish
@@ -190,7 +201,7 @@ openGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $ fmap Group
        $ checkHID p_err ("Cannot open group " ++ path)
-       $ h5g_open (getHID dir) c_path h5p_DEFAULT
+       $ h5g_open (getHID dir) c_path H5P_DEFAULT
 
 withOpenGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
@@ -210,7 +221,7 @@ createGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $ fmap Group
        $ checkHID p_err ("Cannot create group " ++ path)
-       $ h5g_create (getHID dir) c_path h5p_DEFAULT h5p_DEFAULT h5p_DEFAULT
+       $ h5g_create (getHID dir) c_path H5P_DEFAULT H5P_DEFAULT H5P_DEFAULT
 
 withCreateGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
@@ -257,29 +268,33 @@ openDataset dir path = liftIO $ withFrozenCallStack $ evalContT $ do
   c_path <- ContT $ withCString path
   lift $  Dataset
       <$> ( checkHID p_err ("Cannot open dataset " ++ path)
-          $ h5d_open2 (getHID dir) c_path h5p_DEFAULT)
+          $ h5d_open2 (getHID dir) c_path H5P_DEFAULT)
 
 -- | Create new dataset at given location without writing any data to
 --   it. Returned 'Dataset' must be closed by call to 'close'.
 createEmptyDataset
   :: (MonadIO m, IsDirectory dir, IsExtent ext, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> Type     -- ^ Element type
-  -> ext      -- ^ Dataspace, that is size of dataset
+  => dir       -- ^ Location
+  -> FilePath  -- ^ Path relative to location
+  -> Type      -- ^ Element type
+  -> ext       -- ^ Extent of dataset
+  -> Maybe ext -- ^ Maximum extent of dataset. If @Nothing@ it's same as extent
+  -> [Property Dataset]
+  -- ^ Dataset creation properties
   -> m Dataset
-createEmptyDataset dir path ty ext = liftIO $ evalContT $ do
+createEmptyDataset dir path ty ext ext_max props = liftIO $ evalContT $ do
   p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspace ext
+  space  <- ContT $ withCreateDataspace ext ext_max
   tid    <- ContT $ withType ty
+  plist  <- ContT $ withDatasetProps $ mconcat props
   lift $ withFrozenCallStack
        $ fmap Dataset
        $ checkHID p_err ("Unable to create dataset")
        $ h5d_create (getHID dir) c_path tid (getHID space)
-         h5p_DEFAULT
-         h5p_DEFAULT
-         h5p_DEFAULT
+         H5P_DEFAULT
+         (getHID plist)
+         H5P_DEFAULT
 
 
 -- | Create new dataset at given location and write provided data to
@@ -291,7 +306,7 @@ createDataset
   -> a        -- ^ Value to write
   -> m ()
 createDataset dir path a = liftIO $ evalContT $ do
-  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a)
+  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) Nothing []
   lift $ basicWrite dset a
 
 
@@ -310,15 +325,32 @@ withOpenDataset dir path = bracket (openDataset dir path) close
 --   closed by call to 'close'.
 withCreateEmptyDataset
   :: (MonadIO m, MonadMask m, IsDirectory dir, IsExtent ext, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> Type     -- ^ Element type
-  -> ext      -- ^ Dataspace, that is size of dataset
+  => dir       -- ^ Location
+  -> FilePath  -- ^ Path relative to location
+  -> Type      -- ^ Element type
+  -> ext       -- ^ Dataspace, that is size of dataset
+  -> Maybe ext -- ^ Maximum extent of dataset. If @Nothing@ it's same as extent
+  -> [Property Dataset]
+  -- ^ Dataset creation properties
   -> (Dataset -> m a)
   -> m a
-withCreateEmptyDataset dir path ty ext = bracket
-  (createEmptyDataset dir path ty ext)
+withCreateEmptyDataset dir path ty ext ext_max props = bracket
+  (createEmptyDataset dir path ty ext ext_max props)
   close
+
+-- | Create new dataset at given location and populate it using data
+--   from provided data structure.
+withCreateDataset
+  :: forall a m r dir. (MonadIO m, MonadMask m, IsDirectory dir, Serialize a, HasCallStack)
+  => dir      -- ^ Location
+  -> FilePath -- ^ Path relative to location
+  -> a        -- ^ Data to write
+  -> (Dataset -> m r)
+  -> m r
+withCreateDataset dir path a action = evalContT $ do
+  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) Nothing []
+  liftIO $ basicWrite dset a
+  lift   $ action dset
 
 -- | Read data from already opened dataset. This function work
 --   specifically with datasets and can use its attributes. Use 'read'
@@ -338,6 +370,48 @@ readAt
   -> m a
 readAt dir path = liftIO $ withOpenDataset dir path readDataset
 
+-- | Read slab selection from dataset
+readSlab
+  :: (SerializeSlab a, MonadIO m, HasCallStack)
+  => Dataset    -- ^ Dataset to read from
+  -> ExtentOf a -- ^ Offset into dataset
+  -> ExtentOf a -- ^ Size to read
+  -> m a
+readSlab dset off sz = liftIO $ basicReadSlab dset off sz
+
+-- | Write provided data into slab selection
+writeSlab
+  :: (SerializeSlab a, MonadIO m, HasCallStack)
+  => Dataset    -- ^ Dataset to read from
+  -> ExtentOf a -- ^ Offset into dataset
+  -> a          -- ^ Data to write (will write all)
+  -> m ()
+writeSlab dset off xs = liftIO $ basicWriteSlab dset off xs
+
+-- | Set new extent of dataspace. This function could be applied to
+--   following datasets:
+--
+--   * Chunked dataset with unlimited dimensions
+--
+--   * A chunked dataset with fixed dimensions if the new dimension
+--     sizes are less than the maximum sizes set with maxdims
+setDatasetExtent :: (HasCallStack, IsExtent dim, MonadIO m) => Dataset -> dim -> m ()
+setDatasetExtent dset dim = liftIO $ evalContT $ do
+  p_err         <- ContT $ alloca
+  (r_ext,p_ext) <- withEncodedExtent dim >>= \case
+    Nothing -> throwM $ Error [Left "Extent must be non-null"]
+    Just x  -> pure x
+  spc    <- ContT $ withDataspace dset
+  r_dset <- lift
+          $ checkCInt p_err "Cannot get rank of dataspace's extent"
+          $ h5s_get_simple_extent_ndims (getHID spc)
+  when (fromIntegral r_ext /= r_dset) $ throwM $
+    Error [Left "Rank of dataset and rank of new extent do not match"]
+  lift $ checkHErr p_err "Failed to set new extent for a dataset"
+       $ h5d_set_extent (getHID dset) p_ext
+
+
+
 
 ----------------------------------------------------------------
 -- Dataspace API
@@ -350,7 +424,7 @@ rank a = liftIO $ withDataspace a HIO.dataspaceRank
 --   unexpected shape. E.g. if 2D array is expected but object is 1D
 --   array.
 extent :: (HasData a, IsExtent ext, MonadIO m, HasCallStack) => a -> m (Maybe ext)
-extent a = liftIO $ withDataspace a runParseFromDataspace
+extent a = liftIO $ fmap fst <$> withDataspace a runParseFromDataspace
 
 dataspaceRank
   :: (MonadIO m, HasCallStack)
@@ -364,7 +438,7 @@ dataspaceExt
   :: (MonadIO m, IsExtent ext, HasCallStack)
   => Dataspace
   -> m (Maybe ext)
-dataspaceExt spc = liftIO $ runParseFromDataspace spc
+dataspaceExt spc = liftIO $ fmap fst <$> runParseFromDataspace spc
 
 ----------------------------------------------------------------
 -- Attributes

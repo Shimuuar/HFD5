@@ -3,7 +3,10 @@ Name:           HDF5-hl
 Version:        0.1
 Synopsis:       High level API for HDF5 library
 Description:
-
+  Hihb level bindings to HDF5 library. This library aims to provide
+  nice and idiomatic API for working with HDF5 libabry. Since library
+  is huge this comes at the cost of exhaustiveness. Only subset of
+  features is supported.
 
 License:        BSD-3-Clause
 License-File:   LICENSE
@@ -17,7 +20,7 @@ Library
   Default-Language: Haskell2010
   hs-source-dirs:   src
   --
-  Build-Depends:    base         >=4.12 && <5
+  Build-Depends:    base         >=4.14 && <5
                   , HDF5-direct
                   , transformers
                   , exceptions
@@ -31,6 +34,7 @@ Library
         HDF5.HL.Internal.Error
         HDF5.HL.Internal.Types
         HDF5.HL.Internal.Wrappers
+        HDF5.HL.Internal.Property
 
 Test-suite HDF5-hl-tests
   type:             exitcode-stdio-1.0

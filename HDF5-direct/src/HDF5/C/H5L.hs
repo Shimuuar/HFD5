@@ -33,6 +33,9 @@ import HDF5.C.Types
 ----------------------------------------------------------------
 
 -- | Tag for H5L_info2_t
+--
+--   NOTE: It was introduced in 1.12. We use compatibility macro in
+--   order to support 1.10
 data H5LInfo2
 
 
@@ -136,7 +139,7 @@ foreign import ccall "wrapper"
 -- membership of group_id changes during the iteration. This does not
 -- limit the ability to change link destinations while iterating, but
 -- caution is advised.
-foreign import capi "hdf5-hs.h hs_H5Literate2" h5l_iterate
+foreign import capi "hdf5-hs.h hs_H5Literate" h5l_iterate
   :: HID         -- ^ @grp_id@ Group identifier
   -> H5Index     -- ^ @idx_type@ Index type
   -> H5IterOrder -- ^ @order@ Iteration order

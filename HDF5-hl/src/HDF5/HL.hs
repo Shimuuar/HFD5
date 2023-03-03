@@ -39,6 +39,7 @@ module HDF5.HL
   , createDataset
   , withOpenDataset
   , withCreateEmptyDataset
+  , withCreateDataset
     -- ** Reading and writing
   , readDataset
   , readObject
@@ -321,6 +322,20 @@ withCreateEmptyDataset
 withCreateEmptyDataset dir path ty ext = bracket
   (createEmptyDataset dir path ty ext)
   close
+
+-- | Create new dataset at given location and populate it using data
+--   from provided data structure.
+withCreateDataset
+  :: forall a m r dir. (MonadIO m, MonadMask m, IsDirectory dir, Serialize a, HasCallStack)
+  => dir      -- ^ Location
+  -> FilePath -- ^ Path relative to location
+  -> a        -- ^ Data to write
+  -> (Dataset -> m r)
+  -> m r
+withCreateDataset dir path a action = evalContT $ do
+  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a)
+  liftIO $ basicWrite dset a
+  lift   $ action dset
 
 -- | Read data from already opened dataset. This function work
 --   specifically with datasets and can use its attributes. Use 'read'

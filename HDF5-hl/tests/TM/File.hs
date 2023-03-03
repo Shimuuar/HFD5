@@ -37,6 +37,15 @@ tests = testGroup "Files"
         assertEqual "attribute"   (Just (123::Int)) =<< H5.readAttr h5 "attr"
         assertEqual "Nonexistent" (Nothing @Int)    =<< H5.readAttr h5 "attr-X"
     --
+  , testCase "Write/read slabs" $ withDir $ \dir -> do
+      let path = dir </> "test.h5"
+          arr  = [0..10] :: [Int]
+      H5.withCreateFile path H5.CreateTrunc $ \h5 -> do
+        H5.createDataset h5 "dset1" arr
+        H5.withOpenDataset h5 "dset1" $ \dset -> do
+          assertEqual "Slice" [3,4,5] =<< H5.readSlab @[Int] dset 3 3
+          H5.writeSlab dset 3 [30,40,50::Int]
+          assertEqual "After write" [0,1,2,30,40,50,6,7,8,9,10] =<< H5.readDataset @[Int] dset
   ]
 
 withDir :: (FilePath -> IO a) -> IO a

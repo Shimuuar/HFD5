@@ -653,8 +653,11 @@ H5T_class_t H5Tget_member_class(hid_t type_id, unsigned membno)
 // H5L
 // ----------------------------------------------------------------
 
-herr_t hs_H5Literate2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t* error) {
-    CHECK_ERR(H5Literate2(grp_id, idx_type, order, idx, op, op_data));
+// NOTE: compatibility macro for HDF5-1.10
+//
+// 1.12 introduced H5_iterate2_t
+herr_t hs_H5Literate(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate_t op, void *op_data, hid_t* error) {
+    CHECK_ERR(H5Literate(grp_id, idx_type, order, idx, op, op_data));
 }
 
 /*

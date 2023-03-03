@@ -24,7 +24,9 @@ module HDF5.C.H5P
   , pattern H5P_OBJECT_COPY
   , pattern H5P_OBJECT_CREATE
   , pattern H5P_STRING_CREATE
-  , pattern H5P_VOL_INITIALIZE
+
+  -- Not supported in HDF5-1.10 (aand we don't use it anyway)
+  -- , pattern H5P_VOL_INITIALIZE
     -- * Function
   , h5p_close
   , h5p_create
@@ -66,7 +68,7 @@ foreign import capi "hdf5.h value H5P_LINK_CREATE"      h5p_LINK_CREATE      :: 
 foreign import capi "hdf5.h value H5P_OBJECT_COPY"      h5p_OBJECT_COPY      :: HID
 foreign import capi "hdf5.h value H5P_OBJECT_CREATE"    h5p_OBJECT_CREATE    :: HID
 foreign import capi "hdf5.h value H5P_STRING_CREATE"    h5p_STRING_CREATE    :: HID
-foreign import capi "hdf5.h value H5P_VOL_INITIALIZE"   h5p_VOL_INITIALIZE   :: HID
+-- foreign import capi "hdf5.h value H5P_VOL_INITIALIZE"   h5p_VOL_INITIALIZE   :: HID
 
 -- | Class name @attribute create@: Properties for attribute creation
 pattern H5P_ATTRIBUTE_CREATE :: HID
@@ -132,9 +134,9 @@ pattern H5P_OBJECT_CREATE <- ((==h5p_OBJECT_CREATE) -> True) where H5P_OBJECT_CR
 pattern H5P_STRING_CREATE :: HID
 pattern H5P_STRING_CREATE <- ((==h5p_STRING_CREATE) -> True) where H5P_STRING_CREATE = h5p_STRING_CREATE
 
--- | Class name @vol initialize@: Properties for VOL initialization
-pattern H5P_VOL_INITIALIZE :: HID
-pattern H5P_VOL_INITIALIZE <- ((==h5p_VOL_INITIALIZE) -> True) where H5P_VOL_INITIALIZE = h5p_VOL_INITIALIZE
+-- -- | Class name @vol initialize@: Properties for VOL initialization
+-- pattern H5P_VOL_INITIALIZE :: HID
+-- pattern H5P_VOL_INITIALIZE <- ((==h5p_VOL_INITIALIZE) -> True) where H5P_VOL_INITIALIZE = h5p_VOL_INITIALIZE
 
 
 ----------------------------------------------------------------

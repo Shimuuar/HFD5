@@ -43,6 +43,8 @@ module HDF5.HL
   , readDataset
   , readObject
   , readAt
+  , readSlab
+  , writeSlab
     -- ** Dataspace information
   , Dataspace
   , Extent(..)
@@ -81,6 +83,7 @@ module HDF5.HL
   , Element(..)
   , Serialize(..)
   , SerializeArr(..)
+  , SerializeSlab(..)
     -- ** Primitives
   , basicReadBuffer
   , basicReadScalar
@@ -108,7 +111,7 @@ import Foreign.Storable
 import GHC.Stack
 
 import HDF5.HL.Internal            qualified as HIO
-import HDF5.HL.Internal            ( SerializeAttr(..), Serialize(..), SerializeArr(..)
+import HDF5.HL.Internal            ( SerializeAttr(..), Serialize(..), SerializeArr(..), SerializeSlab(..)
                                    , basicReadBuffer, basicReadScalar)
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Wrappers
@@ -336,6 +339,24 @@ readAt
   -> FilePath -- ^ Path to dataset
   -> m a
 readAt dir path = liftIO $ withOpenDataset dir path readDataset
+
+-- | Read slab selection from dataset
+readSlab
+  :: (SerializeSlab a, MonadIO m, HasCallStack)
+  => Dataset    -- ^ Dataset to read from
+  -> ExtentOf a -- ^ Offset into dataset
+  -> ExtentOf a -- ^ Size to read
+  -> m a
+readSlab dset off sz = liftIO $ basicReadSlab dset off sz
+
+-- | Write provided data into slab selection
+writeSlab
+  :: (SerializeSlab a, MonadIO m, HasCallStack)
+  => Dataset    -- ^ Dataset to read from
+  -> ExtentOf a -- ^ Offset into dataset
+  -> a          -- ^ Data to write (will write all)
+  -> m ()
+writeSlab dset off xs = liftIO $ basicWriteSlab dset off xs
 
 
 ----------------------------------------------------------------

@@ -8,6 +8,7 @@ module HDF5Test where
 
 import Control.Exception
 import Control.Monad
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
 import Control.Concurrent
 
@@ -27,6 +28,9 @@ import System.IO.Unsafe
 import HDF5.C
 import HDF5.HL as H5
 import HDF5.HL.Internal.Wrappers
+import HDF5.HL.Internal.Dataspace
+import HDF5.HL.Internal.Error
+import HDF5.HL.Internal.Types
 ----------------------------------------------------------------
 
 
@@ -89,3 +93,35 @@ woo = do
 ----------------------------------------------------------------
 
 
+part :: IO ()
+part = do
+  H5.withCreateFile "/run/user/1000/tst.hdf5" H5.CreateTrunc $ \h5 -> do
+    H5.createDataset h5 "d1" [0 .. 100::Int32]
+    H5.withOpenDataset h5 "d1" $ \dset -> do
+      print =<< H5.readSlab @[Int] dset 3 10
+      writeSlab dset 10 (take 10 [1000::Int ..])
+      print =<< readDataset @[Int] dset
+      return ()
+      -- print d
+      -- evalContT $ do
+      --   --
+      --   p_err <- ContT alloca
+      --   let off = 4  :: Int
+      --       sz  = 12 :: Int
+      --   -- Memory dataspace
+      --   spc <- getDataspace d
+      --   lift $ setSlabSelection spc off sz
+      --   --
+      --   mem <- ContT $ withCreateDataspace sz Nothing
+      --   --
+      --   tid   <- ContT $ withType (typeH5 @Int32)
+      --   ptr   <- ContT $ allocaArray @Int32 100
+      --   lift $ print =<< peekArray sz ptr
+      --   lift $ checkHErr p_err "Reading dataset data failed"
+      --        $ h5d_read (getHID d) tid
+      --          (getHID mem)
+      --          (getHID spc)
+      --          H5P_DEFAULT (castPtr ptr)
+      --   lift $ print =<< peekArray sz ptr
+      --   --
+      --   close spc

@@ -23,6 +23,7 @@ module HDF5.HL.Internal.Dataspace
   , createDataspace
   , withCreateDataspace
   , withEncodedExtent
+  , setSlabSelection
   ) where
 
 import Control.Applicative
@@ -230,3 +231,32 @@ withCreateDataspace
   -> (Dataspace -> IO a) -- ^ Continuation
   -> IO a
 withCreateDataspace dim dim_max = bracket (createDataspace dim dim_max) basicClose
+
+-- | Set selection in dataspace to a regular slab.
+setSlabSelection
+  :: (IsExtent dim)
+  => Dataspace
+  -> dim        -- ^ Offset
+  -> dim        -- ^ Size of selection
+  -> IO ()
+setSlabSelection (Dataspace hid) off sz = evalContT $ do
+  p_err     <- ContT alloca
+  --
+  rank_dset <- lift
+             $ checkCInt p_err "Cannot get rank of dataspace's extent"
+             $ h5s_get_simple_extent_ndims hid
+  --
+  (rank_off, p_off) <- checkJust =<< withEncodedExtent off
+  (rank_sz , p_sz)  <- checkJust =<< withEncodedExtent sz
+  when (rank_off /= rank_sz) $ throwM $
+    Error [Left "In dataspace selection ranks of an offset and size do not match"]
+  when (fromIntegral rank_dset /= rank_sz) $ throwM $
+    Error [Left "Rank of size does not match rank of dataset"]
+  lift $ checkHErr p_err "Unable to set simple hyperslab selection"
+       $ h5s_select_hyperslab hid H5S_SELECT_SET
+            p_off nullPtr
+            p_sz  nullPtr
+  pure ()
+  where
+    checkJust (Just a) = pure a
+    checkJust  Nothing = throwM $ Error [Left "Selection must be non-null"]

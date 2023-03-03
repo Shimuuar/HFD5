@@ -168,6 +168,10 @@ herr_t hs_H5Dwrite(hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t f
     CHECK_ERR(H5Dwrite(dset_id, mem_type_id, mem_space_id, file_space_id, dxpl_id, buf));
 }
 
+herr_t hs_H5Dset_extent(hid_t dset_id, const hsize_t size[], hid_t *error) {
+    CHECK_ERR(H5Dset_extent(dset_id, size));
+}
+
 /*
 hid_t H5Dcreate_anon(hid_t loc_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id)
 herr_t H5Dget_space_status(hid_t dset_id, H5D_space_status_t *allocation)
@@ -187,7 +191,6 @@ herr_t H5Dread_chunk(hid_t dset_id, hid_t dxpl_id, const hsize_t *offset, uint32
 herr_t H5Diterate(void *buf, hid_t type_id, hid_t space_id, H5D_operator_t op, void *operator_data)
 herr_t H5Dvlen_get_buf_size(hid_t dset_id, hid_t type_id, hid_t space_id, hsize_t *size)
 herr_t H5Dfill(const void *fill, hid_t fill_type_id, void *buf, hid_t buf_type_id, hid_t space_id)
-herr_t H5Dset_extent(hid_t dset_id, const hsize_t size[])
 herr_t H5Dflush(hid_t dset_id)
 herr_t H5Drefresh(hid_t dset_id)
 herr_t H5Dscatter(H5D_scatter_func_t op, void *op_data, hid_t type_id, hid_t dst_space_id, void *dst_buf)

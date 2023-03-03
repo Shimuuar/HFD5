@@ -38,6 +38,7 @@ hid_t hs_H5Dget_type(hid_t dset_id, hid_t *error);
 hid_t hs_H5Dget_space(hid_t dset_id, hid_t *error);
 herr_t hs_H5Dread(hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, void *buf, hid_t *error);
 herr_t hs_H5Dwrite(hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, const void *buf, hid_t *error);
+herr_t hs_H5Dset_extent(hid_t dset_id, const hsize_t size[], hid_t *error);
 
 herr_t hs_H5Eclose_msg(hid_t err_id, hid_t *error);
 herr_t hs_H5Eclose_stack(hid_t stack_id, hid_t *error);

@@ -185,6 +185,11 @@ class SerializeAttr a where
   basicFromAttrs :: HasCallStack => AttributeM a
   basicToAttrs   :: HasCallStack => a -> AttributeM ()
 
+instance SerializeAttr () where
+  basicToAttrs   = pure
+  basicFromAttrs = pure ()
+
+
 newtype AttributeM a = AttributeM
   { unAttributeM :: forall d. HasAttrs d => d -> (FilePath -> FilePath) -> IO a }
   deriving Functor

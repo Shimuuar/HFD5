@@ -7,6 +7,7 @@ module HDF5.HL.Internal.Property
   , withDatasetProps
   , propDatasetLayout
   , propDatasetChunking
+  , propDatasetDeflate
   ) where
 
 import Control.Applicative
@@ -68,3 +69,19 @@ propDatasetChunking dim = Property $ \p_err prop -> withFrozenCallStack $ evalCo
     Just (rank,p) -> lift
       $ checkHErr p_err "Unable to set chunk size"
       $ h5p_set_chunk (getHID prop) (fromIntegral rank) p
+
+-- | Use gzip compression for dataset. Compression level is specified
+--   by number. 0 is no compression (but compression filter is still
+--   present!) and 9 is highest.
+propDatasetDeflate
+  :: HasCallStack
+  => Int -- ^ Compression level. Out of range values are clamped
+  -> Property Dataset
+propDatasetDeflate lvl = Property $ \p_err prop -> withFrozenCallStack
+  $ checkHErr p_err "Unable to set compression level"
+  $ h5p_set_deflate (getHID prop) z
+  where
+    z | lvl < 0   = 0
+      | lvl > 9   = 9
+      | otherwise = fromIntegral lvl
+  

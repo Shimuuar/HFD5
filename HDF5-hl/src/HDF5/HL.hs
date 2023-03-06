@@ -75,6 +75,7 @@ module HDF5.HL
   , Layout(..)
   , propDatasetLayout
   , propDatasetChunking
+  , propDatasetDeflate
     -- ** Type classes
   , IsObject
   , IsDirectory

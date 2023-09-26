@@ -67,6 +67,10 @@ module HDF5.HL
   , tyI8, tyI16, tyI32, tyI64
   , tyU8, tyU16, tyU32, tyU64
   , tyF32, tyF64
+  , tyI8LE, tyI16LE, tyI32LE, tyI64LE
+  , tyU8LE, tyU16LE, tyU32LE, tyU64LE
+  , tyI8BE, tyI16BE, tyI32BE, tyI64BE
+  , tyU8BE, tyU16BE, tyU32BE, tyU64BE
   , pattern Array
   , makePackedRecord
   , makeEnumeration

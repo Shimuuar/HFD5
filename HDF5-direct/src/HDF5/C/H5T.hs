@@ -61,6 +61,22 @@ module HDF5.C.H5T
   , h5t_NATIVE_HSSIZE
   , h5t_NATIVE_HERR
   , h5t_NATIVE_HBOOL
+  , h5t_STD_I8BE
+  , h5t_STD_I8LE
+  , h5t_STD_I16BE
+  , h5t_STD_I16LE
+  , h5t_STD_I32BE
+  , h5t_STD_I32LE
+  , h5t_STD_I64BE
+  , h5t_STD_I64LE
+  , h5t_STD_U8BE
+  , h5t_STD_U8LE
+  , h5t_STD_U16BE
+  , h5t_STD_U16LE
+  , h5t_STD_U32BE
+  , h5t_STD_U32LE
+  , h5t_STD_U64BE
+  , h5t_STD_U64LE
     -- * Functions
   , h5t_close
   , h5t_create
@@ -296,6 +312,25 @@ foreign import capi "hdf5.h value H5T_NATIVE_HERR" h5t_NATIVE_HERR :: HID
 
 -- | Boolean type based on native types
 foreign import capi "hdf5.h value H5T_NATIVE_HBOOL" h5t_NATIVE_HBOOL :: HID
+
+
+
+foreign import capi "hdf5.h value H5T_STD_I8BE"  h5t_STD_I8BE  :: HID
+foreign import capi "hdf5.h value H5T_STD_I8LE"  h5t_STD_I8LE  :: HID
+foreign import capi "hdf5.h value H5T_STD_I16BE" h5t_STD_I16BE :: HID
+foreign import capi "hdf5.h value H5T_STD_I16LE" h5t_STD_I16LE :: HID
+foreign import capi "hdf5.h value H5T_STD_I32BE" h5t_STD_I32BE :: HID
+foreign import capi "hdf5.h value H5T_STD_I32LE" h5t_STD_I32LE :: HID
+foreign import capi "hdf5.h value H5T_STD_I64BE" h5t_STD_I64BE :: HID
+foreign import capi "hdf5.h value H5T_STD_I64LE" h5t_STD_I64LE :: HID
+foreign import capi "hdf5.h value H5T_STD_U8BE"  h5t_STD_U8BE  :: HID
+foreign import capi "hdf5.h value H5T_STD_U8LE"  h5t_STD_U8LE  :: HID
+foreign import capi "hdf5.h value H5T_STD_U16BE" h5t_STD_U16BE :: HID
+foreign import capi "hdf5.h value H5T_STD_U16LE" h5t_STD_U16LE :: HID
+foreign import capi "hdf5.h value H5T_STD_U32BE" h5t_STD_U32BE :: HID
+foreign import capi "hdf5.h value H5T_STD_U32LE" h5t_STD_U32LE :: HID
+foreign import capi "hdf5.h value H5T_STD_U64BE" h5t_STD_U64BE :: HID
+foreign import capi "hdf5.h value H5T_STD_U64LE" h5t_STD_U64LE :: HID
 
 
 ----------------------------------------------------------------
@@ -552,8 +587,8 @@ foreign import capi "hdf5-hs.h hs_H5Tenum_create" h5t_enum_create
 --   and use @H5Tconvert@ on values as they are read from or written
 --   to a dataset.
 foreign import capi "hdf5-hs.h hs_H5Tenum_insert" h5t_enum_insert
-  :: HID      -- ^ @type@ Datatype identifier 
-  -> CString  -- ^ @name@ Name of the new member 
+  :: HID      -- ^ @type@ Datatype identifier
+  -> CString  -- ^ @name@ Name of the new member
   -> Ptr x    -- ^ @value@ Pointer to the value of the new member
   -> HIO HErr -- ^ Returns a non-negative value if successful;
               --   otherwise returns a negative value.
@@ -566,9 +601,9 @@ foreign import capi "hdf5-hs.h hs_H5Tenum_insert" h5t_enum_insert
 --   fit in the name buffer, then as many characters as possible are
 --   copied (not null terminated) and the function fails.
 foreign import capi "hdf5-hs.h hs_H5Tenum_nameof" h5t_enum_nameof
-  :: HID      -- ^ @type@ Datatype identifier 
-  -> Ptr x    -- ^ @value@ Value of the enumeration datatype 
-  -> CString  -- ^ @[out]@ @name@ Buffer for output of the symbol name 
+  :: HID      -- ^ @type@ Datatype identifier
+  -> Ptr x    -- ^ @value@ Value of the enumeration datatype
+  -> CString  -- ^ @[out]@ @name@ Buffer for output of the symbol name
   -> CSize    -- ^ @size@ Anticipated size of the symbol name, in bytes
   -> HIO HErr -- ^ Returns a non-negative value if
               --   successful. Otherwise returns a negative value
@@ -585,8 +620,8 @@ foreign import capi "hdf5-hs.h hs_H5Tenum_nameof" h5t_enum_nameof
 --   that base type. If the size is unknown, you can determine it with
 --   @H5Tget_size@.
 foreign import capi "hdf5-hs.h hs_H5Tenum_valueof" h5t_enum_valueof
-  :: HID      -- ^ @type@ Datatype identifier 
-  -> CString  -- ^ @name@ Symbol name of the enumeration datatype 
+  :: HID      -- ^ @type@ Datatype identifier
+  -> CString  -- ^ @name@ Symbol name of the enumeration datatype
   -> Ptr x    -- ^ @[out]@ @value@ Buffer for the value of the
               --   enumeration datatype
   -> HIO HErr -- ^ Returns a non-negative value if successful;
@@ -605,8 +640,8 @@ foreign import capi "hdf5-hs.h hs_H5Tenum_valueof" h5t_enum_valueof
 --   that base type. If the size is unknown, you can determine it with
 --   @H5Tget_size@.
 foreign import capi "hdf5-hs.h hs_H5Tget_member_value" h5t_get_member_value
-  :: HID      -- ^ @type_id@ Datatype identifier 
-  -> CUInt    -- ^ @membno@ Number of the enumeration datatype member 
+  :: HID      -- ^ @type_id@ Datatype identifier
+  -> CUInt    -- ^ @membno@ Number of the enumeration datatype member
   -> Ptr x    -- ^ @[out]@ @value@ Buffer for the value of the enumeration datatype member
   -> HIO HErr -- ^ Returns a non-negative value if successful;
               --   otherwise returns a negative value.

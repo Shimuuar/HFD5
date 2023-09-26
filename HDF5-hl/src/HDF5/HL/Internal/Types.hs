@@ -25,6 +25,10 @@ module HDF5.HL.Internal.Types
   , tyI8, tyI16, tyI32, tyI64
   , tyU8, tyU16, tyU32, tyU64
   , tyF32, tyF64
+  , tyI8LE, tyI16LE, tyI32LE, tyI64LE
+  , tyU8LE, tyU16LE, tyU32LE, tyU64LE
+  , tyI8BE, tyI16BE, tyI32BE, tyI64BE
+  , tyU8BE, tyU16BE, tyU32BE, tyU64BE
     -- * Patterns
   , pattern Array
   , makePackedRecord
@@ -141,6 +145,30 @@ tyU64 = Native h5t_NATIVE_ULONG
 tyF32,tyF64 :: Type
 tyF32 = Native h5t_NATIVE_FLOAT
 tyF64 = Native h5t_NATIVE_DOUBLE
+
+tyI8LE,tyI16LE,tyI32LE,tyI64LE :: Type
+tyI8LE  = Native h5t_STD_I8LE
+tyI16LE = Native h5t_STD_I16LE
+tyI32LE = Native h5t_STD_I32LE
+tyI64LE = Native h5t_STD_I64LE
+
+tyU8LE,tyU16LE,tyU32LE,tyU64LE :: Type
+tyU8LE  = Native h5t_STD_U8LE
+tyU16LE = Native h5t_STD_U16LE
+tyU32LE = Native h5t_STD_U32LE
+tyU64LE = Native h5t_STD_U64LE
+
+tyI8BE,tyI16BE,tyI32BE,tyI64BE :: Type
+tyI8BE  = Native h5t_STD_I8BE
+tyI16BE = Native h5t_STD_I16BE
+tyI32BE = Native h5t_STD_I32BE
+tyI64BE = Native h5t_STD_I64BE
+
+tyU8BE,tyU16BE,tyU32BE,tyU64BE :: Type
+tyU8BE  = Native h5t_STD_U8BE
+tyU16BE = Native h5t_STD_U16BE
+tyU32BE = Native h5t_STD_U32BE
+tyU64BE = Native h5t_STD_U64BE
 
 pattern Array :: Type -> [Int] -> Type
 pattern Array ty dim <- (matchArray -> Just (ty, dim))

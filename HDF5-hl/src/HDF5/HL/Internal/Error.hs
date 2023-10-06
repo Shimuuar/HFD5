@@ -126,7 +126,7 @@ checkCInt p_err msg action =
     n | n < 0     -> throwM =<< decodeError p_err msg
       | otherwise -> pure n 
 
-checkCLLong :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO CLLong) -> IO CLLong
+checkCLLong :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO HSSize) -> IO HSSize
 {-# INLINE checkCLLong #-}
 checkCLLong p_err msg action =
   action p_err >>= \case

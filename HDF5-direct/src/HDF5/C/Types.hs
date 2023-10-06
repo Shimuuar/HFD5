@@ -38,6 +38,7 @@ module HDF5.C.Types
   ) where
 
 import Data.Int
+import Data.Word
 import Foreign.C
 import Foreign.Storable
 import Foreign.Ptr
@@ -78,8 +79,8 @@ pattern HOK      <- HErr ((>=0) -> True)
 {-# COMPLETE HErrored, HOK #-}
 
 
-type HSize  = CULLong
-type HSSize = CLLong
+type HSize  = Word64
+type HSSize = Int64
 
 -- | We use standard approach where last parameter of wrapper function
 --   is always pointer where we return error stack in case of error.

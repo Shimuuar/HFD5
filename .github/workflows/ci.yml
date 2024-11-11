@@ -17,16 +17,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - { cabal: "3.6", os: ubuntu-latest,  ghc: "8.10.7" }
-          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.0.1"  }
-          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.2.7"  }
-          - { cabal: "3.6", os: ubuntu-latest,  ghc: "9.4.4"  }
+          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.0.2"   }
+          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.2.8"   }
+          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.4.8"   }
+          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.6.6"   }
+          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.8.2"   }
+          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.10.1"  }
       fail-fast: false
     steps:
     # ----------------
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     # ----------------
-    - uses: haskell/actions/setup@v1
+    - uses: haskell-actions/setup@v2
       id: setup-haskell-cabal
       name: Setup Haskell
       with:
@@ -36,7 +38,7 @@ jobs:
     - name: "HDF5"
       run:  "sudo apt-get install libhdf5-dev"
     # ----------------
-    - uses: actions/cache@v1
+    - uses: actions/cache@v3
       name: Cache ~/.cabal/store
       with:
         path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}

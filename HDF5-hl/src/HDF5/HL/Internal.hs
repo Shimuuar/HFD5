@@ -221,45 +221,45 @@ basicDecodeAttr name = AttributeM $ \d fun -> do
 
 
 
-instance Element a => Serialize [a] where
+instance (Element a, Storable a) => Serialize [a] where
   type ElementOf [a] = a
   type ExtentOf  [a] = Int
   getExtent = length
 
-instance Element a => SerializeArr [a] where
+instance (Element a, Storable a) => SerializeArr [a] where
   basicReadArr  dset spc = VS.toList <$> basicReadArr dset spc
   basicWriteArr dset xs  = basicWriteArr dset (VS.fromList xs)
 
-instance Element a => SerializeSlab [a] where
+instance (Element a, Storable a) => SerializeSlab [a] where
   basicReadSlab  dset off sz = VS.toList <$> basicReadSlab dset off sz
   basicWriteSlab dset off xs = basicWriteSlab dset off (VS.fromList xs)
 
 
-instance (Element a, VU.Unbox a) => Serialize (VU.Vector a) where
+instance (Element a, Storable a, VU.Unbox a) => Serialize (VU.Vector a) where
   type ElementOf (VU.Vector a) = a
   type ExtentOf  (VU.Vector a) = Int
   getExtent = VU.length
 
-instance (Element a, VU.Unbox a) => SerializeArr (VU.Vector a) where
+instance (Element a, Storable a, VU.Unbox a) => SerializeArr (VU.Vector a) where
   basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
   basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
 
-instance (Element a, VU.Unbox a) => SerializeSlab (VU.Vector a) where
+instance (Element a, Storable a, VU.Unbox a) => SerializeSlab (VU.Vector a) where
   basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VS.Vector a) dset off sz
   basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VS.Vector a)
 
 
-instance (Element a) => Serialize (V.Vector a) where
+instance (Storable a, Element a) => Serialize (V.Vector a) where
   type ElementOf (V.Vector a) = a
   type ExtentOf  (V.Vector a) = Int
   getExtent = V.length
 
-instance (Element a) => SerializeArr (V.Vector a) where
+instance (Storable a, Element a) => SerializeArr (V.Vector a) where
   basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
   basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
 
-instance (Element a) => SerializeSlab (V.Vector a) where
-  basicReadSlab dset off sz = VG.convert <$> basicReadSlab @(VS.Vector a) dset off sz
+instance (Storable a, Element a) => SerializeSlab (V.Vector a) where
+  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VS.Vector a) dset off sz
   basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VS.Vector a)
 
 
@@ -267,19 +267,20 @@ instance (Element a) => SerializeSlab (V.Vector a) where
 -- Storable vector
 ----------------------------------------------------------------
 
-instance Element a => Serialize (VS.Vector a) where
+instance (Storable a, Element a) => Serialize (VS.Vector a) where
   type ElementOf (VS.Vector a) = a
   type ExtentOf  (VS.Vector a) = Int
   getExtent = VS.length
 
-instance Element a => SerializeArr (VS.Vector a) where
+instance (Storable a, Element a) => SerializeArr (VS.Vector a) where
   basicReadArr dset spc = do
     n <- dataspaceRank spc
     when (n /= Just 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
   basicWriteArr dset xs = VS.unsafeWith xs $ unsafeWriteAll dset (typeH5 @a)
 
-instance Element a => SerializeSlab (VS.Vector a) where
+instance (Storable a, Element a) => SerializeSlab (VS.Vector a) where
+  -- FIXME: Check that we don't rely on fact that Storable and Element match
   basicReadSlab dset off sz = evalContT $ do
     p_err <- ContT alloca
     -- File dataspace
@@ -357,9 +358,9 @@ deriving via SerializeAsScalar (FU.Vec n a)
     instance (F.Arity n, Element a, FU.Unbox n a) => SerializeArr (FU.Vec n a)
 
 deriving via SerializeAsScalar (FS.Vec n a)
-    instance (F.Arity n, Element a) => Serialize (FS.Vec n a)
+    instance (F.Arity n, Element a, Storable a) => Serialize (FS.Vec n a)
 deriving via SerializeAsScalar (FS.Vec n a)
-    instance (F.Arity n, Element a) => SerializeArr (FS.Vec n a)
+    instance (F.Arity n, Element a, Storable a) => SerializeArr (FS.Vec n a)
 
 deriving via SerializeAsScalar (FP.Vec n a)
     instance (F.Arity n, Element a, FP.Prim a) => Serialize (FP.Vec n a)
@@ -382,8 +383,8 @@ instance Element a => Serialize (SerializeAsScalar a) where
 instance Element a => SerializeArr (SerializeAsScalar a) where
   basicReadArr  dset spc = basicReadScalar dset spc
   basicWriteArr dset a   = evalContT $ do
-    p  <- ContT $ alloca
-    lift $ do poke p a
+    p  <- ContT $ allocaElement
+    lift $ do pokeH5 p a
               unsafeWriteAll dset (typeH5 @a) p
 
 ----------------------------------------------------------------
@@ -400,7 +401,7 @@ basicReadBuffer dset (Dataspace spc) = do
     n   <- withFrozenCallStack
          $ checkCLLong p_err "Cannot get number of points for dataspace"
          $ h5s_get_simple_extent_npoints spc
-    buf <- mallocForeignPtrArray (fromIntegral n)
+    buf <- undefined -- mallocForeignPtrArray (fromIntegral n)
     evalContT $ do
       p  <- ContT $ withForeignPtr buf
       lift $ do unsafeReadAll dset (typeH5 @a) (castPtr p)
@@ -416,5 +417,5 @@ basicReadScalar dset spc = do
     Nothing -> throwM $ Error [Left "Cannot read scalar from NULL dataset"]
     Just 0  -> pure ()
     Just _  -> throwM $ Error [Left "Cannot read scalar from non-scalar dataset"]
-  alloca $ \p -> do unsafeReadAll dset (typeH5 @a) p
-                    peek p
+  allocaElement $ \p -> do unsafeReadAll dset (typeH5 @a) p
+                           peekH5 p

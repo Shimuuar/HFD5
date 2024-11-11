@@ -20,7 +20,7 @@ Library
   Default-Language: Haskell2010
   hs-source-dirs:   src
   --
-  Build-Depends:    base         >=4.14 && <5
+  Build-Depends:    base         >=4.15 && <5
                   , HDF5-direct
                   , transformers
                   , exceptions

@@ -1,17 +1,20 @@
-{-# LANGUAGE AllowAmbiguousTypes  #-}
-{-# LANGUAGE BangPatterns         #-}
-{-# LANGUAGE CPP                  #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE ImportQualifiedPost  #-}
-{-# LANGUAGE LambdaCase           #-}
-{-# LANGUAGE MagicHash            #-}
-{-# LANGUAGE PatternSynonyms      #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TypeApplications     #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE UnboxedTuples        #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ViewPatterns         #-}
+{-# LANGUAGE AllowAmbiguousTypes        #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImportQualifiedPost        #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MagicHash                  #-}
+{-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE UnboxedTuples              #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE ViewPatterns               #-}
 -- |
 -- API for working with HDF5 data types. We treat them as immutable
 -- while they're mutable in HDF5.
@@ -35,6 +38,13 @@ module HDF5.HL.Internal.Types
   , makeEnumeration
     -- * Element
   , Element(..)
+  , peekElemOffH5
+  , peekByteOffH5
+  , pokeElemOffH5
+  , pokeByteOffH5
+  , allocaElement
+  , advancePtrH5
+  , mallocVectorH5
   ) where
 
 import Control.Monad
@@ -53,13 +63,17 @@ import Data.Vector.Fixed.Unboxed   qualified as FU
 import Data.Vector.Fixed.Boxed     qualified as FB
 import Data.Vector.Fixed.Storable  qualified as FS
 import Data.Vector.Fixed.Primitive qualified as FP
-import Foreign.Marshal             (alloca, allocaArray, allocaArray0, withArray, peekArray)
+import Foreign.Marshal             (alloca, allocaArray, allocaArray0, withArray, peekArray,
+                                    allocaBytesAligned
+                                   )
 import Foreign.Ptr
+import Foreign.ForeignPtr
 import Foreign.C.String
 import Foreign.Storable
 import System.IO.Unsafe
 import GHC.Exts
 import GHC.Stack
+import GHC.ForeignPtr  (mallocPlainForeignPtrAlignedBytes)
 import GHC.IO          (IO(..))
 
 import HDF5.HL.Internal.Error
@@ -233,7 +247,7 @@ makePackedRecord fields = unsafePerformIO $ withFrozenCallStack $ unsafeNewType 
 makeEnumeration :: forall a. (Element a, HasCallStack) => [(String,a)] -> Type
 makeEnumeration elems = unsafePerformIO $ withFrozenCallStack $ unsafeNewType $ evalContT $ do
   p_err    <- ContT $ alloca
-  p_val    <- ContT $ alloca
+  p_val    <- ContT $ allocaElement
   base_tid <- ContT $ withType (typeH5 @a)
   -- Create enumeration data type. We want to release it in case of
   -- any exception
@@ -243,7 +257,7 @@ makeEnumeration elems = unsafePerformIO $ withFrozenCallStack $ unsafeNewType $ 
     (\tid -> void $ h5t_close tid p_err)
   lift $ do
     forM_ elems $ \(nm,a) -> do
-      poke p_val a
+      pokeH5 p_val a
       withCString nm $ \c_nm ->
           checkHErr p_err "Cannot add member to enumeration"
         $ h5t_enum_insert tid c_nm p_val
@@ -256,43 +270,162 @@ makeEnumeration elems = unsafePerformIO $ withFrozenCallStack $ unsafeNewType $ 
 
 -- | Data type which corresponds to some HDF data type and could read
 --   from buffer using 'Storable'.
-class Storable a => Element a where
-  typeH5 :: Type
-
-instance Element Int8   where typeH5 = tyI8
-instance Element Int16  where typeH5 = tyI16
-instance Element Int32  where typeH5 = tyI32
-instance Element Int64  where typeH5 = tyI64
-instance Element Word8  where typeH5 = tyU8
-instance Element Word16 where typeH5 = tyU16
-instance Element Word32 where typeH5 = tyU32
-instance Element Word64 where typeH5 = tyU64
-
-instance Element Float  where typeH5 = tyF32
-instance Element Double where typeH5 = tyF64
-
--- | Uses same convention as @h5py@ by default.
-instance Element a => Element (Complex a) where
-  typeH5 = makePackedRecord [("r",ty), ("i",ty)] where ty = typeH5 @a
+class Element a where
+  typeH5   :: Type
+  fastSizeOfH5 :: Int
+  fastSizeOfH5 = sizeOfH5 (typeH5 @a)
+  alignmentH5 :: Int
+  peekH5 :: Ptr a -> IO a
+  pokeH5 :: Ptr a -> a -> IO ()
 
 
-instance (Element a, F.Arity n) => Element (FB.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
-instance (Element a, F.Arity n, FU.Unbox n a) => Element (FU.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
-instance (Element a, F.Arity n) => Element (FS.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
-instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
-  typeH5 = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
 
-instance Element a => Element (Identity a) where typeH5 = typeH5 @a
+peekElemOffH5 :: forall a. Element a => Ptr a -> Int -> IO a
+{-# INLINE peekElemOffH5 #-}
+peekElemOffH5 ptr off = peekByteOffH5 ptr (off * fastSizeOfH5 @a)
+
+pokeElemOffH5 :: forall a. Element a => Ptr a -> Int -> a -> IO ()
+{-# INLINE pokeElemOffH5 #-}
+pokeElemOffH5 ptr off = pokeByteOffH5 ptr (off * fastSizeOfH5 @a)
+
+peekByteOffH5 :: Element a => Ptr a -> Int -> IO a
+{-# INLINE peekByteOffH5 #-}
+peekByteOffH5 ptr off = peekH5 (ptr `plusPtr` off)
+
+pokeByteOffH5 :: Element a => Ptr a -> Int -> a -> IO ()
+{-# INLINE pokeByteOffH5 #-}
+pokeByteOffH5 ptr off = pokeH5 (ptr `plusPtr` off)
+
+
+allocaElement :: forall a b. Element a => (Ptr a -> IO b) -> IO b
+allocaElement = allocaBytesAligned (fastSizeOfH5 @a) (alignmentH5 @a)
+
+advancePtrH5 :: forall a. Element a => Ptr a -> Int -> Ptr a
+{-# INLINE advancePtrH5 #-}
+advancePtrH5 ptr off = ptr `plusPtr` (off * fastSizeOfH5 @a)
+
+mallocVectorH5 :: forall a. Element a => Int -> IO (ForeignPtr a)
+{-# INLINE mallocVectorH5 #-}
+mallocVectorH5 size = mallocPlainForeignPtrAlignedBytes
+  (size * fastSizeOfH5 @a)
+  (alignmentH5 @a)
+
 
 instance Element Int where
   typeH5 | wordSizeInBits == 64 = tyI64
          | otherwise            = tyI32
+  fastSizeOfH5 = sizeOf    (undefined :: Int)
+  alignmentH5  = alignment (undefined :: Int)
+  peekH5       = peek
+  pokeH5       = poke
 instance Element Word where
   typeH5 | wordSizeInBits == 64 = tyU64
          | otherwise            = tyU32
+  fastSizeOfH5 = sizeOf    (undefined :: Word)
+  alignmentH5  = alignment (undefined :: Word)
+  peekH5       = peek
+  pokeH5       = poke
+
+
+instance Element Int8   where
+  typeH5       = tyI8
+  fastSizeOfH5 = sizeOf    (undefined :: Int8)
+  alignmentH5  = alignment (undefined :: Int8)
+  peekH5       = peek
+  pokeH5       = poke
+instance Element Int16  where
+  typeH5       = tyI16
+  fastSizeOfH5 = sizeOf    (undefined :: Int16)
+  alignmentH5  = alignment (undefined :: Int16)
+  peekH5       = peek
+  pokeH5       = poke
+instance Element Int32  where
+  typeH5       = tyI32
+  fastSizeOfH5 = sizeOf    (undefined :: Int32)
+  alignmentH5  = alignment (undefined :: Int32)
+  peekH5       = peek
+  pokeH5       = poke
+instance Element Int64  where
+  typeH5       = tyI64
+  fastSizeOfH5 = sizeOf    (undefined :: Int64)
+  alignmentH5  = alignment (undefined :: Int64)
+  peekH5       = peek
+  pokeH5       = poke
+instance Element Word8  where
+  typeH5       = tyU8
+  fastSizeOfH5 = sizeOf    (undefined :: Word8)
+  alignmentH5  = alignment (undefined :: Word8)
+  peekH5       = peek
+  pokeH5       = poke
+instance Element Word16 where
+  typeH5       = tyU16
+  fastSizeOfH5 = sizeOf    (undefined :: Word16)
+  alignmentH5  = alignment (undefined :: Word16)
+  peekH5       = peek
+  pokeH5       = poke
+instance Element Word32 where
+  typeH5       = tyU32
+  fastSizeOfH5 = sizeOf    (undefined :: Word32)
+  alignmentH5  = alignment (undefined :: Word32)
+  peekH5       = peek
+  pokeH5       = poke
+instance Element Word64 where
+  typeH5       = tyU64
+  fastSizeOfH5 = sizeOf    (undefined :: Word64)
+  alignmentH5  = alignment (undefined :: Word64)
+  peekH5       = peek
+  pokeH5       = poke
+
+instance Element Float  where
+  typeH5       = tyF32
+  fastSizeOfH5 = sizeOf    (undefined :: Float)
+  alignmentH5  = alignment (undefined :: Float)
+  peekH5       = peek
+  pokeH5       = poke
+instance Element Double where
+  typeH5       = tyF64
+  fastSizeOfH5 = sizeOf    (undefined :: Double)
+  alignmentH5  = alignment (undefined :: Double)
+  peekH5       = peek
+  pokeH5       = poke
+
+-- | Uses same convention as @h5py@ by default.
+instance Element a => Element (Complex a) where
+  typeH5       = makePackedRecord [("r",ty), ("i",ty)] where ty = typeH5 @a
+  fastSizeOfH5 = 2 * fastSizeOfH5 @a
+  alignmentH5  = alignmentH5 @a
+  peekH5 ptr   = (:+) <$> peekH5 (castPtr ptr) <*> peekElemOffH5 (castPtr ptr) 1
+  pokeH5 ptr (re :+ im) = do
+    pokeH5        (castPtr ptr)   re
+    pokeElemOffH5 (castPtr ptr) 1 im
+
+instance (Element a, F.Arity n) => Element (FB.Vec n a) where
+  typeH5       = Array (typeH5 @a) [F.length (undefined :: FB.Vec n a)]
+  fastSizeOfH5 = fastSizeOfH5 @a *  F.length (undefined :: FB.Vec n a)
+  alignmentH5  = alignmentH5  @a
+  peekH5 ptr   = F.generateM (peekElemOffH5 (castPtr ptr))
+  pokeH5 ptr v = F.imapM_ (pokeElemOffH5 (castPtr ptr)) v
+
+instance (Element a, F.Arity n, FU.Unbox n a) => Element (FU.Vec n a) where
+  typeH5       = Array (typeH5 @a) [F.length (undefined :: FU.Vec n a)]
+  fastSizeOfH5 = fastSizeOfH5 @a *  F.length (undefined :: FU.Vec n a)
+  alignmentH5  = alignmentH5  @a
+  peekH5 ptr   = F.generateM (peekElemOffH5 (castPtr ptr))
+  pokeH5 ptr v = F.imapM_ (pokeElemOffH5 (castPtr ptr)) v
+instance (Element a, F.Arity n, Storable a) => Element (FS.Vec n a) where
+  typeH5       = Array (typeH5 @a) [F.length (undefined :: FS.Vec n a)]
+  fastSizeOfH5 = fastSizeOfH5 @a *  F.length (undefined :: FS.Vec n a)
+  alignmentH5  = alignmentH5  @a
+  peekH5 ptr   = F.generateM (peekElemOffH5 (castPtr ptr))
+  pokeH5 ptr v = F.imapM_ (pokeElemOffH5 (castPtr ptr)) v
+instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
+  typeH5       = Array (typeH5 @a) [F.length (undefined :: FP.Vec n a)]
+  fastSizeOfH5 = fastSizeOfH5 @a *  F.length (undefined :: FP.Vec n a)
+  alignmentH5  = alignmentH5  @a
+  peekH5 ptr   = F.generateM (peekElemOffH5 (castPtr ptr))
+  pokeH5 ptr v = F.imapM_ (pokeElemOffH5 (castPtr ptr)) v
+
+deriving newtype instance Element a => Element (Identity a)
 
 wordSizeInBits :: Int
 wordSizeInBits = finiteBitSize (0 :: Word)

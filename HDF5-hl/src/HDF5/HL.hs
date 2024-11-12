@@ -95,7 +95,6 @@ module HDF5.HL
     -- ** Type classes
   , Element(..)
   , Serialize(..)
-  , SerializeArr(..)
   , SerializeSlab(..)
     -- ** Primitives
   , basicReadBuffer
@@ -124,7 +123,7 @@ import Foreign.Storable
 import GHC.Stack
 
 import HDF5.HL.Internal            qualified as HIO
-import HDF5.HL.Internal            ( SerializeAttr(..), Serialize(..), SerializeArr(..), SerializeSlab(..)
+import HDF5.HL.Internal            ( SerializeAttr(..), Serialize(..), SerializeSlab(..)
                                    , basicReadBuffer, basicReadScalar)
 import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Wrappers
@@ -364,7 +363,7 @@ readDataset :: (Serialize a, MonadIO m, HasCallStack) => Dataset -> m a
 readDataset d = liftIO $ withDataspace d $ \spc -> basicRead d spc
 
 -- | Read value from already opened dataset or attribute.
-readObject :: (SerializeArr a, HasData d, MonadIO m, HasCallStack) => d -> m a
+readObject :: (Serialize a, HasData d, MonadIO m, HasCallStack) => d -> m a
 readObject = liftIO . HIO.basicReadObject
 
 -- | Open dataset and read it using 'readDSet'.
@@ -471,7 +470,7 @@ withAttr a path = bracket (openAttr a path) (mapM_ close)
 
 -- | Create attribute
 createAttr
-  :: forall a dir m. (SerializeArr a, HasAttrs dir, MonadIO m, HasCallStack)
+  :: forall a dir m. (Serialize a, HasAttrs dir, MonadIO m, HasCallStack)
   => dir    -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> a      -- ^ Value to store in attribute
@@ -479,7 +478,7 @@ createAttr
 createAttr dir path a = liftIO $ HIO.basicCreateAttr dir path a
 
 readAttr
-  :: (SerializeArr a, HasAttrs d, MonadIO m, HasCallStack)
+  :: (Serialize a, HasAttrs d, MonadIO m, HasCallStack)
   => d      -- ^ Dataset or group
   -> String -- ^ Attribute name
   -> m (Maybe a)

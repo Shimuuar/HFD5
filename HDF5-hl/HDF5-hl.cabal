@@ -24,10 +24,13 @@ Library
                   , HDF5-direct
                   , transformers
                   , exceptions
+                  , primitive    >=0.7
+                  , deepseq      >=1.4
                   , vector       >=0.13
                   , fixed-vector >=1.2.2.1
   Exposed-modules:
         HDF5.HL
+        HDF5.HL.Vector
         HDF5.HL.Internal
         HDF5.HL.Internal.Dataspace
         HDF5.HL.Internal.Enum

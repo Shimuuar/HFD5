@@ -38,11 +38,13 @@ module HDF5.HL.Internal.Types
   , makeEnumeration
     -- * Element
   , Element(..)
-  , allocaElement
   , peekElemOffH5
   , peekByteOffH5
   , pokeElemOffH5
   , pokeByteOffH5
+  , allocaElement
+  , advancePtrH5
+  , mallocVectorH5
   ) where
 
 import Control.Monad
@@ -65,11 +67,13 @@ import Foreign.Marshal             (alloca, allocaArray, allocaArray0, withArray
                                     allocaBytesAligned
                                    )
 import Foreign.Ptr
+import Foreign.ForeignPtr
 import Foreign.C.String
 import Foreign.Storable
 import System.IO.Unsafe
 import GHC.Exts
 import GHC.Stack
+import GHC.ForeignPtr  (mallocPlainForeignPtrAlignedBytes)
 import GHC.IO          (IO(..))
 
 import HDF5.HL.Internal.Error
@@ -296,6 +300,15 @@ pokeByteOffH5 ptr off = pokeH5 (ptr `plusPtr` off)
 allocaElement :: forall a b. Element a => (Ptr a -> IO b) -> IO b
 allocaElement = allocaBytesAligned (fastSizeOfH5 @a) (alignmentH5 @a)
 
+advancePtrH5 :: forall a. Element a => Ptr a -> Int -> Ptr a
+{-# INLINE advancePtrH5 #-}
+advancePtrH5 ptr off = ptr `plusPtr` (off * fastSizeOfH5 @a)
+
+mallocVectorH5 :: forall a. Element a => Int -> IO (ForeignPtr a)
+{-# INLINE mallocVectorH5 #-}
+mallocVectorH5 size = mallocPlainForeignPtrAlignedBytes
+  (size * fastSizeOfH5 @a)
+  (alignmentH5 @a)
 
 
 instance Element Int where
@@ -411,7 +424,6 @@ instance (Element a, F.Arity n, FP.Prim a) => Element (FP.Vec n a) where
   alignmentH5  = alignmentH5  @a
   peekH5 ptr   = F.generateM (peekElemOffH5 (castPtr ptr))
   pokeH5 ptr v = F.imapM_ (pokeElemOffH5 (castPtr ptr)) v
-
 
 deriving newtype instance Element a => Element (Identity a)
 

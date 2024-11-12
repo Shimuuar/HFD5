@@ -52,6 +52,7 @@ import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Dataspace
+import HDF5.HL.Vector
 import HDF5.C
 import Prelude hiding (read,readIO)
 
@@ -221,51 +222,47 @@ basicDecodeAttr name = AttributeM $ \d fun -> do
 
 
 
-instance (Element a, Storable a) => Serialize [a] where
+instance (Element a) => Serialize [a] where
   type ElementOf [a] = a
   type ExtentOf  [a] = Int
   getExtent = length
 
-instance (Element a, Storable a) => SerializeArr [a] where
-  basicReadArr  dset spc = VS.toList <$> basicReadArr dset spc
-  basicWriteArr dset xs  = basicWriteArr dset (VS.fromList xs)
+instance (Element a) => SerializeArr [a] where
+  basicReadArr  dset spc = VG.toList <$> basicReadArr @(VecHDF5 a) dset spc
+  basicWriteArr dset xs  = basicWriteArr dset (VG.fromList @VecHDF5 xs)
 
-instance (Element a, Storable a) => SerializeSlab [a] where
-  basicReadSlab  dset off sz = VS.toList <$> basicReadSlab dset off sz
-  basicWriteSlab dset off xs = basicWriteSlab dset off (VS.fromList xs)
+instance (Element a) => SerializeSlab [a] where
+  basicReadSlab  dset off sz = VG.toList <$> basicReadSlab @(VecHDF5 a) dset off sz
+  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.fromList @VecHDF5 xs)
 
 
-instance (Element a, Storable a, VU.Unbox a) => Serialize (VU.Vector a) where
+instance (Element a, VU.Unbox a) => Serialize (VU.Vector a) where
   type ElementOf (VU.Vector a) = a
   type ExtentOf  (VU.Vector a) = Int
   getExtent = VU.length
 
-instance (Element a, Storable a, VU.Unbox a) => SerializeArr (VU.Vector a) where
-  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
-  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
+instance (Element a, VU.Unbox a) => SerializeArr (VU.Vector a) where
+  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VecHDF5 a) dset spc
+  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VecHDF5 a)
 
-instance (Element a, Storable a, VU.Unbox a) => SerializeSlab (VU.Vector a) where
-  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VS.Vector a) dset off sz
-  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VS.Vector a)
+instance (Element a, VU.Unbox a) => SerializeSlab (VU.Vector a) where
+  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
+  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
 
 
-instance (Storable a, Element a) => Serialize (V.Vector a) where
+instance (Element a) => Serialize (V.Vector a) where
   type ElementOf (V.Vector a) = a
   type ExtentOf  (V.Vector a) = Int
   getExtent = V.length
 
-instance (Storable a, Element a) => SerializeArr (V.Vector a) where
-  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
-  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
+instance (Element a) => SerializeArr (V.Vector a) where
+  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VecHDF5 a) dset spc
+  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VecHDF5 a)
 
-instance (Storable a, Element a) => SerializeSlab (V.Vector a) where
-  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VS.Vector a) dset off sz
-  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VS.Vector a)
+instance (Element a) => SerializeSlab (V.Vector a) where
+  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
+  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
 
-
-----------------------------------------------------------------
--- Storable vector
-----------------------------------------------------------------
 
 instance (Storable a, Element a) => Serialize (VS.Vector a) where
   type ElementOf (VS.Vector a) = a
@@ -273,14 +270,32 @@ instance (Storable a, Element a) => Serialize (VS.Vector a) where
   getExtent = VS.length
 
 instance (Storable a, Element a) => SerializeArr (VS.Vector a) where
+  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
+  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
+
+instance (Storable a, Element a) => SerializeSlab (VS.Vector a) where
+  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
+  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
+
+
+----------------------------------------------------------------
+-- Vector with HDF5 encoding
+----------------------------------------------------------------
+
+instance (Element a) => Serialize (VecHDF5 a) where
+  type ElementOf (VecHDF5 a) = a
+  type ExtentOf  (VecHDF5 a) = Int
+  getExtent = VG.length
+
+instance (Element a) => SerializeArr (VecHDF5 a) where
   basicReadArr dset spc = do
     n <- dataspaceRank spc
     when (n /= Just 1) $ error "Invalid dimention"
     basicReadBuffer dset spc
-  basicWriteArr dset xs = VS.unsafeWith xs $ unsafeWriteAll dset (typeH5 @a)
+  basicWriteArr dset xs = unsafeWithH5 xs $ unsafeWriteAll dset (typeH5 @a)
 
-instance (Storable a, Element a) => SerializeSlab (VS.Vector a) where
-  -- FIXME: Check that we don't rely on fact that Storable and Element match
+
+instance (Element a) => SerializeSlab (VecHDF5 a) where
   basicReadSlab dset off sz = evalContT $ do
     p_err <- ContT alloca
     -- File dataspace
@@ -290,13 +305,13 @@ instance (Storable a, Element a) => SerializeSlab (VS.Vector a) where
     spc_mem <- ContT $ withCreateDataspace sz Nothing
     -- Prepare reading
     tid     <- ContT $ withType (typeH5 @a)
-    buf     <- lift  $ mallocForeignPtrArray sz
+    buf     <- lift  $ mallocVectorH5 sz
     ptr     <- ContT $ withForeignPtr buf
     lift $ checkHErr p_err "Reading dataset data failed"
          $ h5d_read (getHID dset) tid
              (getHID spc_mem) (getHID spc_file)
              H5P_DEFAULT (castPtr ptr)
-    pure $! VS.unsafeFromForeignPtr0 buf sz
+    pure $! unsafeFromForeignPtr buf sz
   --
   basicWriteSlab dset off vec = evalContT $ do
     p_err <- ContT alloca
@@ -307,12 +322,12 @@ instance (Storable a, Element a) => SerializeSlab (VS.Vector a) where
     spc_mem <- ContT $ withCreateDataspace sz Nothing
     -- Writing
     tid <- ContT $ withType (typeH5 @a)
-    ptr <- ContT $ VS.unsafeWith vec
+    ptr <- ContT $ unsafeWithH5 vec
     lift $ checkHErr p_err "Writing dataset data failed"
          $ h5d_write (getHID dset) tid
              (getHID spc_mem) (getHID spc_file) H5P_DEFAULT ptr
     where
-      sz = VS.length vec
+      sz = VG.length vec
 
 
 deriving via SerializeAsScalar Int8   instance SerializeArr Int8
@@ -395,17 +410,17 @@ basicReadBuffer
   :: forall a d. (Element a, HasData d, HasCallStack)
   => d
   -> Dataspace
-  -> IO (VS.Vector a)
+  -> IO (VecHDF5 a)
 basicReadBuffer dset (Dataspace spc) = do
   alloca $ \p_err -> do
     n   <- withFrozenCallStack
          $ checkCLLong p_err "Cannot get number of points for dataspace"
          $ h5s_get_simple_extent_npoints spc
-    buf <- undefined -- mallocForeignPtrArray (fromIntegral n)
+    buf <- mallocVectorH5 (fromIntegral n)
     evalContT $ do
       p  <- ContT $ withForeignPtr buf
       lift $ do unsafeReadAll dset (typeH5 @a) (castPtr p)
-                pure $! VS.unsafeFromForeignPtr0 buf (fromIntegral n)
+                pure $! unsafeFromForeignPtr buf (fromIntegral n)
 
 basicReadScalar
   :: forall a d. (Element a, HasData d, HasCallStack)

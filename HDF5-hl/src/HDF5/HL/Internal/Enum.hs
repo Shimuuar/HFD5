@@ -1,7 +1,4 @@
-{-# LANGUAGE DerivingStrategies  #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeFamilies #-}
 -- |
 -- Mapping of C enums from HDF to haskell data types
 module HDF5.HL.Internal.Enum

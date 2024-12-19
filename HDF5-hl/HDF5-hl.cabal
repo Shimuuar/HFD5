@@ -16,9 +16,22 @@ Category:       Data
 Build-Type:     Simple
 
 Library
-  Ghc-options:      -Wall -O2
-  Default-Language: Haskell2010
-  hs-source-dirs:   src
+  Ghc-options:        -Wall -O2
+  Default-Language:   GHC2021
+  Default-Extensions: NoPolyKinds
+                      --
+                      --NoFieldSelectors
+                      --OverloadedRecordDot
+                      --DuplicateRecordFields
+                      --
+                      DataKinds
+                      DerivingStrategies
+                      DerivingVia
+                      LambdaCase
+                      ViewPatterns
+                      PatternSynonyms
+                      MultiWayIf
+  hs-source-dirs:     src
   --
   Build-Depends:    base         >=4.15 && <5
                   , HDF5-direct

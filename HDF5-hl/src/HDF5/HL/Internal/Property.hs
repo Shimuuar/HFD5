@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 -- |
 module HDF5.HL.Internal.Property
   ( -- * Property lists

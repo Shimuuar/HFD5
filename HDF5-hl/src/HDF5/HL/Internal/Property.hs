@@ -9,7 +9,6 @@ module HDF5.HL.Internal.Property
   , propDatasetDeflate
   ) where
 
-import Control.Applicative
 import Control.Monad.Catch
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont

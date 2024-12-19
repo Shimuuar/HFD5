@@ -34,7 +34,6 @@ import Data.Functor
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.Marshal
-import Foreign.C.Types
 import GHC.Stack
 
 import HDF5.HL.Internal.Wrappers

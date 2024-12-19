@@ -1,4 +1,3 @@
 packages:
         HDF5-direct
         HDF5-hl
-        HDF5-test

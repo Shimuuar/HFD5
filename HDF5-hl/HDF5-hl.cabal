@@ -33,7 +33,7 @@ Library
                       MultiWayIf
   hs-source-dirs:     src
   --
-  Build-Depends:    base         >=4.15 && <5
+  Build-Depends:    base         >=4.16 && <5
                   , HDF5-direct
                   , transformers
                   , exceptions

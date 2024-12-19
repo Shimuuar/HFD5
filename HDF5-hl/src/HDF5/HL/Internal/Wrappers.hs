@@ -90,32 +90,32 @@ withDataspace a = bracket (getDataspaceIO a) basicClose
 -- Files, groups, datasets
 ----------------------------------------------------------------
 
--- | Handle for working with HDF5 file
+-- | Handle for working with HDF5 file.
 newtype File = File HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
--- | Handle for working with group (directory)
+-- | Handle for working with group (directory).
 newtype Group = Group HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
--- | Handle for dataset
+-- | Handle for dataset.
 newtype Dataset = Dataset HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
--- | Handle for attribute
+-- | Handle for attribute attached to file, group, directory.
 newtype Attribute = Attribute HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
--- | Handle for dataspace
+-- | Handle for dataspace.
 newtype Dataspace = Dataspace HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
--- | Property list for values of type @p@
+-- | Property list for values of type @p@.
 newtype PropertyHID p = PropertyHID HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject

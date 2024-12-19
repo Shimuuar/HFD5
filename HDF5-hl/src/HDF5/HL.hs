@@ -1,12 +1,13 @@
 -- |
+-- High level API for working with HDF5 files
 module HDF5.HL
   ( -- * Data types and common operations
     -- ** File operations
     File
   , OpenMode(..)
+  , CreateMode(..)
   , openFile
   , withOpenFile
-  , CreateMode(..)
   , createFile
   , withCreateFile
     -- ** Group operation
@@ -179,9 +180,10 @@ withCreateFile path mode = bracket (createFile path mode) close
 -- Group API
 ----------------------------------------------------------------
 
+-- | Obtain handle to directory 
 openGroup
   :: (IsDirectory dir, MonadIO m, HasCallStack)
-  => dir      -- ^ Location
+  => dir      -- ^ Location. Either 'File' or 'Group'
   -> FilePath -- ^ Name of group
   -> m Group
 openGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
@@ -191,17 +193,19 @@ openGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
        $ checkHID p_err ("Cannot open group " ++ path)
        $ h5g_open (getHID dir) c_path H5P_DEFAULT
 
+-- | @bracket-style wrapper for 'openGroup'
 withOpenGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
-  => dir              -- ^ Location
+  => dir              -- ^ Location. Either 'File' or 'Group'
   -> FilePath         -- ^ Name of group
   -> (Group -> m a)
   -> m a
 withOpenGroup dir path = bracket (openGroup dir path) close
 
+-- | Create group in HDF5 file or in some group.
 createGroup
   :: (IsDirectory dir, MonadIO m, HasCallStack)
-  => dir       -- ^ Location
+  => dir       -- ^ Location. Either 'File' or 'Group'
   -> FilePath  -- ^ Name of group
   -> m Group
 createGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
@@ -211,9 +215,10 @@ createGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
        $ checkHID p_err ("Cannot create group " ++ path)
        $ h5g_create (getHID dir) c_path H5P_DEFAULT H5P_DEFAULT H5P_DEFAULT
 
+-- | @bracket-style wrapper for 'createGroup'
 withCreateGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
-  => dir              -- ^ Location
+  => dir              -- ^ Location. Either 'File' or 'Group'
   -> FilePath         -- ^ Name of group
   -> (Group -> m a)
   -> m a

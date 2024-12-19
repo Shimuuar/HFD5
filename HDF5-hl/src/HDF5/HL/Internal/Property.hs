@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- |
 module HDF5.HL.Internal.Property
   ( -- * Property lists
@@ -9,6 +10,9 @@ module HDF5.HL.Internal.Property
   , propDatasetDeflate
   ) where
 
+#if MIN_VERSION_base(4,18,0)
+import Control.Applicative(liftA2)
+#endif
 import Control.Monad.Catch
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont

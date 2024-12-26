@@ -258,11 +258,16 @@ makeEnumeration elems = unsafePerformIO $ withFrozenCallStack $ unsafeNewType $ 
 -- | Data type which corresponds to some HDF data type and could read
 --   from buffer using 'Storable'.
 class Element a where
-  typeH5   :: Type
+  -- | HDF5 type of element.
+  typeH5 :: Type
+  -- | Compute size of element. It must be same as @sizeOfH5 (typeH5 \@a)@
   fastSizeOfH5 :: Int
   fastSizeOfH5 = sizeOfH5 (typeH5 @a)
+
   alignmentH5 :: Int
+  -- | Read haskell data type from buffer
   peekH5 :: Ptr a -> IO a
+  -- | Write haskell data type into buffer
   pokeH5 :: Ptr a -> a -> IO ()
 
 

@@ -42,6 +42,7 @@ import Control.Monad.Trans.Cont
 import Data.Bits                  (finiteBitSize)
 import Data.IORef
 import Data.Complex
+import Data.Proxy
 import Data.Int
 import Data.Word
 import Data.Functor.Identity
@@ -58,13 +59,14 @@ import Foreign.ForeignPtr
 import Foreign.C.String
 import Foreign.Storable
 import System.IO.Unsafe
-import GHC.Exts
+import GHC.Exts        (keepAlive#)
 import GHC.Stack
+import GHC.Generics
+import GHC.TypeLits
 import GHC.ForeignPtr  (mallocPlainForeignPtrAlignedBytes)
 import GHC.IO          (IO(..))
 
 import HDF5.HL.Internal.Error
--- import HDF5.HL.Internal.Types
 import HDF5.C
 
 ----------------------------------------------------------------
@@ -421,3 +423,68 @@ deriving newtype instance Element a => Element (Identity a)
 
 wordSizeInBits :: Int
 wordSizeInBits = finiteBitSize (0 :: Word)
+
+
+-- | Derives HDF5 type as record. Uses 'makePackedRecord'
+instance ( Generic a
+         , GRecElement (Rep a)
+         ) => Element (Generically a) where
+  typeH5       = makePackedRecord $ gtypeH5 @(Rep a) []
+  alignmentH5  = galignmentH5 @(Rep a)
+  fastSizeOfH5 = gfastSizeOfH5 @(Rep a)
+  peekH5 p = do
+    (f,_) <- gpeekH5 (castPtr p) 0
+    pure $! Generically $ to f
+  pokeH5 p (Generically a) = void $ gpokeH5 (castPtr p) 0 (from a)
+  {-# INLINE typeH5       #-}
+  {-# INLINE alignmentH5  #-}
+  {-# INLINE fastSizeOfH5 #-}
+  {-# INLINE peekH5       #-}
+  {-# INLINE pokeH5       #-}
+
+class GRecElement f where
+  gtypeH5 :: [(String,Type)] -> [(String,Type)]
+  gfastSizeOfH5 :: Int
+  galignmentH5 :: Int
+  gpeekH5 :: Ptr () -> Int -> IO (f p, Int)
+  gpokeH5 :: Ptr () -> Int -> f p -> IO Int
+
+deriving newtype instance GRecElement f => GRecElement (M1 D i f)
+deriving newtype instance GRecElement f => GRecElement (M1 C i f)
+
+instance (GRecElement f, GRecElement g) => GRecElement (f :*: g) where
+  gtypeH5       = gtypeH5 @f . gtypeH5 @g
+  gfastSizeOfH5 = gfastSizeOfH5 @f + gfastSizeOfH5 @g
+  galignmentH5  = galignmentH5 @f `max` galignmentH5 @g
+  gpeekH5 p i = do (f, i')  <- gpeekH5 p i
+                   (g, i'') <- gpeekH5 p i'
+                   pure (f :*: g, i'')
+  gpokeH5 p i (f :*: g) = do i' <- gpokeH5 p i f
+                             gpokeH5 p i' g
+  {-# INLINE gtypeH5       #-}
+  {-# INLINE gfastSizeOfH5 #-}
+  {-# INLINE galignmentH5  #-}
+  {-# INLINE gpeekH5       #-}
+  {-# INLINE gpokeH5       #-}
+
+instance ( KnownSymbol fld
+         , Element a
+         ) => GRecElement (M1 S (MetaSel (Just fld) u s l) (K1 r a)) where
+  gtypeH5 = ((symbolVal (Proxy @fld), typeH5 @a):)
+  gfastSizeOfH5 = fastSizeOfH5 @a
+  galignmentH5  = alignmentH5  @a
+  gpeekH5 p i = do
+    a <- peekH5 (castPtr $ plusPtr p i)
+    pure (M1 (K1 a), i+len)
+    where
+      len = fastSizeOfH5 @a
+  gpokeH5 p i (M1 (K1 a)) = do
+    pokeH5 (castPtr $ plusPtr p i) a
+    pure $! i + len
+    where
+      len = fastSizeOfH5 @a
+  {-# INLINE gtypeH5       #-}
+  {-# INLINE gfastSizeOfH5 #-}
+  {-# INLINE galignmentH5  #-}
+  {-# INLINE gpeekH5       #-}
+  {-# INLINE gpokeH5       #-}

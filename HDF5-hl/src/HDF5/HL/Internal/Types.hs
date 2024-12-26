@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes  #-}
+{-# LANGUAGE CPP                  #-}
 {-# LANGUAGE MagicHash            #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -425,6 +426,7 @@ wordSizeInBits :: Int
 wordSizeInBits = finiteBitSize (0 :: Word)
 
 
+#if MIN_VERSION_base(4,17,0)
 -- | Derives HDF5 type as record. Uses 'makePackedRecord'
 instance ( Generic a
          , GRecElement (Rep a)
@@ -488,3 +490,4 @@ instance ( KnownSymbol fld
   {-# INLINE galignmentH5  #-}
   {-# INLINE gpeekH5       #-}
   {-# INLINE gpokeH5       #-}
+#endif

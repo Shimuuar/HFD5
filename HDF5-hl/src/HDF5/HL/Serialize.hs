@@ -8,30 +8,35 @@ module HDF5.HL.Serialize
   , H5Serialize1(..)
   , h5Read1
   , h5Write1
+  , FilePathRepr(..)
     -- * Deriving via
   , ViaDataset(..)
   , ViaSerialize1(..)
   ) where
 
+import Control.Monad
 import Data.Coerce
-import Data.Functor.Identity
 import Data.Functor.Compose
--- import Data.Map.Strict              qualified as Map
--- import Data.IntMap.Strict           qualified as IntMap
+import Data.Functor.Identity
+import Data.Int
+import Data.IntMap.Strict           qualified as IntMap
+import Data.Map.Strict              qualified as Map
+import Data.Proxy
+import Data.Text                    qualified as T
+import Data.Text.Lazy               qualified as TL
+import Data.Traversable
 import Data.Vector                  qualified as V
-import Data.Vector.Unboxed          qualified as VU
-import Data.Vector.Storable         qualified as VS
-import Data.Vector.Strict           qualified as VV
-import Data.Vector.Primitive        qualified as VP
 import Data.Vector.Fixed            qualified as F
-import Data.Vector.Fixed.Unboxed    qualified as FU
-import Data.Vector.Fixed.Storable   qualified as FS
 import Data.Vector.Fixed.Boxed      qualified as FB
 import Data.Vector.Fixed.Primitive  qualified as FP
+import Data.Vector.Fixed.Storable   qualified as FS
 import Data.Vector.Fixed.Strict     qualified as FV
-import Data.Proxy
+import Data.Vector.Fixed.Unboxed    qualified as FU
+import Data.Vector.Primitive        qualified as VP
+import Data.Vector.Storable         qualified as VS
+import Data.Vector.Strict           qualified as VV
+import Data.Vector.Unboxed          qualified as VU
 import Data.Word
-import Data.Int
 
 import GHC.Generics
 import GHC.TypeLits
@@ -52,7 +57,7 @@ type H5Reader a = forall dir. (HasCallStack, H5.IsDirectory dir) => dir -> FileP
 --   parameter relative to @dir@ (could be HDF5 file or group inside it).
 type H5Writer a = forall dir. (HasCallStack, H5.IsDirectory dir) => dir -> FilePath -> a -> IO ()
 
--- | Type class for value that could be serialized into HDF5 file. 
+-- | Type class for value that could be serialized into HDF5 file.
 class H5Serialize a where
   h5Read  :: H5Reader a
   h5Write :: H5Writer a
@@ -68,6 +73,42 @@ h5Read1 = liftH5Read h5Read
 h5Write1 :: (H5Serialize1 f, H5Serialize a) => H5Writer (f a)
 h5Write1 = liftH5Write h5Write
 
+
+-- | Type class for values that could be represented as path fragments
+class FilePathRepr a where
+  toFilePath   :: a -> FilePath
+  fromFilePath :: FilePath -> Maybe a
+
+instance FilePathRepr [Char] where
+  toFilePath   = id
+  fromFilePath = Just
+instance FilePathRepr T.Text where
+  toFilePath   = T.unpack
+  fromFilePath = Just . T.pack
+instance FilePathRepr TL.Text where
+  toFilePath   = TL.unpack
+  fromFilePath = Just . TL.pack
+
+deriving via ReprViaShowRead Int    instance FilePathRepr Int
+deriving via ReprViaShowRead Int8   instance FilePathRepr Int8
+deriving via ReprViaShowRead Int16  instance FilePathRepr Int16
+deriving via ReprViaShowRead Int32  instance FilePathRepr Int32
+deriving via ReprViaShowRead Int64  instance FilePathRepr Int64
+deriving via ReprViaShowRead Word   instance FilePathRepr Word
+deriving via ReprViaShowRead Word8  instance FilePathRepr Word8
+deriving via ReprViaShowRead Word16 instance FilePathRepr Word16
+deriving via ReprViaShowRead Word32 instance FilePathRepr Word32
+deriving via ReprViaShowRead Word64 instance FilePathRepr Word64
+
+
+-- | Derive 'FilePathRepr' using @Show/Read@ pair.
+newtype ReprViaShowRead a = ReprViaShowRead a
+
+instance (Show a, Read a) => FilePathRepr (ReprViaShowRead a) where
+  toFilePath (ReprViaShowRead a) = show a
+  fromFilePath s = case reads s of
+    [(a,"")] -> Just (ReprViaShowRead a)
+    _        -> Nothing
 
 
 ----------------------------------------------------------------
@@ -163,6 +204,10 @@ deriving via ViaDataset (FP.Vec n a)
     instance (H5.Element a, F.Arity n, FP.Prim a) => H5Serialize (FP.Vec n a)
 
 deriving newtype instance H5Serialize a => H5Serialize (Identity a)
+deriving via ViaSerialize1 IntMap.IntMap a
+    instance H5Serialize a => H5Serialize (IntMap.IntMap a)
+deriving via ViaSerialize1 (Map.Map k) a
+    instance (H5Serialize a, FilePathRepr k, Ord k) => H5Serialize (Map.Map k a)
 
 
 ----------------------------------------------------------------
@@ -178,3 +223,34 @@ instance (H5Serialize1 f, H5Serialize1 g) => H5Serialize1 (f `Compose` g) where
     = Compose <$> liftH5Read (liftH5Read reader) dir path
   liftH5Write writer dir path (Compose a)
     = liftH5Write (liftH5Write writer) dir path a
+
+
+instance H5Serialize1 IntMap.IntMap where
+  liftH5Write writer dir path xs =
+    H5.withCreateGroup dir path $ \d -> do
+      forM_ (IntMap.toList xs) $ \(k,v) ->
+        writer d (toFilePath k) v
+  liftH5Read reader dir path =
+    H5.withOpenGroup dir path $ \d -> do
+      entries <- H5.listGroup d
+      names   <- for entries $ \s -> case fromFilePath s of
+        Just k  -> pure (s,k)
+        Nothing -> error $ "H5Serialize1 for IntMap: can't decode " ++ s
+      fmap IntMap.fromList $ for names $ \(s,k) -> do
+        a <- reader d s
+        pure (k,a)
+
+instance (Ord k, FilePathRepr k) => H5Serialize1 (Map.Map k) where
+  liftH5Write writer dir path xs =
+    H5.withCreateGroup dir path $ \d -> do
+      forM_ (Map.toList xs) $ \(k,v) ->
+        writer d (toFilePath k) v
+  liftH5Read reader dir path =
+    H5.withOpenGroup dir path $ \d -> do
+      entries <- H5.listGroup d
+      names   <- for entries $ \s -> case fromFilePath s of
+        Just k  -> pure (s,k)
+        Nothing -> error $ "H5Serialize1 for Map: can't decode " ++ s
+      fmap Map.fromList $ for names $ \(s,k) -> do
+        a <- reader d s
+        pure (k,a)

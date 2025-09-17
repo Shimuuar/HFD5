@@ -26,6 +26,7 @@ import Data.Vector.Fixed.Unboxed   qualified as FU
 import Data.Vector.Fixed.Boxed     qualified as FB
 import Data.Vector.Fixed.Storable  qualified as FS
 import Data.Vector.Fixed.Primitive qualified as FP
+import Data.Vector.Fixed.Strict    qualified as FV
 import Control.Monad.Trans.Cont
 import Foreign.C.String
 import Foreign.Ptr
@@ -372,6 +373,11 @@ deriving via SerializeAsScalar (FP.Vec n a)
     instance (F.Arity n, Element a, FP.Prim a) => Serialize (FP.Vec n a)
 deriving via SerializeAsScalar (FP.Vec n a)
     instance (F.Arity n, Element a, FP.Prim a) => SerializeArr (FP.Vec n a)
+
+deriving via SerializeAsScalar (FV.Vec n a)
+    instance (F.Arity n, Element a) => Serialize (FV.Vec n a)
+deriving via SerializeAsScalar (FV.Vec n a)
+    instance (F.Arity n, Element a) => SerializeArr (FV.Vec n a)
 
 deriving newtype instance Serialize    a => Serialize    (Identity a)
 deriving newtype instance SerializeArr a => SerializeArr (Identity a)

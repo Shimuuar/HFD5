@@ -52,6 +52,7 @@ import Data.Vector.Fixed.Unboxed   qualified as FU
 import Data.Vector.Fixed.Boxed     qualified as FB
 import Data.Vector.Fixed.Storable  qualified as FS
 import Data.Vector.Fixed.Primitive qualified as FP
+import Data.Vector.Fixed.Strict    qualified as FV
 import Foreign.Marshal             (alloca, allocaArray, allocaArray0, withArray, peekArray,
                                     allocaBytesAligned
                                    )
@@ -400,7 +401,12 @@ instance (Element a, F.Arity n) => Element (FB.Vec n a) where
   alignmentH5  = alignmentH5  @a
   peekH5 ptr   = F.generateM (peekElemOffH5 (castPtr ptr))
   pokeH5 ptr v = F.imapM_ (pokeElemOffH5 (castPtr ptr)) v
-
+instance (Element a, F.Arity n) => Element (FV.Vec n a) where
+  typeH5       = Array (typeH5 @a) [F.length (undefined :: FV.Vec n a)]
+  fastSizeOfH5 = fastSizeOfH5 @a *  F.length (undefined :: FV.Vec n a)
+  alignmentH5  = alignmentH5  @a
+  peekH5 ptr   = F.generateM (peekElemOffH5 (castPtr ptr))
+  pokeH5 ptr v = F.imapM_ (pokeElemOffH5 (castPtr ptr)) v
 instance (Element a, F.Arity n, FU.Unbox n a) => Element (FU.Vec n a) where
   typeH5       = Array (typeH5 @a) [F.length (undefined :: FU.Vec n a)]
   fastSizeOfH5 = fastSizeOfH5 @a *  F.length (undefined :: FU.Vec n a)

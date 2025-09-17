@@ -21,6 +21,7 @@ import Data.Vector                 qualified as V
 import Data.Vector.Storable        qualified as VS
 import Data.Vector.Unboxed         qualified as VU
 import Data.Vector.Generic         qualified as VG
+import Data.Vector.Strict          qualified as VV
 import Data.Vector.Fixed           qualified as F
 import Data.Vector.Fixed.Unboxed   qualified as FU
 import Data.Vector.Fixed.Boxed     qualified as FB
@@ -252,6 +253,19 @@ instance (Element a) => SerializeArr (V.Vector a) where
   basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VecHDF5 a)
 
 instance (Element a) => SerializeSlab (V.Vector a) where
+  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
+  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
+
+instance (Element a) => Serialize (VV.Vector a) where
+  type ElementOf (VV.Vector a) = a
+  type ExtentOf  (VV.Vector a) = Int
+  getExtent = VV.length
+
+instance (Element a) => SerializeArr (VV.Vector a) where
+  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VecHDF5 a) dset spc
+  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VecHDF5 a)
+
+instance (Element a) => SerializeSlab (VV.Vector a) where
   basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
   basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
 

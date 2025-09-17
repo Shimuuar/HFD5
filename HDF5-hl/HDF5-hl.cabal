@@ -39,7 +39,7 @@ Library
                   , exceptions
                   , primitive    >=0.7
                   , deepseq      >=1.4
-                  , vector       >=0.13
+                  , vector       >=0.13.2
                   , fixed-vector >=2.0
   Exposed-modules:
         HDF5.HL

@@ -43,7 +43,7 @@ import GHC.TypeLits
 import GHC.Stack
 
 import HDF5.HL        qualified as H5
-
+import HDF5.HL.Vector (VecHDF5)
 
 ----------------------------------------------------------------
 -- Type classes
@@ -191,6 +191,7 @@ deriving via ViaDataset (VS.Vector a) instance (H5.Element a, VS.Storable a) => 
 deriving via ViaDataset (VU.Vector a) instance (H5.Element a, VU.Unbox a)    => H5Serialize (VU.Vector a)
 deriving via ViaDataset (VP.Vector a) instance (H5.Element a, VP.Prim a)     => H5Serialize (VP.Vector a)
 deriving via ViaDataset (VV.Vector a) instance (H5.Element a)                => H5Serialize (VV.Vector a)
+deriving via ViaDataset (VecHDF5   a) instance (H5.Element a)                => H5Serialize (VecHDF5 a)
 
 deriving via ViaDataset (FU.Vec n a)
     instance (H5.Element a, FU.Unbox n a) => H5Serialize (FU.Vec n a)

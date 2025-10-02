@@ -29,6 +29,7 @@ import Data.Semigroup
 import Data.Vector.Fusion.Bundle   qualified as Bundle
 import Data.Vector.Generic         qualified as VG
 import Data.Vector.Generic.Mutable qualified as MVG
+import Text.Read
 
 import HDF5.HL.Internal.Types
 
@@ -138,7 +139,6 @@ instance Element a => VG.Vector VecHDF5 a where
   elemseq _ = seq
 
 
-
 instance (Element a, Eq a) => Eq (VecHDF5 a) where
   {-# INLINE (==) #-}
   xs == ys = Bundle.eq (VG.stream xs) (VG.stream ys)
@@ -180,6 +180,12 @@ instance NFData (VecHDF5 a) where
 instance NFData1 VecHDF5 where
   liftRnf _ (VecHDF5 _ _) = ()
 
+instance (Show a, Element a) => Show (VecHDF5 a) where
+  showsPrec = VG.showsPrec
+
+instance (Read a, Element a) => Read (VecHDF5 a) where
+  readPrec = VG.readPrec
+  readListPrec = readListPrecDefault
 
 
 unsafeFromForeignPtr :: ForeignPtr a -> Int -> VecHDF5 a

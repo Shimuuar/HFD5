@@ -1,7 +1,53 @@
--- |
--- High level API for working with HDF5 files
+{-|
+High level API for working with HDF5 files. HDF5 stands for
+Hierarchical Data Format v5 and geared for working with large scale
+array data. C has very large API surface and not everything is
+supported.
+
+= Overview
+
+Each HDF5 file is organized as hierarchical namespace (file system
+like) and contains named 'Dataset's and 'Group's (directories) which
+could contain @Group@s and @Dataset@s. In turn @Dataset@ is dense
+N-dimensional (up to 32) array of elements of some type. HDF5 supports
+wide range of types: primitives like fixed width ints, IEEE754
+floating points, records, enumerations. @Dataset@s could be read and
+written to using slices. Currently support for that is only partial.
+Both @Group@s and @Dataset@s support 'Attribute's, named values:
+scalars or small arrays.
+
+
+== HDF5 entities
+
+HDF5 define number of entities with lifetimes that should be managed
+by programmer:
+
+- 'File' — handle to HDF5 file.
+
+- 'Group' — handle to group in some file. Note that in places which
+  expect group @File@ represents root directory of a file. (See 'IsDirectory')
+
+- 'Dataset' — handle to dataset in the file. It could be used to both
+  read from and write to dataset.
+
+- 'Attribute' — named values which could be attached to group or dataset.
+
+- 'Dataspace' — it encodes dimensions of dataset. Usually one doesn't
+   to deal with it directly.
+
+All of them could be closed in the same way by calling
+'close'. Functions that open\/create such entities have bracket-like
+companion named @with...@
+
+
+== Reading/writing
+
+
+
+
+-}
 module HDF5.HL
-  ( -- * Data types and common operations
+  ( -- * Files and groups
     -- ** File operations
     File
   , OpenMode(..)
@@ -17,8 +63,9 @@ module HDF5.HL
   , withOpenGroup
   , withCreateGroup
   , listGroup
-    -- ** Datasets
+    -- * Datasets
   , Dataset
+    -- ** Opening and creation
   , openDataset
   , createEmptyDataset
   , createDataset
@@ -40,7 +87,7 @@ module HDF5.HL
   , extent
   , dataspaceRank
   , dataspaceExt
-    -- ** Attributes
+    -- * Attributes
   , Attribute
   , openAttr
   , withAttr
@@ -65,7 +112,7 @@ module HDF5.HL
   , propDatasetLayout
   , propDatasetChunking
   , propDatasetDeflate
-    -- ** Type classes
+    -- * Type classes
   , IsObject
   , IsDirectory
   , HasData(..)
@@ -194,7 +241,7 @@ openGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
        $ checkHID p_err ("Cannot open group " ++ path)
        $ h5g_open (getHID dir) c_path H5P_DEFAULT
 
--- | @bracket-style wrapper for 'openGroup'
+-- | @bracket@-style wrapper for 'openGroup'
 withOpenGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
   => dir              -- ^ Location. Either 'File' or 'Group'
@@ -216,7 +263,7 @@ createGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
        $ checkHID p_err ("Cannot create group " ++ path)
        $ h5g_create (getHID dir) c_path H5P_DEFAULT H5P_DEFAULT H5P_DEFAULT
 
--- | @bracket-style wrapper for 'createGroup'
+-- | @bracket@-style wrapper for 'createGroup'
 withCreateGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
   => dir              -- ^ Location. Either 'File' or 'Group'

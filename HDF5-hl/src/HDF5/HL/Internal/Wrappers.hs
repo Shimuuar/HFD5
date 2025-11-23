@@ -90,7 +90,8 @@ withDataspace a = bracket (getDataspaceIO a) basicClose
 -- Files, groups, datasets
 ----------------------------------------------------------------
 
--- | Handle for working with HDF5 file.
+-- | Handle for working with HDF5 file. It also serves as root
+--   directory of a file when group is expected. See 'IsDirectory'.
 newtype File = File HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject

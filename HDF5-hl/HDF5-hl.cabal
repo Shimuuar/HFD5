@@ -41,9 +41,12 @@ Library
                   , deepseq      >=1.4
                   , vector       >=0.13.2
                   , fixed-vector >=2.0
+                  , containers   >=0.6
+                  , text         >=2
   Exposed-modules:
         HDF5.HL
         HDF5.HL.Vector
+        HDF5.HL.Serialize
         HDF5.HL.Internal
         HDF5.HL.Internal.Dataspace
         HDF5.HL.Internal.Enum

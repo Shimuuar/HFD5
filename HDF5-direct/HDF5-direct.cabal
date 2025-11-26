@@ -28,7 +28,7 @@ Library
   cc-options:         -Wall
   c-sources:          cbits/hdf5.c
   --
-  Build-Depends:    base         >=4.16 && <5
+  Build-Depends:    base         >=4.17 && <5
                   , exceptions   >=0.10
                   , transformers
   Exposed-modules:

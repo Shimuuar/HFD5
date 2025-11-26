@@ -101,7 +101,12 @@ newtype Group = Group HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
--- | Handle for dataset.
+-- | Handle for dataset. It's dense N-dimensional array of
+--   elements. Dimensions of array are called 'Dataspace' in HDF5
+--   terminology. Extent of already existing dataset could be
+--   changed. Wide range of 'Type's are supported: fixed width
+--   integers, IEEE754 floating point, fixed size arrays, structures,
+--   enumerations.
 newtype Dataset = Dataset HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
@@ -111,7 +116,15 @@ newtype Attribute = Attribute HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
--- | Handle for dataspace.
+-- | Handle for dataspace. It defines number of dimensions and size of
+--   each dimension for datasets and attributes. Each dataspace has
+--   size and maximum size which could be larger. Special value
+--   'UNLIMITED' is used to denote that particular dimension is unbounded.
+--   Datasets in which size and maximum size are different must be chunked.
+--
+--   It's convenient to represent dataspaces using haskell data
+--   type. Type class 'IsExtent' is used to convert haskell values to
+--   dataspaces and parse dimension data back.
 newtype Dataspace = Dataspace HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject

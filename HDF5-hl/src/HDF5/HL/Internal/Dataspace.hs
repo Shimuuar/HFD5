@@ -156,6 +156,8 @@ instance (IsExtent a, IsExtent b) => IsExtent (a,b) where
                           Just $ \f -> encA f <> encB f
   decodeExtent = (,) <$> decodeExtent <*> decodeExtent
 
+-- | Value which is used to represent than maximum size of particular
+--   dimension is unbounded.
 pattern UNLIMITED :: Word64
 pattern UNLIMITED <- (coerce -> H5S_UNLIMITED) where UNLIMITED = coerce H5S_UNLIMITED
 

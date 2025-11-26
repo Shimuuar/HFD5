@@ -80,9 +80,11 @@ module HDF5.HL
   , readSlab
   , writeSlab
     -- ** Dataspace information
+    -- $dataspace
   , Dataspace
   , pattern UNLIMITED
   , Extent(..)
+  , IsExtent(..)
   , rank
   , extent
   , dataspaceRank
@@ -296,6 +298,27 @@ listGroup dir = liftIO $ withFrozenCallStack $ evalContT $ do
 ----------------------------------------------------------------
 -- Dataset API
 ----------------------------------------------------------------
+
+-- $dataspace
+--
+-- In HDF5 terminology 'Dataspace' is object that encode dimensions of
+-- an dataset or attribute array. It's also used to select parts of an
+-- array for reading\/writing.
+--
+--  * Null dataspace it corresponds to empty dataset
+--  * Scalar dataspace which corresponds to dataset containing single value
+--  * Simple dataspace which corresponds to N-dimensional array. Up to
+--  32-dimensional arrays are supported
+--
+-- 'Dataspace' is part of public API but it's expected that usually
+-- dataset operations do not need to deal with it explicitly. Instead
+-- we encode data dimensions and offsets using haskell values: fixnums
+-- and tuples mostly. Type class 'IsExtent' encodes N-dimensional
+-- products of @Word64@ and could be used as size or
+-- offset. 'IsDataspace' is used for specifying dataset's dataspace
+-- when creating it and for querying.
+
+
 
 -- | Open existing dataset in given location. Returned 'Dataset' must
 --   be closed by call to close.

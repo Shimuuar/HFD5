@@ -30,7 +30,6 @@ import Control.Monad.Trans.Maybe
 import Data.Coerce
 import Data.Int
 import Data.Word
-import Data.Functor
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.Marshal
@@ -70,9 +69,9 @@ class IsExtent a where
 
 
 newtype ParserDim i m a = ParserDim
-  { unParserDim :: forall s.
-                   (s -> m (Maybe (s, i)))
-                -> (s -> m (Maybe (s, a)))
+  { _unParserDim :: forall s.
+                    (s -> m (Maybe (s, i)))
+                 -> (s -> m (Maybe (s, a)))
   }
   deriving Functor
 
@@ -95,12 +94,21 @@ endOfExtent = ParserDim $ \uncons s -> uncons s >>= \case
   Nothing -> pure $ Just (s,())
   Just _  -> pure Nothing
 
+runParserDim
+  :: Monad m
+  => (s -> m (Maybe (s,i)))
+  -> s
+  -> ParserDim i m a
+  -> m (Maybe a)
+runParserDim uncons s0 (ParserDim fun) = fmap snd <$> fun uncons s0
+
+
 runParseFromDataspace :: IsExtent a => Dataspace -> IO (Maybe (a,a))
 runParseFromDataspace (getHID -> hid) = withFrozenCallStack $ evalContT $ do
   p_err <- ContT alloca
   lift (h5s_get_simple_extent_type hid p_err) >>= \case
     H5S_NULL   -> pure $ decodeNullExtent
-    H5S_SCALAR -> unParserDim decodeExtent (\() -> pure Nothing) () <&> fmap snd
+    H5S_SCALAR -> runParserDim (\() -> pure Nothing) ()  decodeExtent
     H5S_SIMPLE -> do
       rank <- lift
             $ fmap fromIntegral
@@ -116,8 +124,8 @@ runParseFromDataspace (getHID -> hid) = withFrozenCallStack $ evalContT $ do
         let uncons p i | i >= rank = pure Nothing
                        | otherwise = do dim <- fromIntegral <$> peekElemOff p i
                                         pure $ Just (i+1, dim)
-        dim     <- unParserDim decodeExtent (uncons p_dim) 0 <&> fmap snd
-        dim_max <- unParserDim decodeExtent (uncons p_max) 0 <&> fmap snd
+        dim     <- runParserDim (uncons p_dim) 0  decodeExtent
+        dim_max <- runParserDim (uncons p_max) 0  decodeExtent
         pure $ liftA2 (,) dim dim_max
     _ -> lift $ throwM =<< decodeError p_err "Cannot get class of dataspace"
 

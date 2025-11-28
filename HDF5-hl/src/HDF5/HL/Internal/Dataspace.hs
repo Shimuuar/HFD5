@@ -63,34 +63,34 @@ class IsExtent a where
   encodeExtent :: Monoid m => a -> Maybe ((Word64 -> m) -> m)
   -- | Parser for dataset which could be used to decode from sequence
   --   of Dims.
-  decodeExtent :: Monad m => ParserDim m a
+  decodeExtent :: Monad m => ParserDim Word64 m a
   -- | How null extent should be decoded
   decodeNullExtent :: Maybe a
   decodeNullExtent = Nothing
 
 
-newtype ParserDim m a = ParserDim
+newtype ParserDim i m a = ParserDim
   { unParserDim :: forall s.
-                   (s -> m (Maybe (s, Word64))) -- Uncons (possibly monadic)
-                -> (s -> m (Maybe (s, a)))      -- State monad with failure
+                   (s -> m (Maybe (s, i)))
+                -> (s -> m (Maybe (s, a)))
   }
   deriving Functor
 
-instance Monad m => Applicative (ParserDim m) where
+instance Monad m => Applicative (ParserDim i m) where
   pure a = ParserDim $ \_ s -> pure (Just (s,a))
   ParserDim pf <*> ParserDim pa = ParserDim $ \uncons s -> runMaybeT $ do
     (s',  f) <- MaybeT $ pf uncons s
     (s'', a) <- MaybeT $ pa uncons s'
     pure (s'', f a)
 
-instance Monad m => Alternative (ParserDim m) where
+instance Monad m => Alternative (ParserDim i m) where
   empty = ParserDim $ \_ _ -> pure Nothing
   ParserDim pa <|> ParserDim pb = ParserDim $ \uncons s -> runMaybeT (MaybeT (pa uncons s) <|> MaybeT (pb uncons s))
 
-parseDim :: ParserDim m Word64
+parseDim :: ParserDim i m i
 parseDim = ParserDim id
 
-endOfExtent :: Monad m => ParserDim m ()
+endOfExtent :: Monad m => ParserDim i m ()
 endOfExtent = ParserDim $ \uncons s -> uncons s >>= \case
   Nothing -> pure $ Just (s,())
   Just _  -> pure Nothing

@@ -68,11 +68,10 @@ module HDF5.HL
     -- ** Opening and creation
   , openDataset
   , createEmptyDataset
-  , createDataset
   , withOpenDataset
   , withCreateEmptyDataset
-  , withCreateDataset
   , setDatasetExtent
+  , createDataset
     -- ** Reading and writing
   , readDataset
   , readObject
@@ -83,7 +82,7 @@ module HDF5.HL
     -- $dataspace
   , Dataspace
   , pattern UNLIMITED
-  , Extent(..)
+  -- , Extent(..)
   , IsExtent(..)
   , rank
   , extent
@@ -337,19 +336,17 @@ openDataset dir path = liftIO $ withFrozenCallStack $ evalContT $ do
 -- | Create new dataset at given location without writing any data to
 --   it. Returned 'Dataset' must be closed by call to 'close'.
 createEmptyDataset
-  :: (MonadIO m, IsDirectory dir, IsExtent ext, HasCallStack)
-  => dir       -- ^ Location
-  -> FilePath  -- ^ Path relative to location
-  -> Type      -- ^ Element type
-  -> ext       -- ^ Extent of dataset
-  -> Maybe ext -- ^ Maximum extent of dataset. If @Nothing@ it's same as extent
-  -> [Property Dataset]
-  -- ^ Dataset creation properties
+  :: (MonadIO m, IsDirectory dir, IsDataspace ext, HasCallStack)
+  => dir                -- ^ Location
+  -> FilePath           -- ^ Path relative to location
+  -> Type               -- ^ Element type
+  -> ext                -- ^ Extent of dataset
+  -> [Property Dataset] -- ^ Dataset creation properties
   -> m Dataset
-createEmptyDataset dir path ty ext ext_max props = liftIO $ evalContT $ do
+createEmptyDataset dir path ty ext props = liftIO $ evalContT $ do
   p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspace ext ext_max
+  space  <- ContT $ withCreateDataspaceFromDSpace ext
   tid    <- ContT $ withType ty
   plist  <- ContT $ withDatasetProps $ mconcat props
   lift $ withFrozenCallStack
@@ -365,14 +362,28 @@ createEmptyDataset dir path ty ext ext_max props = liftIO $ evalContT $ do
 --   it. Shape of data is inferred from data to write.
 createDataset
   :: forall a dir m. (Serialize a, IsDirectory dir, MonadIO m, HasCallStack)
-  => dir      -- ^ File (root will be used) or group
-  -> FilePath -- ^ Path to dataset
-  -> a        -- ^ Value to write
+  => dir                -- ^ File (root will be used) or group
+  -> FilePath           -- ^ Path to dataset
+  -> a                  -- ^ Value to write
+  -> [Property Dataset] -- ^ Dataset creation properties
   -> m ()
-createDataset dir path a = liftIO $ evalContT $ do
-  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) Nothing []
+createDataset dir path a props = liftIO $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString path
+  space  <- ContT $ withCreateDataspaceFromExtent $ getExtent a
+  tid    <- ContT $ withType $ typeH5 @(ElementOf a)
+  plist  <- ContT $ withDatasetProps $ mconcat props
+  dset   <- ContT $ bracket
+    ( withFrozenCallStack
+    $ fmap Dataset
+    $ checkHID p_err ("Unable to create dataset")
+    $ h5d_create (getHID dir) c_path tid (getHID space)
+      H5P_DEFAULT
+      (getHID plist)
+      H5P_DEFAULT
+    )
+    basicClose
   lift $ basicWrite dset a
-
 
 -- | Open dataset and pass handle to continuation. Dataset will be
 --   closed when continuation finish execution normally or with an
@@ -388,33 +399,18 @@ withOpenDataset dir path = bracket (openDataset dir path) close
 -- | Create new dataset at given location. Returned 'Dataset' must be
 --   closed by call to 'close'.
 withCreateEmptyDataset
-  :: (MonadIO m, MonadMask m, IsDirectory dir, IsExtent ext, HasCallStack)
+  :: (MonadIO m, MonadMask m, IsDirectory dir, IsDataspace ext, HasCallStack)
   => dir       -- ^ Location
   -> FilePath  -- ^ Path relative to location
   -> Type      -- ^ Element type
   -> ext       -- ^ Dataspace, that is size of dataset
-  -> Maybe ext -- ^ Maximum extent of dataset. If @Nothing@ it's same as extent
-  -> [Property Dataset]
-  -- ^ Dataset creation properties
+  -> [Property Dataset] -- ^ Dataset creation properties
   -> (Dataset -> m a)
   -> m a
-withCreateEmptyDataset dir path ty ext ext_max props = bracket
-  (createEmptyDataset dir path ty ext ext_max props)
+withCreateEmptyDataset dir path ty ext props = bracket
+  (createEmptyDataset dir path ty ext props)
   close
 
--- | Create new dataset at given location and populate it using data
---   from provided data structure.
-withCreateDataset
-  :: forall a m r dir. (MonadIO m, MonadMask m, IsDirectory dir, Serialize a, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> a        -- ^ Data to write
-  -> (Dataset -> m r)
-  -> m r
-withCreateDataset dir path a action = evalContT $ do
-  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) Nothing []
-  liftIO $ basicWrite dset a
-  lift   $ action dset
 
 -- | Read data from already opened dataset. This function work
 --   specifically with datasets and can use its attributes. Use 'read'
@@ -462,9 +458,7 @@ writeSlab dset off xs = liftIO $ basicWriteSlab dset off xs
 setDatasetExtent :: (HasCallStack, IsExtent dim, MonadIO m) => Dataset -> dim -> m ()
 setDatasetExtent dset dim = liftIO $ evalContT $ do
   p_err         <- ContT $ alloca
-  (r_ext,p_ext) <- withEncodedExtent dim >>= \case
-    Nothing -> throwM $ Error [Left "Extent must be non-null"]
-    Just x  -> pure x
+  (r_ext,p_ext) <- withEncodedExtent dim
   spc    <- ContT $ withDataspace dset
   r_dset <- lift
           $ checkCInt p_err "Cannot get rank of dataspace's extent"
@@ -487,8 +481,8 @@ rank a = liftIO $ withDataspace a HIO.dataspaceRank
 -- | Compute extent of an object. Returns nothing when extent has
 --   unexpected shape. E.g. if 2D array is expected but object is 1D
 --   array.
-extent :: (HasData a, IsExtent ext, MonadIO m, HasCallStack) => a -> m (Maybe ext)
-extent a = liftIO $ fmap fst <$> withDataspace a runParseFromDataspace
+extent :: (HasData a, IsDataspace ext, MonadIO m, HasCallStack) => a -> m (Maybe ext)
+extent a = liftIO $ withDataspace a runParseFromDataspace
 
 dataspaceRank
   :: (MonadIO m, HasCallStack)
@@ -499,10 +493,10 @@ dataspaceRank spc = liftIO $ HIO.dataspaceRank spc
 -- | Parse extent of dataspace. Returns @Nothing@ if dataspace doens't
 --   match expected shape.
 dataspaceExt
-  :: (MonadIO m, IsExtent ext, HasCallStack)
+  :: (MonadIO m, IsDataspace ext, HasCallStack)
   => Dataspace
   -> m (Maybe ext)
-dataspaceExt spc = liftIO $ fmap fst <$> runParseFromDataspace spc
+dataspaceExt spc = liftIO $ runParseFromDataspace spc
 
 ----------------------------------------------------------------
 -- Attributes

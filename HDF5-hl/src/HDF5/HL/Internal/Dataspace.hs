@@ -3,22 +3,23 @@
 -- Description of dataspaces.
 module HDF5.HL.Internal.Dataspace
   ( -- * Concrete type
-    Extent(..)
+--    Extent(..)
     -- * Encoding of extents
-  , IsExtent(..)
+    IsExtent(..)
+  , IsDataspace(..)
   , pattern UNLIMITED
   , ParserDim
   , parseDim
   , endOfExtent
   , runParseFromDataspace
-    -- * Helpers for working with datasets
-  , DSpaceWriter
-  , putDimension
     -- * Creation of dataspaces
-  , createDataspace
-  , withCreateDataspace
-  , withEncodedExtent
+  , createDataspaceFromExtent
+  , createDataspaceFromDSpace
+  , withCreateDataspaceFromExtent
+  , withCreateDataspaceFromDSpace
   , setSlabSelection
+    -- * Internal
+  , withEncodedExtent
   ) where
 
 import Control.Applicative
@@ -44,36 +45,108 @@ import HDF5.C
 -- Haskell data type
 ----------------------------------------------------------------
 
--- | Generic extent of dataspace. It could encode all possible
---   extents.
-data Extent
-  = Simple [Word64] -- ^ Simple dataspace.
-  | Null            -- ^ Null extent for dataset which do not contain any actual data.
-  deriving stock (Show,Eq,Ord)
+-- -- | Generic extent of dataspace. It could encode all possible
+-- --   extents.
+-- data Extent
+--   = Simple [Word64] -- ^ Simple dataspace.
+--   | Null            -- ^ Null extent for dataset which do not contain any actual data.
+--   deriving stock (Show,Eq,Ord)
 
 
--- | Type class to values which represent subset of possible
---   extents. One usually wants to work with more concrete types such
---   as one or two dimensional array. In that case working with
---   'Extent' would be inconvenient
+-- | Type class for values representing some product of @Word64@ indexes.
+--   It could be number for 1D arrays or some combination of tuples.
 class IsExtent a where
   -- | Encode extent. This fold over all dimensions of dataset for
   --   simple and scalar extents. Null extents should return @Nothing@.
-  encodeExtent :: Monoid m => a -> Maybe ((Word64 -> m) -> m)
+  encodeExtent :: Monoid m => a -> (Word64 -> m) -> m
+
+
+-- | Type class for values representing dataspace. It could be either
+--   null which is used for datasets containing no data, or
+--   N-dimensional size and possibly maximal size.
+class IsDataspace a where
+  encodeDataspace :: Monoid m => a -> Maybe ((Word64 -> Word64 -> m) -> m)
   -- | Parser for dataset which could be used to decode from sequence
   --   of Dims.
-  decodeExtent :: Monad m => ParserDim Word64 m a
-  -- | How null extent should be decoded
-  decodeNullExtent :: Maybe a
-  decodeNullExtent = Nothing
+  decodeDataspace :: Monad m => ParserDim (Word64,Word64) m a
+  decodeNullDataspace :: Maybe a
+  decodeNullDataspace = Nothing
 
 
+-- FIXME: Decide what to do with overflows???
+
+-- | Extent for scalar values. It's rank-0 extent not null extent!
+instance IsExtent () where
+  encodeExtent ()  = \_ -> mempty
+
+-- instance IsExtent Extent where
+--   encodeExtent Null          = Nothing
+--   encodeExtent (Simple dims) = Just $ flip foldMap dims
+--   decodeExtent     = Simple <$> many parseDim
+--   -- decodeNullExtent = Just Null
+
+instance IsExtent Word64 where
+  encodeExtent i = \f -> f i
+instance IsExtent Word where
+  encodeExtent i = \f -> f (fromIntegral i)
+instance IsExtent Int64 where
+  encodeExtent i = \f -> f (if i < 0 then error "Negative extent" else fromIntegral i)
+instance IsExtent Int where
+  encodeExtent i = \f -> f (if i < 0 then error "Negative extent" else fromIntegral i)
+
+instance (IsExtent a, IsExtent b) => IsExtent (a,b) where
+  encodeExtent (a,b) f = encodeExtent a f <> encodeExtent b f
+
+instance IsExtent a => IsExtent [a] where
+  encodeExtent xs f = foldMap (\x -> encodeExtent x f) xs
+
+
+
+instance IsDataspace () where
+  encodeDataspace () = Just $ \_ -> mempty
+  decodeDataspace    = pure ()
+
+instance IsDataspace Word64 where
+  encodeDataspace i = Just $ \f ->f i i
+  decodeDataspace = fst <$> parseDim
+
+instance IsDataspace Word where
+  encodeDataspace (fromIntegral -> i) = Just $ \f ->f i i
+  decodeDataspace = fromIntegral <$> decodeDataspace @Word64
+
+-- FIXME: Int,Int64
+
+instance (IsDataspace a, IsDataspace b) => IsDataspace (a,b) where
+  encodeDataspace (a,b) = (liftA2 . liftA2) (<>)
+    (encodeDataspace a) (encodeDataspace b)
+  decodeDataspace = liftA2 (,) decodeDataspace decodeDataspace
+
+instance (IsDataspace a) => IsDataspace [a] where
+  encodeDataspace xs = do
+    fs <- traverse encodeDataspace xs
+    Just $ \f -> foldMap ($ f) fs
+  decodeDataspace = many decodeDataspace
+
+
+
+-- | Value which is used to represent than maximum size of particular
+--   dimension is unbounded.
+pattern UNLIMITED :: Word64
+pattern UNLIMITED <- (coerce -> H5S_UNLIMITED) where UNLIMITED = coerce H5S_UNLIMITED
+
+
+
+----------------------------------------------------------------
+-- Parser for dataspaces
+----------------------------------------------------------------
+
+-- | Very simple parser for sequence of values of type @i@
 newtype ParserDim i m a = ParserDim
   { _unParserDim :: forall s.
                     (s -> m (Maybe (s, i)))
                  -> (s -> m (Maybe (s, a)))
   }
-  deriving Functor
+  deriving stock Functor
 
 instance Monad m => Applicative (ParserDim i m) where
   pure a = ParserDim $ \_ s -> pure (Just (s,a))
@@ -103,12 +176,12 @@ runParserDim
 runParserDim uncons s0 (ParserDim fun) = fmap snd <$> fun uncons s0
 
 
-runParseFromDataspace :: IsExtent a => Dataspace -> IO (Maybe (a,a))
+runParseFromDataspace :: IsDataspace a => Dataspace -> IO (Maybe a)
 runParseFromDataspace (getHID -> hid) = withFrozenCallStack $ evalContT $ do
   p_err <- ContT alloca
   lift (h5s_get_simple_extent_type hid p_err) >>= \case
-    H5S_NULL   -> pure $ decodeNullExtent
-    H5S_SCALAR -> runParserDim (\() -> pure Nothing) ()  decodeExtent
+    H5S_NULL   -> pure $ decodeNullDataspace
+    H5S_SCALAR -> runParserDim (\() -> pure Nothing) ()  decodeDataspace
     H5S_SIMPLE -> do
       rank <- lift
             $ fmap fromIntegral
@@ -121,56 +194,18 @@ runParseFromDataspace (getHID -> hid) = withFrozenCallStack $ evalContT $ do
         _ <- checkCInt p_err "Cannot get extent for simple dataspace"
            $ h5s_get_simple_extent_dims hid p_dim p_max
         --
-        let uncons p i | i >= rank = pure Nothing
-                       | otherwise = do dim <- fromIntegral <$> peekElemOff p i
-                                        pure $ Just (i+1, dim)
-        dim     <- runParserDim (uncons p_dim) 0  decodeExtent
-        dim_max <- runParserDim (uncons p_max) 0  decodeExtent
-        pure $ liftA2 (,) dim dim_max
+        let uncons i | i >= rank = pure Nothing
+                     | otherwise = do
+                         dim  <- peekElemOff p_dim i
+                         mdim <- peekElemOff p_max i
+                         pure $ Just (i+1, (dim, mdim))
+        runParserDim uncons 0  decodeDataspace
     _ -> lift $ throwM =<< decodeError p_err "Cannot get class of dataspace"
 
--- | Extent for scalar values. It's rank-0 extent not null extent!
-instance IsExtent () where
-  encodeExtent ()  = Just $ \_ -> mempty
-  decodeExtent     = pure ()
 
-instance IsExtent Extent where
-  encodeExtent Null          = Nothing
-  encodeExtent (Simple dims) = Just $ flip foldMap dims
-  decodeExtent     = Simple <$> many parseDim
-  decodeNullExtent = Just Null
-
-instance IsExtent Word64 where
-  encodeExtent i = Just $ \f -> f i
-  decodeExtent   = parseDim
-
-instance IsExtent Word where
-  encodeExtent i = Just $ \f -> f (fromIntegral i)
-  decodeExtent   = fromIntegral <$> parseDim
-
-instance IsExtent Int64 where
-  encodeExtent i = Just $ \f -> f (if i < 0 then error "Negative extent" else fromIntegral i)
-  -- FIXME: Deal with overflows???
-  decodeExtent   = fromIntegral <$> parseDim
-
-instance IsExtent Int where
-  encodeExtent i = Just $ \f -> f (if i < 0 then error "Negative extent" else fromIntegral i)
-  -- FIXME: Deal with overflows???
-  decodeExtent   = fromIntegral <$> parseDim
-
-instance (IsExtent a, IsExtent b) => IsExtent (a,b) where
-  encodeExtent (a,b) = do encA <- encodeExtent a
-                          encB <- encodeExtent b
-                          Just $ \f -> encA f <> encB f
-  decodeExtent = (,) <$> decodeExtent <*> decodeExtent
-
--- | Value which is used to represent than maximum size of particular
---   dimension is unbounded.
-pattern UNLIMITED :: Word64
-pattern UNLIMITED <- (coerce -> H5S_UNLIMITED) where UNLIMITED = coerce H5S_UNLIMITED
 
 ----------------------------------------------------------------
--- Data types
+-- Encoder for dataspaces
 ----------------------------------------------------------------
 
 -- | Monoid which is used to fill buffers for calling HDF5 functions.
@@ -182,6 +217,7 @@ newtype DSpaceWriter = DSpaceWriter
   )
 
 instance Semigroup DSpaceWriter where
+  {-# INLINE (<>) #-}
   DSpaceWriter f <> DSpaceWriter g = DSpaceWriter $ \p_sz i_max ->
     g p_sz i_max <=< f p_sz i_max
 
@@ -197,6 +233,19 @@ putDimension sz = DSpaceWriter go where
     | otherwise  = do pokeElemOff p_sz i (coerce sz)
                       pure $! i + 1
 
+putDimension2 :: Word64 -> Word64 -> DSpaceWriter
+putDimension2 sz max_sz = DSpaceWriter go where
+  go p_sz i_max i
+    | i >= i_max = throwM $ Error [Left "Internal error: buffer overrun"]
+    | otherwise  = do pokeElemOff p_sz i             (coerce sz)
+                      pokeElemOff p_sz (maxRank + i) (coerce max_sz)
+                      pure $! i + 1
+
+
+-- Maximum possible rank of an array (as of HDF5 1.8)
+maxRank :: Int
+maxRank = 32
+
 
 ----------------------------------------------------------------
 -- Dataspace creation
@@ -204,52 +253,80 @@ putDimension sz = DSpaceWriter go where
 
 withEncodedExtent
   :: (IsExtent dim)
-  => dim -> ContT r IO (Maybe (Int, Ptr HSize))
-withEncodedExtent dim = case encodeExtent dim of
-  Nothing  -> pure Nothing
-  Just fld -> do let DSpaceWriter write = fld putDimension
-                 ptr  <- ContT $ allocaArray max_rank
-                 rank <- lift  $ write ptr max_rank 0
-                 pure $ Just (rank, ptr)
-  where
-    -- We hardcode maximum rank at 32 (Which was the case in HDF5 1.8)
-    max_rank = 32
+  => dim -> ContT r IO (Int, Ptr HSize)
+withEncodedExtent dim = do
+  let DSpaceWriter write = encodeExtent dim putDimension
+  ptr  <- ContT $ allocaArray maxRank
+  rank <- lift  $ write ptr maxRank 0
+  pure (rank, ptr)
 
--- | Create dataspace for a given extent
-createDataspace
+withEncodedDataspace
+  :: (IsDataspace dim)
+  => dim -> ContT r IO (Maybe (Int, Ptr HSize, Ptr HSize))
+withEncodedDataspace dim =
+  case encodeDataspace dim of
+    Nothing  -> pure Nothing
+    Just enc -> do
+      let DSpaceWriter write = enc putDimension2
+      ptr  <- ContT $ allocaArray (maxRank * 2)
+      rank <- lift  $ write ptr maxRank 0
+      pure $ Just ( rank
+                  , ptr
+                  , ptr `plusPtr` (maxRank * sizeOf (undefined :: HSize)))
+
+
+
+
+-- | Create dataspace for a given extent. This only creates scalar or
+--   simple dataspaces with maximum size same as real size.
+createDataspaceFromExtent
   :: (IsExtent dim, HasCallStack)
   => dim       -- ^ Extent of dataspace
-  -> Maybe dim -- ^ Maximum extent of dataspace (optional)
   -> IO Dataspace
-createDataspace dim dim_max = withFrozenCallStack $ evalContT $ do
+createDataspaceFromExtent dim = withFrozenCallStack $ evalContT $ do
+  p_err      <- ContT $ alloca
+  (rank,ptr) <- withEncodedExtent dim
+  lift $ fmap Dataspace
+       $ checkHID p_err "Unable to create simple dataspace"
+       $ h5s_create_simple (fromIntegral rank) ptr nullPtr
+
+
+-- | Create dataspace for a given extent. This variant allow creation
+--   of all possible dataspaces.
+createDataspaceFromDSpace
+  :: (IsDataspace dim, HasCallStack)
+  => dim       -- ^ Extent of dataspace
+  -> IO Dataspace
+createDataspaceFromDSpace dim = withFrozenCallStack $ evalContT $ do
   p_err <- ContT $ alloca
-  -- Encode dataset extent
-  withEncodedExtent dim >>= \case
+  withEncodedDataspace dim >>= \case
     Nothing  -> lift $ fmap Dataspace
                      $ checkHID p_err "Unable to create dataspace with NULL extent"
                      $ h5s_create H5S_NULL
-    Just (rank,ptr) -> do
-      -- Encode optional max extent
-      ptr_max <- case dim_max of
-        Nothing -> pure nullPtr
-        Just d  -> withEncodedExtent d >>= \case
-          Nothing                -> throwM $ Error [Left "Maximum extent must have same rank"]
-          Just (r,_) | r /= rank -> throwM $ Error [Left "Maximum extent must have same rank"]
-          Just (_,p) -> pure p
+    Just (rank,p_sz,p_max) -> do
       lift $ fmap Dataspace
            $ checkHID p_err "Unable to create simple dataspace"
-           $ h5s_create_simple (fromIntegral rank) ptr ptr_max
+           $ h5s_create_simple (fromIntegral rank) p_sz p_max
 
 
--- | Create simple dataspace which could e used in bracket-like
---   context
-withCreateDataspace
+-- | Bracket wrapping 'createDataspaceFromExtent'
+withCreateDataspaceFromExtent
   :: IsExtent dim
   => dim                 -- ^ Extent of dataspace
-  -> Maybe dim           -- ^ Maximum extent of dataspace
   -> (Dataspace -> IO a) -- ^ Continuation
   -> IO a
-withCreateDataspace dim dim_max = bracket (createDataspace dim dim_max) basicClose
+withCreateDataspaceFromExtent dim
+  = bracket (createDataspaceFromExtent dim) basicClose
+
+-- | Bracket wrapping 'createDataspaceFromDSpace'
+withCreateDataspaceFromDSpace
+  :: IsDataspace dim
+  => dim                 -- ^ Extent of dataspace
+  -> (Dataspace -> IO a) -- ^ Continuation
+  -> IO a
+withCreateDataspaceFromDSpace dim
+  = bracket (createDataspaceFromDSpace dim) basicClose
+
 
 -- | Set selection in dataspace to a regular slab.
 setSlabSelection
@@ -265,8 +342,8 @@ setSlabSelection (Dataspace hid) off sz = evalContT $ do
              $ checkCInt p_err "Cannot get rank of dataspace's extent"
              $ h5s_get_simple_extent_ndims hid
   --
-  (rank_off, p_off) <- checkJust =<< withEncodedExtent off
-  (rank_sz , p_sz)  <- checkJust =<< withEncodedExtent sz
+  (rank_off, p_off) <- withEncodedExtent off
+  (rank_sz , p_sz)  <- withEncodedExtent sz
   when (rank_off /= rank_sz) $ throwM $
     Error [Left "In dataspace selection ranks of an offset and size do not match"]
   when (fromIntegral rank_dset /= rank_sz) $ throwM $
@@ -276,6 +353,3 @@ setSlabSelection (Dataspace hid) off sz = evalContT $ do
             p_off nullPtr
             p_sz  nullPtr
   pure ()
-  where
-    checkJust (Just a) = pure a
-    checkJust  Nothing = throwM $ Error [Left "Selection must be non-null"]

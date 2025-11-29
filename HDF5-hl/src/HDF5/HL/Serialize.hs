@@ -123,7 +123,7 @@ instance H5.Serialize a => H5Serialize (ViaDataset a) where
   h5Read  dir path
     = ViaDataset <$> H5.readAt dir path
   h5Write dir path (ViaDataset a)
-    = H5.createDataset dir path a
+    = H5.createDataset dir path a []
 
 
 newtype ViaSerialize1 f a = ViaSerialize1 (f a)

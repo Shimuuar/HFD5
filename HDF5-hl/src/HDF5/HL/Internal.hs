@@ -109,7 +109,7 @@ basicCreateAttr
 basicCreateAttr dir path a = evalContT $ do
   p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspace (getExtent a) Nothing
+  space  <- ContT $ withCreateDataspaceFromExtent (getExtent a)
   tid    <- ContT $ withType $ typeH5 @(ElementOf a)
   attr   <- ContT $ bracket
     ( withFrozenCallStack
@@ -324,7 +324,7 @@ instance (Element a) => SerializeSlab (VecHDF5 a) where
     spc_file <- lift $ getDataspaceIO dset
     lift $ setSlabSelection spc_file off sz
     -- Memory dataspace
-    spc_mem <- ContT $ withCreateDataspace sz Nothing
+    spc_mem <- ContT $ withCreateDataspaceFromExtent sz
     -- Prepare reading
     tid     <- ContT $ withType (typeH5 @a)
     buf     <- lift  $ mallocVectorH5 sz
@@ -341,7 +341,7 @@ instance (Element a) => SerializeSlab (VecHDF5 a) where
     spc_file <- lift $ getDataspaceIO dset
     lift $ setSlabSelection spc_file off sz
     -- Memory dataspace
-    spc_mem <- ContT $ withCreateDataspace sz Nothing
+    spc_mem <- ContT $ withCreateDataspaceFromExtent sz
     -- Writing
     tid <- ContT $ withType (typeH5 @a)
     ptr <- ContT $ unsafeWithH5 vec

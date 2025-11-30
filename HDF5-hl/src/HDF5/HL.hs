@@ -481,7 +481,7 @@ rank a = liftIO $ withDataspace a HIO.dataspaceRank
 -- | Compute extent of an object. Returns nothing when extent has
 --   unexpected shape. E.g. if 2D array is expected but object is 1D
 --   array.
-extent :: (HasData a, IsDataspace ext, MonadIO m, HasCallStack) => a -> m (Maybe ext)
+extent :: (HasData a, IsDataspace ext, MonadIO m, HasCallStack) => a -> m (Either DataspaceParseError ext)
 extent a = liftIO $ withDataspace a runParseFromDataspace
 
 dataspaceRank
@@ -495,7 +495,7 @@ dataspaceRank spc = liftIO $ HIO.dataspaceRank spc
 dataspaceExt
   :: (MonadIO m, IsDataspace ext, HasCallStack)
   => Dataspace
-  -> m (Maybe ext)
+  -> m (Either DataspaceParseError ext)
 dataspaceExt spc = liftIO $ runParseFromDataspace spc
 
 ----------------------------------------------------------------

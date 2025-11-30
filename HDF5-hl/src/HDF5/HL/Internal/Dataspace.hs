@@ -7,6 +7,7 @@ module HDF5.HL.Internal.Dataspace
     -- * Encoding of extents
     IsExtent(..)
   , IsDataspace(..)
+  , DimRepr(..)
   , pattern UNLIMITED
   , ParserDim
   , parseDim
@@ -29,6 +30,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Maybe
 import Data.Coerce
+import Data.Functor
 import Data.Int
 import Data.Word
 import Foreign.Ptr
@@ -87,8 +89,6 @@ instance IsExtent () where
 
 instance IsExtent Word64 where
   encodeExtent i = \f -> f i
-instance IsExtent Word where
-  encodeExtent i = \f -> f (fromIntegral i)
 instance IsExtent Int64 where
   encodeExtent i = \f -> f (if i < 0 then error "Negative extent" else fromIntegral i)
 instance IsExtent Int where
@@ -110,11 +110,21 @@ instance IsDataspace Word64 where
   encodeDataspace i = Just $ \f ->f i i
   decodeDataspace = fst <$> parseDim
 
-instance IsDataspace Word where
-  encodeDataspace (fromIntegral -> i) = Just $ \f ->f i i
-  decodeDataspace = fromIntegral <$> decodeDataspace @Word64
+instance IsDataspace Int where
+  encodeDataspace i
+    | i < 0     = error "Negative size"
+    | otherwise = Just $ \f -> f (fromIntegral i) (fromIntegral i)
+  decodeDataspace = parseDim >>= \case
+    (w,_) | w > fromIntegral (maxBound::Int) -> empty -- FIXME: pass that size is wrong!
+          | otherwise                        -> pure $! fromIntegral w
 
--- FIXME: Int,Int64
+instance IsDataspace Int64 where
+  encodeDataspace i
+    | i < 0     = error "Negative size"
+    | otherwise = Just $ \f -> f (fromIntegral i) (fromIntegral i)
+  decodeDataspace = parseDim >>= \case
+    (w,_) | w > fromIntegral (maxBound::Int) -> empty -- FIXME: pass that size is wrong!
+          | otherwise                        -> pure $! fromIntegral w
 
 instance (IsDataspace a, IsDataspace b) => IsDataspace (a,b) where
   encodeDataspace (a,b) = (liftA2 . liftA2) (<>)
@@ -131,9 +141,32 @@ instance (IsDataspace a) => IsDataspace [a] where
 
 -- | Value which is used to represent than maximum size of particular
 --   dimension is unbounded.
-pattern UNLIMITED :: Word64
-pattern UNLIMITED <- (coerce -> H5S_UNLIMITED) where UNLIMITED = coerce H5S_UNLIMITED
+pattern UNLIMITED :: DimRepr a => a
+pattern UNLIMITED <- ((==unlimitedRepr) -> True) where UNLIMITED = unlimitedRepr
 
+class (Integral a, Eq a) => DimRepr a where
+  unlimitedRepr :: a
+  -- dimFromWord64 :: Word64 -> Maybe a
+  -- dimToWord64   :: Word64 -> Maybe a
+
+instance DimRepr Word64 where
+  unlimitedRepr = coerce H5S_UNLIMITED
+  -- dimFromWord64 = Just
+  -- dimToWord64   = Just
+
+instance DimRepr Int where
+  unlimitedRepr = -1
+  -- dimFromWord64 UNLIMITED = Just UNLIMITED
+  -- dimFromWord64 n = do
+  --   guard $ n <= fromIntegral (maxBound::Int)
+  --   Just $ fromIntegral n
+  
+instance DimRepr Int64 where
+  unlimitedRepr = -1
+  -- dimFromWord64 UNLIMITED = Just UNLIMITED
+  -- dimFromWord64 n = do
+  --   guard $ n <= fromIntegral (maxBound::Int64)
+  --   Just $ fromIntegral n
 
 
 ----------------------------------------------------------------
@@ -142,9 +175,9 @@ pattern UNLIMITED <- (coerce -> H5S_UNLIMITED) where UNLIMITED = coerce H5S_UNLI
 
 -- | Very simple parser for sequence of values of type @i@
 newtype ParserDim i m a = ParserDim
-  { _unParserDim :: forall s.
-                    (s -> m (Maybe (s, i)))
-                 -> (s -> m (Maybe (s, a)))
+  { unParserDim :: forall s.
+                   (s -> m (Maybe (s, i)))
+                -> (s -> m (Maybe (s, a)))
   }
   deriving stock Functor
 
@@ -181,12 +214,16 @@ runParserDim
 runParserDim uncons s0 (ParserDim fun) = fmap snd <$> fun uncons s0
 
 
-runParseFromDataspace :: IsDataspace a => Dataspace -> IO (Maybe a)
+runParseFromDataspace :: IsDataspace a => Dataspace -> IO (Either DataspaceParseError a)
 runParseFromDataspace (getHID -> hid) = withFrozenCallStack $ evalContT $ do
   p_err <- ContT alloca
   lift (h5s_get_simple_extent_type hid p_err) >>= \case
-    H5S_NULL   -> pure $ decodeNullDataspace
-    H5S_SCALAR -> runParserDim (\() -> pure Nothing) ()  decodeDataspace
+    H5S_NULL   -> pure $ case decodeNullDataspace of
+      Just d  -> Right d
+      Nothing -> Left  UnexpectedNull
+    H5S_SCALAR -> runParserDim (\() -> pure Nothing) ()  decodeDataspace <&> \case
+      Just a  -> Right a
+      Nothing -> Left (BadRank [])
     H5S_SIMPLE -> do
       rank <- lift
             $ fmap fromIntegral
@@ -204,7 +241,12 @@ runParseFromDataspace (getHID -> hid) = withFrozenCallStack $ evalContT $ do
                          dim  <- peekElemOff p_dim i
                          mdim <- peekElemOff p_max i
                          pure $ Just (i+1, (dim, mdim))
-        runParserDim uncons 0  decodeDataspace
+        runParserDim uncons 0  decodeDataspace >>= \case
+          Just a  -> pure (Right a)
+          Nothing -> do
+            dim  <- peekArray rank p_dim
+            dmax <- peekArray rank p_max
+            pure $ Left $ BadRank $ zip dim dmax
     _ -> lift $ throwM =<< decodeError p_err "Cannot get class of dataspace"
 
 

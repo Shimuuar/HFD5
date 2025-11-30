@@ -159,6 +159,11 @@ instance Monad m => Alternative (ParserDim i m) where
   empty = ParserDim $ \_ _ -> pure Nothing
   ParserDim pa <|> ParserDim pb = ParserDim $ \uncons s -> runMaybeT (MaybeT (pa uncons s) <|> MaybeT (pb uncons s))
 
+instance Monad m => Monad (ParserDim i m) where
+  m >>= f = ParserDim $ \uncons s0 -> runMaybeT $ do
+    (s1,a) <- MaybeT $ unParserDim m uncons s0
+    MaybeT $ unParserDim (f a) uncons s1
+
 parseDim :: ParserDim i m i
 parseDim = ParserDim id
 

@@ -65,19 +65,21 @@ module HDF5.HL
   , listGroup
     -- * Datasets
   , Dataset
-    -- ** Opening and creation
+    -- ** Opening & creation
   , openDataset
   , createEmptyDataset
   , withOpenDataset
   , withCreateEmptyDataset
+    -- ** Reading & writing
+  , readSlab
+  , writeSlab
   , setDatasetExtent
+    -- ** Read\/write dataset at once
   , createDataset
     -- ** Reading and writing
   , readDataset
   , readObject
   , readAt
-  , readSlab
-  , writeSlab
     -- ** Dataspace information
     -- $dataspace
   , Dataspace
@@ -320,7 +322,7 @@ listGroup dir = liftIO $ withFrozenCallStack $ evalContT $ do
 
 
 -- | Open existing dataset in given location. Returned 'Dataset' must
---   be closed by call to close.
+--   be closed by call to 'close'.
 openDataset
   :: (MonadIO m, IsDirectory dir, HasCallStack)
   => dir      -- ^ Location
@@ -358,6 +360,34 @@ createEmptyDataset dir path ty ext props = liftIO $ evalContT $ do
          H5P_DEFAULT
 
 
+-- | Open dataset and pass handle to continuation. Dataset will be
+--   closed when continuation finish execution normally or with an
+--   exception.
+withOpenDataset
+  :: (MonadMask m, MonadIO m, IsDirectory dir, HasCallStack)
+  => dir      -- ^ Root
+  -> FilePath -- ^ Path relative to root
+  -> (Dataset -> m a)
+  -> m a
+withOpenDataset dir path = bracket (openDataset dir path) close
+
+-- | Create new dataset at given location. Returned 'Dataset' must be
+--   closed by call to 'close'.
+withCreateEmptyDataset
+  :: (MonadIO m, MonadMask m, IsDirectory dir, IsDataspace ext, HasCallStack)
+  => dir       -- ^ Location
+  -> FilePath  -- ^ Path relative to location
+  -> Type      -- ^ Element type
+  -> ext       -- ^ Dataspace, that is size of dataset
+  -> [Property Dataset] -- ^ Dataset creation properties
+  -> (Dataset -> m a)
+  -> m a
+withCreateEmptyDataset dir path ty ext props = bracket
+  (createEmptyDataset dir path ty ext props)
+  close
+
+
+
 -- | Create new dataset at given location and write provided data to
 --   it. Shape of data is inferred from data to write.
 createDataset
@@ -384,32 +414,6 @@ createDataset dir path a props = liftIO $ evalContT $ do
     )
     basicClose
   lift $ basicWrite dset a
-
--- | Open dataset and pass handle to continuation. Dataset will be
---   closed when continuation finish execution normally or with an
---   exception.
-withOpenDataset
-  :: (MonadMask m, MonadIO m, IsDirectory dir, HasCallStack)
-  => dir      -- ^ Root
-  -> FilePath -- ^ Path relative to root
-  -> (Dataset -> m a)
-  -> m a
-withOpenDataset dir path = bracket (openDataset dir path) close
-
--- | Create new dataset at given location. Returned 'Dataset' must be
---   closed by call to 'close'.
-withCreateEmptyDataset
-  :: (MonadIO m, MonadMask m, IsDirectory dir, IsDataspace ext, HasCallStack)
-  => dir       -- ^ Location
-  -> FilePath  -- ^ Path relative to location
-  -> Type      -- ^ Element type
-  -> ext       -- ^ Dataspace, that is size of dataset
-  -> [Property Dataset] -- ^ Dataset creation properties
-  -> (Dataset -> m a)
-  -> m a
-withCreateEmptyDataset dir path ty ext props = bracket
-  (createEmptyDataset dir path ty ext props)
-  close
 
 
 -- | Read data from already opened dataset. This function work

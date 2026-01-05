@@ -2,13 +2,15 @@
 -- |
 -- Description of dataspaces.
 module HDF5.HL.Internal.Dataspace
-  ( -- * Concrete type
---    Extent(..)
-    -- * Encoding of extents
+  ( -- * Encoding of extents
     IsExtent(..)
   , IsDataspace(..)
   , DimRepr(..)
   , pattern UNLIMITED
+    -- * Data types representing extents
+  , Growable(..)
+  , Extent(..)
+    -- * Dimensions parser
   , ParserDim
   , parseDim
   , endOfExtent
@@ -47,12 +49,26 @@ import HDF5.C
 -- Haskell data type
 ----------------------------------------------------------------
 
--- -- | Generic extent of dataspace. It could encode all possible
--- --   extents.
--- data Extent
---   = Simple [Word64] -- ^ Simple dataspace.
---   | Null            -- ^ Null extent for dataset which do not contain any actual data.
---   deriving stock (Show,Eq,Ord)
+-- | HDF5 uses @Word64@ to represent size of an array. Maximum
+--   possible value is used to represent unlimited extend in
+--   dataspace.
+class (Integral a, Eq a) => DimRepr a where
+  unlimitedRepr :: a
+
+-- | Value which is used to represent than maximum size of particular
+--   dimension is unbounded.
+pattern UNLIMITED :: DimRepr a => a
+pattern UNLIMITED <- ((==unlimitedRepr) -> True) where UNLIMITED = unlimitedRepr
+
+instance DimRepr Word64 where
+  unlimitedRepr = coerce H5S_UNLIMITED
+
+instance DimRepr Int where
+  unlimitedRepr = -1
+
+instance DimRepr Int64 where
+  unlimitedRepr = -1
+
 
 
 -- | Type class for values representing some product of @Word64@ indexes.
@@ -67,25 +83,40 @@ class IsExtent a where
 --   null which is used for datasets containing no data, or
 --   N-dimensional size and possibly maximal size.
 class IsDataspace a where
+  -- |
   encodeDataspace :: Monoid m => a -> Maybe ((Word64 -> Word64 -> m) -> m)
   -- | Parser for dataset which could be used to decode from sequence
   --   of Dims.
   decodeDataspace :: Monad m => ParserDim (Word64,Word64) m a
+  -- |
   decodeNullDataspace :: Maybe a
   decodeNullDataspace = Nothing
 
 
--- FIXME: Decide what to do with overflows???
+
+-- | Generic extent of dataspace. It could encode all possible
+--   extents.
+data Extent
+  = Simple [Growable Word64] -- ^ Simple dataspace.
+  | Null                     -- ^ Null extent for dataset which do not
+                             --   contain any actual data.
+  deriving stock (Show,Eq,Ord)
+
+
+instance IsDataspace Extent where
+  encodeDataspace = \case
+    Null        -> Nothing
+    Simple dims -> encodeDataspace dims
+  decodeDataspace     = Simple <$> decodeDataspace
+  decodeNullDataspace = Just Null
+
+data Growable a = Growable !a !a
+  deriving stock (Show,Eq,Ord)
 
 -- | Extent for scalar values. It's rank-0 extent not null extent!
 instance IsExtent () where
   encodeExtent ()  = \_ -> mempty
 
--- instance IsExtent Extent where
---   encodeExtent Null          = Nothing
---   encodeExtent (Simple dims) = Just $ flip foldMap dims
---   decodeExtent     = Simple <$> many parseDim
---   -- decodeNullExtent = Just Null
 
 instance IsExtent Word64 where
   encodeExtent i = \f -> f i
@@ -101,9 +132,9 @@ instance IsExtent a => IsExtent [a] where
   encodeExtent xs f = foldMap (\x -> encodeExtent x f) xs
 
 
-
+-- | Extent for scalar values. It's rank-0 extent not null extent!
 instance IsDataspace () where
-  encodeDataspace () = Just $ \_ -> mempty
+  encodeDataspace () = Just mempty
   decodeDataspace    = pure ()
 
 instance IsDataspace Word64 where
@@ -126,9 +157,49 @@ instance IsDataspace Int64 where
     (w,_) | w > fromIntegral (maxBound::Int) -> empty -- FIXME: pass that size is wrong!
           | otherwise                        -> pure $! fromIntegral w
 
+instance IsDataspace (Growable Word64) where
+  encodeDataspace (Growable w m) = Just $ \f -> f w m
+  decodeDataspace = uncurry Growable <$> parseDim
+
+instance IsDataspace (Growable Int) where
+  encodeDataspace = \case
+    Growable w UNLIMITED
+      | w < 0     -> error "Negative size"
+      | otherwise -> Just $ \f -> f (fromIntegral w) UNLIMITED
+    Growable w m
+      | w < 0     -> error "Negative size"
+      | m < 0     -> error "Negative size"
+      | otherwise -> Just $ \f -> f (fromIntegral w) (fromIntegral m)
+  decodeDataspace = parseDim >>= \case
+    (w,UNLIMITED)
+      | w > fromIntegral (maxBound::Int) -> empty
+      | otherwise -> pure $! Growable (fromIntegral w) UNLIMITED
+    (w,m)
+      | w > fromIntegral (maxBound::Int) -> empty
+      | m > fromIntegral (maxBound::Int) -> empty
+      | otherwise -> pure $! Growable (fromIntegral w) (fromIntegral m)
+
+instance IsDataspace (Growable Int64) where
+  encodeDataspace = \case
+    Growable w UNLIMITED
+      | w < 0     -> error "Negative size"
+      | otherwise -> Just $ \f -> f (fromIntegral w) UNLIMITED
+    Growable w m
+      | w < 0     -> error "Negative size"
+      | m < 0     -> error "Negative size"
+      | otherwise -> Just $ \f -> f (fromIntegral w) (fromIntegral m)
+  decodeDataspace = parseDim >>= \case
+    (w,UNLIMITED)
+      | w > fromIntegral (maxBound::Int64) -> empty
+      | otherwise -> pure $! Growable (fromIntegral w) UNLIMITED
+    (w,m)
+      | w > fromIntegral (maxBound::Int64) -> empty
+      | m > fromIntegral (maxBound::Int64) -> empty
+      | otherwise -> pure $! Growable (fromIntegral w) (fromIntegral m)
+
+
 instance (IsDataspace a, IsDataspace b) => IsDataspace (a,b) where
-  encodeDataspace (a,b) = (liftA2 . liftA2) (<>)
-    (encodeDataspace a) (encodeDataspace b)
+  encodeDataspace (a,b) = (<>) (encodeDataspace a) (encodeDataspace b)
   decodeDataspace = liftA2 (,) decodeDataspace decodeDataspace
 
 instance (IsDataspace a) => IsDataspace [a] where
@@ -139,34 +210,7 @@ instance (IsDataspace a) => IsDataspace [a] where
 
 
 
--- | Value which is used to represent than maximum size of particular
---   dimension is unbounded.
-pattern UNLIMITED :: DimRepr a => a
-pattern UNLIMITED <- ((==unlimitedRepr) -> True) where UNLIMITED = unlimitedRepr
 
-class (Integral a, Eq a) => DimRepr a where
-  unlimitedRepr :: a
-  -- dimFromWord64 :: Word64 -> Maybe a
-  -- dimToWord64   :: Word64 -> Maybe a
-
-instance DimRepr Word64 where
-  unlimitedRepr = coerce H5S_UNLIMITED
-  -- dimFromWord64 = Just
-  -- dimToWord64   = Just
-
-instance DimRepr Int where
-  unlimitedRepr = -1
-  -- dimFromWord64 UNLIMITED = Just UNLIMITED
-  -- dimFromWord64 n = do
-  --   guard $ n <= fromIntegral (maxBound::Int)
-  --   Just $ fromIntegral n
-  
-instance DimRepr Int64 where
-  unlimitedRepr = -1
-  -- dimFromWord64 UNLIMITED = Just UNLIMITED
-  -- dimFromWord64 n = do
-  --   guard $ n <= fromIntegral (maxBound::Int64)
-  --   Just $ fromIntegral n
 
 
 ----------------------------------------------------------------

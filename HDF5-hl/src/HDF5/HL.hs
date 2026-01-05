@@ -84,12 +84,12 @@ module HDF5.HL
     -- $dataspace
   , Dataspace
   , pattern UNLIMITED
-  -- , Extent(..)
   , IsExtent(..)
+  , IsDataspace(..)
+  , Extent(..)
+  , Growable(..)
   , rank
   , extent
-  , dataspaceRank
-  , dataspaceExt
     -- * Attributes
   , Attribute
   , openAttr

@@ -488,19 +488,6 @@ rank a = liftIO $ withDataspace a HIO.dataspaceRank
 extent :: (HasData a, IsDataspace ext, MonadIO m, HasCallStack) => a -> m (Either DataspaceParseError ext)
 extent a = liftIO $ withDataspace a runParseFromDataspace
 
-dataspaceRank
-  :: (MonadIO m, HasCallStack)
-  => Dataspace
-  -> m (Maybe Int)
-dataspaceRank spc = liftIO $ HIO.dataspaceRank spc
-
--- | Parse extent of dataspace. Returns @Nothing@ if dataspace doens't
---   match expected shape.
-dataspaceExt
-  :: (MonadIO m, IsDataspace ext, HasCallStack)
-  => Dataspace
-  -> m (Either DataspaceParseError ext)
-dataspaceExt spc = liftIO $ runParseFromDataspace spc
 
 ----------------------------------------------------------------
 -- Attributes

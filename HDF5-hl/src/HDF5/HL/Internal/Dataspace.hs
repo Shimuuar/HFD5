@@ -21,6 +21,9 @@ module HDF5.HL.Internal.Dataspace
   , withCreateDataspaceFromExtent
   , withCreateDataspaceFromDSpace
   , setSlabSelection
+    -- * Dataspace querying
+  , dataspaceRank
+  , dataspaceExt
     -- * Internal
   , withEncodedExtent
   ) where
@@ -28,6 +31,7 @@ module HDF5.HL.Internal.Dataspace
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Catch
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Maybe
@@ -444,3 +448,33 @@ setSlabSelection (Dataspace hid) off sz = evalContT $ do
             p_off nullPtr
             p_sz  nullPtr
   pure ()
+
+
+----------------------------------------------------------------
+-- Dataspace querying
+----------------------------------------------------------------
+
+dataspaceRank
+  :: (HasCallStack, MonadIO m)
+  => Dataspace
+  -> m (Maybe Int)
+dataspaceRank (Dataspace hid)
+  = withFrozenCallStack
+  $ liftIO
+  $ alloca $ \p_err ->
+    h5s_get_simple_extent_type hid p_err >>= \case
+      H5S_NULL   -> pure   Nothing
+      H5S_SCALAR -> pure $ Just 0
+      H5S_SIMPLE -> do
+        n <- checkCInt p_err "Cannot get rank of dataspace's extent"
+           $ h5s_get_simple_extent_ndims hid
+        pure $ Just (fromIntegral n)
+      _ -> throwM =<< decodeError p_err "Cannot get dataspace type"
+
+-- | Parse extent of dataspace. Returns @Nothing@ if dataspace doens't
+--   match expected shape.
+dataspaceExt
+  :: (MonadIO m, IsDataspace ext, HasCallStack)
+  => Dataspace
+  -> m (Either DataspaceParseError ext)
+dataspaceExt spc = liftIO $ runParseFromDataspace spc

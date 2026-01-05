@@ -54,21 +54,6 @@ basicReadObject :: (SerializeArr a, HasData d, MonadIO m, HasCallStack) => d -> 
 basicReadObject d = liftIO $ withDataspace d $ \spc -> basicReadArr d spc
 
 
-dataspaceRank
-  :: (HasCallStack)
-  => Dataspace
-  -> IO (Maybe Int)
-dataspaceRank (Dataspace hid)
-  = withFrozenCallStack
-  $ alloca $ \p_err ->
-    h5s_get_simple_extent_type hid p_err >>= \case
-      H5S_NULL   -> pure   Nothing
-      H5S_SCALAR -> pure $ Just 0
-      H5S_SIMPLE -> do
-        n <- checkCInt p_err "Cannot get rank of dataspace's extent"
-           $ h5s_get_simple_extent_ndims hid
-        pure $ Just (fromIntegral n)
-      _ -> throwM =<< decodeError p_err "Cannot get dataspace type"
 
 
 ----------------------------------------------------------------

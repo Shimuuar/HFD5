@@ -77,7 +77,7 @@ instance DimRepr Int64 where
 
 -- | Type class for values representing some product of @Word64@ indexes.
 --   It could be number for 1D arrays or some combination of tuples.
-class IsExtent a where
+class IsDataspace a => IsExtent a where
   -- | Encode extent. This fold over all dimensions of dataset for
   --   simple and scalar extents. Null extents should return @Nothing@.
   encodeExtent :: Monoid m => a -> (Word64 -> m) -> m

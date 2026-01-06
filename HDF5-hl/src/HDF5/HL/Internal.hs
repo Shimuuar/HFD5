@@ -43,406 +43,394 @@ import HDF5.HL.Internal.Types
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Dataspace
+import HDF5.HL.Internal.Property
 import HDF5.HL.Vector
 import HDF5.C
 import Prelude hiding (read,readIO)
 
 
+----------------------------------------------------------------
+-- Primitives
+----------------------------------------------------------------
 
--- | Read value from already opened dataset or attribute.
-basicReadObject :: (SerializeArr a, HasData d, MonadIO m, HasCallStack) => d -> m a
-basicReadObject d = liftIO $ withDataspace d $ \spc -> basicReadArr d spc
+-- | Basic read primitive. Reads full content of dataset\/attribute
+--   into haskell data structure.
+basicReadObject
+  :: forall a d. (ArrayLike a, HasData d, HasCallStack)
+  => d -> IO a
+basicReadObject d = withDataspace d $ \spc_file -> do
+  ext <- dataspaceExt @_ @(ExtentOf a) spc_file >>= \case
+    Left  _ -> error "FIXME"
+    Right x -> pure x
+  basicReadFromSlab ext $ \ptr -> evalContT $ do
+    p_err   <- ContT alloca
+    spc_mem <- ContT $ withCreateDataspaceFromExtent ext
+    tid     <- ContT $ withType (typeH5 @(ElementOf a))
+    --
+    lift $ checkHErr p_err "Reading dataset data failed"
+         $ h5d_read (getHID d) tid
+             (getHID spc_mem) (getHID spc_file)
+             H5P_DEFAULT (castPtr ptr)
 
+-- | Basic primitive for writing into dataset\/attributes without
+--   offset. It's assumed that dataset was created with correct size
+basicWriteObject
+  :: forall a d. (ArrayLike a, HasData d, HasCallStack)
+  => d -> a -> IO ()
+basicWriteObject dset a = 
+  basicWriteToSlab a $ \ptr -> evalContT $ do
+    p_err    <- ContT alloca
+    spc_file <- lift  $ getDataspaceIO dset
+    spc_mem  <- ContT $ withCreateDataspaceFromExtent $ getExtent a
+    tid      <- ContT $ withType (typeH5 @(ElementOf a))
+    lift $ checkHErr p_err "Writing dataset data failed"
+         $ h5d_write (getHID dset) tid
+             (getHID spc_mem) (getHID spc_file) H5P_DEFAULT ptr
 
-
+-- | Read slab 
+basicReadSlab
+  :: forall a d. (ArrayLike a, HasData d, HasCallStack)
+  => d          -- ^ Dataset\/attribute to read from
+  -> ExtentOf a -- ^ Offset into array
+  -> ExtentOf a -- ^ Array size
+  -> IO a
+basicReadSlab d off sz = withDataspace d $ \spc_file -> do
+  basicReadFromSlab sz $ \ptr -> evalContT $ do
+    p_err   <- ContT alloca
+    lift $ setSlabSelection spc_file off sz
+    spc_mem <- ContT $ withCreateDataspaceFromExtent sz
+    tid     <- ContT $ withType (typeH5 @(ElementOf a))
+    --
+    lift $ checkHErr p_err "Reading dataset data failed"
+         $ h5d_read (getHID d) tid
+             (getHID spc_mem) (getHID spc_file)
+             H5P_DEFAULT (castPtr ptr)
+basicWriteSlab
+  :: forall a d. (ArrayLike a, HasData d, HasCallStack)
+  => d
+  -> ExtentOf a -- ^ Offset into array
+  -> a
+  -> IO ()
+basicWriteSlab dset off a = do
+  basicWriteToSlab a $ \ptr -> evalContT $ do
+    p_err    <- ContT alloca
+    spc_file <- lift  $ getDataspaceIO dset
+    lift $ setSlabSelection spc_file off (getExtent a)
+    spc_mem  <- ContT $ withCreateDataspaceFromExtent $ getExtent a
+    tid      <- ContT $ withType (typeH5 @(ElementOf a))
+    lift $ checkHErr p_err "Writing dataset data failed"
+         $ h5d_write (getHID dset) tid
+             (getHID spc_mem) (getHID spc_file) H5P_DEFAULT ptr
+  
 
 ----------------------------------------------------------------
 -- Attributes
 ----------------------------------------------------------------
 
-openAttr
-  :: (HasAttrs a, HasCallStack)
-  => a      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> IO (Maybe Attribute)
-openAttr (getHID -> hid) path = withFrozenCallStack $ evalContT $ do
-  p_err <- ContT $ alloca
-  c_str <- ContT $ withCString path
-  lift $ do
-    exists <- checkHTri p_err ("Cannot check whether attribute " ++ path ++ " exists")
-            $ h5a_exists hid c_str
-    case exists of
-      False -> pure Nothing
-      True  -> Just . Attribute
-            <$> ( checkHID p_err ("Cannot open attribute " ++ path)
-                $ h5a_open hid c_str H5P_DEFAULT)
 
-withAttr
-  :: (HasAttrs a, HasCallStack)
-  => a      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> (Maybe Attribute -> IO b)
-  -> IO b
-withAttr a path = bracket (openAttr a path) (mapM_ basicClose)
+-- openAttr
+--   :: (HasAttrs a, HasCallStack)
+--   => a      -- ^ Dataset or group
+--   -> String -- ^ Attribute name
+--   -> IO (Maybe Attribute)
+-- openAttr (getHID -> hid) path = withFrozenCallStack $ evalContT $ do
+--   p_err <- ContT $ alloca
+--   c_str <- ContT $ withCString path
+--   lift $ do
+--     exists <- checkHTri p_err ("Cannot check whether attribute " ++ path ++ " exists")
+--             $ h5a_exists hid c_str
+--     case exists of
+--       False -> pure Nothing
+--       True  -> Just . Attribute
+--             <$> ( checkHID p_err ("Cannot open attribute " ++ path)
+--                 $ h5a_open hid c_str H5P_DEFAULT)
 
-basicCreateAttr
-  :: forall a dir. (SerializeArr a, HasAttrs dir, HasCallStack)
-  => dir    -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> a      -- ^ Value to store in attribute
-  -> IO ()
-basicCreateAttr dir path a = evalContT $ do
-  p_err  <- ContT $ alloca
-  c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspaceFromExtent (getExtent a)
-  tid    <- ContT $ withType $ typeH5 @(ElementOf a)
-  attr   <- ContT $ bracket
-    ( withFrozenCallStack
-    $ fmap Attribute
-    $ checkHID p_err ("Cannot create attribute " ++ path)
-    $ h5a_create (getHID dir) c_path tid (getHID space)
-          H5P_DEFAULT
-          H5P_DEFAULT)
-    basicClose
-  lift $ basicWriteArr attr a
+-- withAttr
+--   :: (HasAttrs a, HasCallStack)
+--   => a      -- ^ Dataset or group
+--   -> String -- ^ Attribute name
+--   -> (Maybe Attribute -> IO b)
+--   -> IO b
+-- withAttr a path = bracket (openAttr a path) (mapM_ basicClose)
 
-basicReadAttr
-  :: (SerializeArr a, HasAttrs d, HasCallStack)
-  => d      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> IO (Maybe a)
-basicReadAttr a name = withAttr a name $ \case
-  Just x  -> Just <$> basicReadObject x
-  Nothing -> pure Nothing
+-- basicCreateAttr
+--   :: forall a dir. (SerializeArr a, HasAttrs dir, HasCallStack)
+--   => dir    -- ^ Dataset or group
+--   -> String -- ^ Attribute name
+--   -> a      -- ^ Value to store in attribute
+--   -> IO ()
+-- basicCreateAttr dir path a = evalContT $ do
+--   p_err  <- ContT $ alloca
+--   c_path <- ContT $ withCString path
+--   space  <- ContT $ withCreateDataspaceFromExtent (getExtent a)
+--   tid    <- ContT $ withType $ typeH5 @(ElementOf a)
+--   attr   <- ContT $ bracket
+--     ( withFrozenCallStack
+--     $ fmap Attribute
+--     $ checkHID p_err ("Cannot create attribute " ++ path)
+--     $ h5a_create (getHID dir) c_path tid (getHID space)
+--           H5P_DEFAULT
+--           H5P_DEFAULT)
+--     basicClose
+--   lift $ basicWriteArr attr a
+
+-- basicReadAttr
+--   :: (SerializeArr a, HasAttrs d, HasCallStack)
+--   => d      -- ^ Dataset or group
+--   -> String -- ^ Attribute name
+--   -> IO (Maybe a)
+-- basicReadAttr a name = withAttr a name $ \case
+--   Just x  -> Just <$> basicReadObject x
+--   Nothing -> pure Nothing
 
 
 ----------------------------------------------------------------
--- Type class for datasets
+-- Type classes for reading/writing
 ----------------------------------------------------------------
 
--- | Data type which could be serialized to HDF5 dataset. This type
---   class works with dataset and thus is able to work use attributes
---   attached to dataset. See 'SerializeArr' for variant which only
---   use array and thus is able to work with both datasets and attributes.
-class (Element (ElementOf a), IsExtent (ExtentOf a)) => Serialize a where
+-- | Data types which directly represent HDF5 N-dimensional arrays.
+--   Usually operations are not zero-copy. Reading usually needs to
+--   allocate buffer first, read from HDF file into it and reconstruct
+--   haskell value from it. Similarly writing needs to create buffer
+--   fill and then pass to HDF.
+class (Element (ElementOf a), IsExtent (ExtentOf a)) => ArrayLike a where
   type ElementOf a
   type ExtentOf  a
-  -- | Read object using object itself and dataspace associated with
-  --   it. This method shouldn't be called directly
-  basicRead :: HasCallStack => Dataset -> Dataspace -> IO a
-  default basicRead :: (SerializeArr a) => Dataset -> Dataspace -> IO a
-  basicRead = basicReadArr
-  -- | Write object to HDF5 file. At this point dataset is already
-  --   created with correct dataspace.
-  basicWrite :: HasCallStack => Dataset -> a -> IO ()
-  default basicWrite :: (SerializeArr a) => Dataset -> a -> IO ()
-  basicWrite = basicWriteArr
-  -- | Compute dimensions of an array
+  -- | Primitive for writing of HDF5 arrays (and scalars)
+  basicWriteToSlab
+    :: a                            -- ^ Value to pass
+    -> (Ptr (ElementOf a) -> IO ()) -- ^ Callback consuming buffer
+    -> IO ()
+  -- | Primitive for reading HDF5 arrays. 
+  basicReadFromSlab
+    :: ExtentOf a                   -- ^ Size of an array
+    -> (Ptr (ElementOf a) -> IO ()) -- ^ Callback which will read into elements
+    -> IO a
+  -- | Compute extent of data
   getExtent :: a -> ExtentOf a
 
--- | More restrictive variant of 'Serialize' which does not use
---   attributes and thus may work with both datasets and attributes.
-class Serialize a => SerializeArr a where
-  basicReadArr  :: (HasData d, HasCallStack) => d -> Dataspace -> IO a
-  basicWriteArr :: (HasData d, HasCallStack) => d -> a -> IO ()
-
--- | Data types which could be read and written using simple hyperslabs
-class SerializeArr a => SerializeSlab a where
-  -- | Read part of dataset into given data structure
-  basicReadSlab :: Dataset
-                -> ExtentOf a -- ^ Offset into on-disk data structure
-                -> ExtentOf a -- ^ Size of data to read
-                -> IO a
-  -- | Write content of array to a dataspace
-  basicWriteSlab :: Dataset    -- ^ Dataset to write to
-                 -> ExtentOf a -- ^ Offset into dataset
-                 -> a          -- ^ Data to write
-                 -> IO ()
-
-
--- | Values which could be serialized as set of attributes
-class SerializeAttr a where
-  basicFromAttrs :: HasCallStack => AttributeM a
-  basicToAttrs   :: HasCallStack => a -> AttributeM ()
-
-instance SerializeAttr () where
-  basicToAttrs   = pure
-  basicFromAttrs = pure ()
-
-
-newtype AttributeM a = AttributeM
-  { unAttributeM :: forall d. HasAttrs d => d -> (FilePath -> FilePath) -> IO a }
-  deriving Functor
-
-runAttributeM :: HasAttrs d => d -> AttributeM a -> IO a
-runAttributeM d (AttributeM f) = f d id
-
-instance Applicative AttributeM where
-  pure a = AttributeM $ \_ _ -> pure a
-  (<*>)  = ap
-
-instance Monad AttributeM where
-  m >>= fun = AttributeM $ \d f -> do
-    a <- unAttributeM m d f
-    unAttributeM (fun a) d f
-
-basicAttrSubset :: FilePath -> AttributeM a -> AttributeM a
-basicAttrSubset dir m = AttributeM $ \d fun -> unAttributeM m d ((dir++) . ('/':) . fun)
-
-basicEncodeAttr :: SerializeArr a => FilePath -> a -> AttributeM ()
-basicEncodeAttr name a = AttributeM $ \d fun -> do
-  basicCreateAttr d (fun name) a
-
-basicDecodeAttr :: SerializeArr a => FilePath -> AttributeM a
-basicDecodeAttr name = AttributeM $ \d fun -> do
-  basicReadAttr d (fun name) >>= \case
-    Nothing -> error "No attribute" -- FIXME: proper error handling
-    Just a  -> pure a
 
 
 
-instance (Element a) => Serialize [a] where
-  type ElementOf [a] = a
-  type ExtentOf  [a] = Int
-  getExtent = length
-
-instance (Element a) => SerializeArr [a] where
-  basicReadArr  dset spc = VG.toList <$> basicReadArr @(VecHDF5 a) dset spc
-  basicWriteArr dset xs  = basicWriteArr dset (VG.fromList @VecHDF5 xs)
-
-instance (Element a) => SerializeSlab [a] where
-  basicReadSlab  dset off sz = VG.toList <$> basicReadSlab @(VecHDF5 a) dset off sz
-  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.fromList @VecHDF5 xs)
-
-
-instance (Element a, VU.Unbox a) => Serialize (VU.Vector a) where
-  type ElementOf (VU.Vector a) = a
-  type ExtentOf  (VU.Vector a) = Int
-  getExtent = VU.length
-
-instance (Element a, VU.Unbox a) => SerializeArr (VU.Vector a) where
-  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VecHDF5 a) dset spc
-  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VecHDF5 a)
-
-instance (Element a, VU.Unbox a) => SerializeSlab (VU.Vector a) where
-  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
-  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
+-- | Data type which could be serialized as single HDF5 dataset.
+--   Instance can do anything they like as long instance
+--   roundtrips. Notable it allows use of dataset attributes.
+class SerializeDSet a where
+  basicReadDSet :: Dataset -> IO a
+  basicWriteDSet
+    :: a
+    -> (forall ext. IsDataspace ext
+        => ext -> Type -> [Property Dataset] -> (Dataset -> IO ()) -> IO ())
+    -> IO ()
+    
+  
 
 
-instance (Element a) => Serialize (V.Vector a) where
-  type ElementOf (V.Vector a) = a
-  type ExtentOf  (V.Vector a) = Int
-  getExtent = V.length
-
-instance (Element a) => SerializeArr (V.Vector a) where
-  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VecHDF5 a) dset spc
-  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VecHDF5 a)
-
-instance (Element a) => SerializeSlab (V.Vector a) where
-  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
-  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
 
 
-instance (Element a) => Serialize (VV.Vector a) where
-  type ElementOf (VV.Vector a) = a
-  type ExtentOf  (VV.Vector a) = Int
-  getExtent = VV.length
+-- -- | Values which could be serialized as set of attributes
+-- class SerializeAttr a where
+--   basicFromAttrs :: HasCallStack => AttributeM a
+--   basicToAttrs   :: HasCallStack => a -> AttributeM ()
 
-instance (Element a) => SerializeArr (VV.Vector a) where
-  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VecHDF5 a) dset spc
-  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VecHDF5 a)
-
-instance (Element a) => SerializeSlab (VV.Vector a) where
-  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
-  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
+-- instance SerializeAttr () where
+--   basicToAttrs   = pure
+--   basicFromAttrs = pure ()
 
 
-instance (Storable a, Element a) => Serialize (VS.Vector a) where
-  type ElementOf (VS.Vector a) = a
-  type ExtentOf  (VS.Vector a) = Int
-  getExtent = VS.length
+-- newtype AttributeM a = AttributeM
+--   { unAttributeM :: forall d. HasAttrs d => d -> (FilePath -> FilePath) -> IO a }
+--   deriving Functor
 
-instance (Storable a, Element a) => SerializeArr (VS.Vector a) where
-  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VS.Vector a) dset spc
-  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VS.Vector a)
+-- runAttributeM :: HasAttrs d => d -> AttributeM a -> IO a
+-- runAttributeM d (AttributeM f) = f d id
 
-instance (Storable a, Element a) => SerializeSlab (VS.Vector a) where
-  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
-  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
+-- instance Applicative AttributeM where
+--   pure a = AttributeM $ \_ _ -> pure a
+--   (<*>)  = ap
+
+-- instance Monad AttributeM where
+--   m >>= fun = AttributeM $ \d f -> do
+--     a <- unAttributeM m d f
+--     unAttributeM (fun a) d f
+
+-- basicAttrSubset :: FilePath -> AttributeM a -> AttributeM a
+-- basicAttrSubset dir m = AttributeM $ \d fun -> unAttributeM m d ((dir++) . ('/':) . fun)
+
+-- basicEncodeAttr :: SerializeArr a => FilePath -> a -> AttributeM ()
+-- basicEncodeAttr name a = AttributeM $ \d fun -> do
+--   basicCreateAttr d (fun name) a
+
+-- basicDecodeAttr :: SerializeArr a => FilePath -> AttributeM a
+-- basicDecodeAttr name = AttributeM $ \d fun -> do
+--   basicReadAttr d (fun name) >>= \case
+--     Nothing -> error "No attribute" -- FIXME: proper error handling
+--     Just a  -> pure a
 
 
-instance (VP.Prim a, Element a) => Serialize (VP.Vector a) where
-  type ElementOf (VP.Vector a) = a
-  type ExtentOf  (VP.Vector a) = Int
-  getExtent = VP.length
 
-instance (VP.Prim a, Element a) => SerializeArr (VP.Vector a) where
-  basicReadArr  dset spc = VG.convert <$> basicReadArr @(VP.Vector a) dset spc
-  basicWriteArr dset xs  = basicWriteArr dset (VG.convert xs :: VP.Vector a)
-
-instance (VP.Prim a, Element a) => SerializeSlab (VP.Vector a) where
-  basicReadSlab  dset off sz = VG.convert <$> basicReadSlab @(VecHDF5 a) dset off sz
-  basicWriteSlab dset off xs = basicWriteSlab dset off (VG.convert xs :: VecHDF5 a)
 
 
 ----------------------------------------------------------------
--- Vector with HDF5 encoding
+-- Deriving instances
 ----------------------------------------------------------------
-
-instance (Element a) => Serialize (VecHDF5 a) where
-  type ElementOf (VecHDF5 a) = a
-  type ExtentOf  (VecHDF5 a) = Int
-  getExtent = VG.length
-
-instance (Element a) => SerializeArr (VecHDF5 a) where
-  basicReadArr dset spc = do
-    n <- dataspaceRank spc
-    when (n /= Just 1) $ error "Invalid dimention"
-    basicReadBuffer dset spc
-  basicWriteArr dset xs = unsafeWithH5 xs $ unsafeWriteAll dset (typeH5 @a)
-
-
-instance (Element a) => SerializeSlab (VecHDF5 a) where
-  basicReadSlab dset off sz = evalContT $ do
-    p_err <- ContT alloca
-    -- File dataspace
-    spc_file <- lift $ getDataspaceIO dset
-    lift $ setSlabSelection spc_file off sz
-    -- Memory dataspace
-    spc_mem <- ContT $ withCreateDataspaceFromExtent sz
-    -- Prepare reading
-    tid     <- ContT $ withType (typeH5 @a)
-    buf     <- lift  $ mallocVectorH5 sz
-    ptr     <- ContT $ withForeignPtr buf
-    lift $ checkHErr p_err "Reading dataset data failed"
-         $ h5d_read (getHID dset) tid
-             (getHID spc_mem) (getHID spc_file)
-             H5P_DEFAULT (castPtr ptr)
-    pure $! unsafeFromForeignPtr buf sz
-  --
-  basicWriteSlab dset off vec = evalContT $ do
-    p_err <- ContT alloca
-    -- File dataspace
-    spc_file <- lift $ getDataspaceIO dset
-    lift $ setSlabSelection spc_file off sz
-    -- Memory dataspace
-    spc_mem <- ContT $ withCreateDataspaceFromExtent sz
-    -- Writing
-    tid <- ContT $ withType (typeH5 @a)
-    ptr <- ContT $ unsafeWithH5 vec
-    lift $ checkHErr p_err "Writing dataset data failed"
-         $ h5d_write (getHID dset) tid
-             (getHID spc_mem) (getHID spc_file) H5P_DEFAULT ptr
-    where
-      sz = VG.length vec
-
-
-deriving via SerializeAsScalar Int8   instance SerializeArr Int8
-deriving via SerializeAsScalar Int8   instance Serialize    Int8
-deriving via SerializeAsScalar Int16  instance SerializeArr Int16
-deriving via SerializeAsScalar Int16  instance Serialize    Int16
-deriving via SerializeAsScalar Int32  instance SerializeArr Int32
-deriving via SerializeAsScalar Int32  instance Serialize    Int32
-deriving via SerializeAsScalar Int64  instance SerializeArr Int64
-deriving via SerializeAsScalar Int64  instance Serialize    Int64
-deriving via SerializeAsScalar Word8  instance SerializeArr Word8
-deriving via SerializeAsScalar Word8  instance Serialize    Word8
-deriving via SerializeAsScalar Word16 instance SerializeArr Word16
-deriving via SerializeAsScalar Word16 instance Serialize    Word16
-deriving via SerializeAsScalar Word32 instance SerializeArr Word32
-deriving via SerializeAsScalar Word32 instance Serialize    Word32
-deriving via SerializeAsScalar Word64 instance SerializeArr Word64
-deriving via SerializeAsScalar Word64 instance Serialize    Word64
-
-deriving via SerializeAsScalar Int  instance SerializeArr Int
-deriving via SerializeAsScalar Int  instance Serialize    Int
-deriving via SerializeAsScalar Word instance SerializeArr Word
-deriving via SerializeAsScalar Word instance Serialize    Word
-
-deriving via SerializeAsScalar Float  instance SerializeArr Float
-deriving via SerializeAsScalar Float  instance Serialize    Float
-deriving via SerializeAsScalar Double instance SerializeArr Double
-deriving via SerializeAsScalar Double instance Serialize    Double
-
-deriving via SerializeAsScalar (Complex a)
-    instance Element a => SerializeArr (Complex a)
-deriving via SerializeAsScalar (Complex a)
-    instance Element a => Serialize (Complex a)
-
-deriving via SerializeAsScalar (FB.Vec n a)
-    instance (F.Arity n, Element a) => Serialize (FB.Vec n a)
-deriving via SerializeAsScalar (FB.Vec n a)
-    instance (F.Arity n, Element a) => SerializeArr (FB.Vec n a)
-
-deriving via SerializeAsScalar (FU.Vec n a)
-    instance (F.Arity n, Element a, FU.Unbox n a) => Serialize (FU.Vec n a)
-deriving via SerializeAsScalar (FU.Vec n a)
-    instance (F.Arity n, Element a, FU.Unbox n a) => SerializeArr (FU.Vec n a)
-
-deriving via SerializeAsScalar (FS.Vec n a)
-    instance (F.Arity n, Element a, Storable a) => Serialize (FS.Vec n a)
-deriving via SerializeAsScalar (FS.Vec n a)
-    instance (F.Arity n, Element a, Storable a) => SerializeArr (FS.Vec n a)
-
-deriving via SerializeAsScalar (FP.Vec n a)
-    instance (F.Arity n, Element a, FP.Prim a) => Serialize (FP.Vec n a)
-deriving via SerializeAsScalar (FP.Vec n a)
-    instance (F.Arity n, Element a, FP.Prim a) => SerializeArr (FP.Vec n a)
-
-deriving via SerializeAsScalar (FV.Vec n a)
-    instance (F.Arity n, Element a) => Serialize (FV.Vec n a)
-deriving via SerializeAsScalar (FV.Vec n a)
-    instance (F.Arity n, Element a) => SerializeArr (FV.Vec n a)
-
-deriving newtype instance Serialize    a => Serialize    (Identity a)
-deriving newtype instance SerializeArr a => SerializeArr (Identity a)
 
 -- | Newtype wrapper for derivation of serialization instances as
 --   scalars.
 newtype SerializeAsScalar a = SerializeAsScalar a
   deriving newtype (Storable, Element)
 
-instance Element a => Serialize (SerializeAsScalar a) where
+instance Element a => ArrayLike (SerializeAsScalar a) where
   type ElementOf (SerializeAsScalar a) = a
   type ExtentOf  (SerializeAsScalar a) = ()
   getExtent _ = ()
+  basicReadFromSlab () action = allocaElement $ \p -> do
+    action p
+    SerializeAsScalar <$> peekH5 p
+  basicWriteToSlab (SerializeAsScalar a) action = allocaElement $ \p -> do
+    pokeH5 p a
+    action p
 
-instance Element a => SerializeArr (SerializeAsScalar a) where
-  basicReadArr  dset spc = basicReadScalar dset spc
-  basicWriteArr dset a   = evalContT $ do
-    p  <- ContT $ allocaElement
-    lift $ do pokeH5 p a
-              unsafeWriteAll dset (typeH5 @a) p
+deriving via SerializeAsArray (SerializeAsScalar a)
+   instance Element a => SerializeDSet (SerializeAsScalar a)
+
+
+-- | Default implementation of 'SerializeDSet' in terms of 'ArrayLike'.
+newtype SerializeAsArray a = SerializeAsArray a
+
+instance ArrayLike a => SerializeDSet (SerializeAsArray a) where
+  basicReadDSet d = SerializeAsArray <$> basicReadObject d
+  basicWriteDSet (SerializeAsArray a) make
+    = make (getExtent a) (typeH5 @(ElementOf a)) []
+    $ \d -> basicWriteObject d a
+
 
 ----------------------------------------------------------------
--- Primitive read/write operations
+-- Instance boilerplate
 ----------------------------------------------------------------
 
-basicReadBuffer
-  :: forall a d. (Element a, HasData d, HasCallStack)
-  => d
-  -> Dataspace
-  -> IO (VecHDF5 a)
-basicReadBuffer dset (Dataspace spc) = do
-  alloca $ \p_err -> do
-    n   <- withFrozenCallStack
-         $ checkCLLong p_err "Cannot get number of points for dataspace"
-         $ h5s_get_simple_extent_npoints spc
-    buf <- mallocVectorH5 (fromIntegral n)
-    evalContT $ do
-      p  <- ContT $ withForeignPtr buf
-      lift $ do unsafeReadAll dset (typeH5 @a) (castPtr p)
-                pure $! unsafeFromForeignPtr buf (fromIntegral n)
+instance (Element a) => ArrayLike (VecHDF5 a) where
+  type ElementOf (VecHDF5 a) = a
+  type ExtentOf  (VecHDF5 a) = Int
+  getExtent = VG.length
+  basicWriteToSlab  v = unsafeWithH5 v
+  basicReadFromSlab sz action = do
+    buf <- mallocVectorH5 sz
+    withForeignPtr buf action
+    pure $! unsafeFromForeignPtr buf sz
 
-basicReadScalar
-  :: forall a d. (Element a, HasData d, HasCallStack)
-  => d
-  -> Dataspace
-  -> IO a
-basicReadScalar dset spc = do
-  dataspaceRank spc >>= \case
-    Nothing -> throwM $ Error [Left "Cannot read scalar from NULL dataset"]
-    Just 0  -> pure ()
-    Just _  -> throwM $ Error [Left "Cannot read scalar from non-scalar dataset"]
-  allocaElement $ \p -> do unsafeReadAll dset (typeH5 @a) p
-                           peekH5 p
+
+instance (Element a) => ArrayLike [a] where
+  type ElementOf [a] = a
+  type ExtentOf  [a] = Int
+  getExtent = length
+  basicWriteToSlab v = basicWriteToSlab (VG.fromList v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.toList . basicReadFromSlab @(VecHDF5 a) n
+
+instance (Element a) => ArrayLike (V.Vector a) where
+  type ElementOf (V.Vector a) = a
+  type ExtentOf  (V.Vector a) = Int
+  getExtent = V.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+instance (Element a) => ArrayLike (VV.Vector a) where
+  type ElementOf (VV.Vector a) = a
+  type ExtentOf  (VV.Vector a) = Int
+  getExtent = VV.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+instance (Storable a, Element a) => ArrayLike (VS.Vector a) where
+  type ElementOf (VS.Vector a) = a
+  type ExtentOf  (VS.Vector a) = Int
+  getExtent = VS.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+instance (VP.Prim a, Element a) => ArrayLike (VP.Vector a) where
+  type ElementOf (VP.Vector a) = a
+  type ExtentOf  (VP.Vector a) = Int
+  getExtent = VP.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+instance (VU.Unbox a, Element a) => ArrayLike (VU.Vector a) where
+  type ElementOf (VU.Vector a) = a
+  type ExtentOf  (VU.Vector a) = Int
+  getExtent = VU.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+
+deriving via SerializeAsArray [a]
+    instance (Element a) => SerializeDSet [a]
+deriving via SerializeAsArray (VecHDF5 a)
+    instance (Element a) => SerializeDSet (VecHDF5 a)
+deriving via SerializeAsArray (V.Vector a)
+    instance (Element a) => SerializeDSet (V.Vector a)
+deriving via SerializeAsArray (VV.Vector a)
+    instance (Element a) => SerializeDSet (VV.Vector a)
+deriving via SerializeAsArray (VS.Vector a)
+    instance (Element a, VS.Storable a) => SerializeDSet (VS.Vector a)
+deriving via SerializeAsArray (VP.Vector a)
+    instance (Element a, VP.Prim a) => SerializeDSet (VP.Vector a)
+deriving via SerializeAsArray (VU.Vector a)
+    instance (Element a, VU.Unbox a) => SerializeDSet (VU.Vector a)
+
+
+deriving via SerializeAsScalar Int    instance ArrayLike     Int
+deriving via SerializeAsScalar Int    instance SerializeDSet Int
+deriving via SerializeAsScalar Int8   instance ArrayLike     Int8
+deriving via SerializeAsScalar Int8   instance SerializeDSet Int8
+deriving via SerializeAsScalar Int16  instance ArrayLike     Int16
+deriving via SerializeAsScalar Int16  instance SerializeDSet Int16
+deriving via SerializeAsScalar Int32  instance ArrayLike     Int32
+deriving via SerializeAsScalar Int32  instance SerializeDSet Int32
+deriving via SerializeAsScalar Int64  instance ArrayLike     Int64
+deriving via SerializeAsScalar Int64  instance SerializeDSet Int64
+deriving via SerializeAsScalar Word   instance ArrayLike     Word
+deriving via SerializeAsScalar Word   instance SerializeDSet Word
+deriving via SerializeAsScalar Word8  instance ArrayLike     Word8
+deriving via SerializeAsScalar Word8  instance SerializeDSet Word8
+deriving via SerializeAsScalar Word16 instance ArrayLike     Word16
+deriving via SerializeAsScalar Word16 instance SerializeDSet Word16
+deriving via SerializeAsScalar Word32 instance ArrayLike     Word32
+deriving via SerializeAsScalar Word32 instance SerializeDSet Word32
+deriving via SerializeAsScalar Word64 instance ArrayLike     Word64
+deriving via SerializeAsScalar Word64 instance SerializeDSet Word64
+
+deriving via SerializeAsScalar Float  instance ArrayLike     Float
+deriving via SerializeAsScalar Float  instance SerializeDSet Float
+deriving via SerializeAsScalar Double instance ArrayLike     Double
+deriving via SerializeAsScalar Double instance SerializeDSet Double
+
+deriving via SerializeAsScalar (Complex a)
+    instance Element a => ArrayLike (Complex a)
+deriving via SerializeAsScalar (Complex a)
+    instance Element a => SerializeDSet (Complex a)
+
+deriving via SerializeAsScalar (FB.Vec n a)
+    instance (F.Arity n, Element a) => ArrayLike (FB.Vec n a)
+deriving via SerializeAsScalar (FU.Vec n a)
+    instance (F.Arity n, Element a, FU.Unbox n a) => ArrayLike (FU.Vec n a)
+deriving via SerializeAsScalar (FS.Vec n a)
+    instance (F.Arity n, Element a, Storable a) => ArrayLike (FS.Vec n a)
+deriving via SerializeAsScalar (FP.Vec n a)
+    instance (F.Arity n, Element a, FP.Prim a) => ArrayLike (FP.Vec n a)
+deriving via SerializeAsScalar (FV.Vec n a)
+    instance (F.Arity n, Element a) => ArrayLike (FV.Vec n a)
+
+deriving via SerializeAsScalar (FB.Vec n a)
+    instance (F.Arity n, Element a) => SerializeDSet (FB.Vec n a)
+deriving via SerializeAsScalar (FU.Vec n a)
+    instance (F.Arity n, Element a, FU.Unbox n a) => SerializeDSet (FU.Vec n a)
+deriving via SerializeAsScalar (FS.Vec n a)
+    instance (F.Arity n, Element a, Storable a) => SerializeDSet (FS.Vec n a)
+deriving via SerializeAsScalar (FP.Vec n a)
+    instance (F.Arity n, Element a, FP.Prim a) => SerializeDSet (FP.Vec n a)
+deriving via SerializeAsScalar (FV.Vec n a)
+    instance (F.Arity n, Element a) => SerializeDSet (FV.Vec n a)
+
+deriving newtype instance ArrayLike     a => ArrayLike     (Identity a)
+deriving newtype instance SerializeDSet a => SerializeDSet (Identity a)

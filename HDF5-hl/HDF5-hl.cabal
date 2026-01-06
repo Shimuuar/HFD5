@@ -46,7 +46,7 @@ Library
   Exposed-modules:
         HDF5.HL
         HDF5.HL.Vector
-        HDF5.HL.Serialize
+--        HDF5.HL.Serialize
         HDF5.HL.Internal
         HDF5.HL.Internal.Dataspace
         HDF5.HL.Internal.Enum

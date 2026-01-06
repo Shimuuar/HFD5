@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Description of dataspaces.
-module HDF5.HL.Internal.Dataspace
+module HDF5.HL.Dataspace
   ( -- * Encoding of extents
     IsExtent(..)
   , IsDataspace(..)

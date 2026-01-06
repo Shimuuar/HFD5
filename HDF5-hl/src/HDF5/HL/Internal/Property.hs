@@ -24,7 +24,7 @@ import HDF5.C
 import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Wrappers
-import HDF5.HL.Internal.Dataspace
+import HDF5.HL.Dataspace
 import HDF5.HL.Unsafe.Encoding
 
 

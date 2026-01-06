@@ -45,10 +45,10 @@ Library
                   , text         >=2
   Exposed-modules:
         HDF5.HL
+        HDF5.HL.Dataspace
         HDF5.HL.Vector
 --        HDF5.HL.Serialize
         HDF5.HL.Internal
-        HDF5.HL.Internal.Dataspace
         HDF5.HL.Internal.Enum
         HDF5.HL.Internal.Error
         HDF5.HL.Internal.Types

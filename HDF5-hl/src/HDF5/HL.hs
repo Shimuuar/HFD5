@@ -42,9 +42,6 @@ companion named @with...@
 
 == Reading/writing
 
-
-
-
 -}
 module HDF5.HL
   ( -- * Files and groups
@@ -65,21 +62,26 @@ module HDF5.HL
   , listGroup
     -- * Datasets
   , Dataset
+  , rank
+  , extent
     -- ** Opening & creation
   , openDataset
   , createEmptyDataset
   , withOpenDataset
   , withCreateEmptyDataset
-    -- ** Reading & writing
-  , readSlab
-  , writeSlab
   , setDatasetExtent
-    -- ** Read\/write dataset at once
-  -- , createDataset
-    -- ** Reading and writing
-  -- , readDataset
-  -- , readObject
-  -- , readAt
+    -- ** Reading & writing of arrays
+  , ArrayLike(..)
+  , writeSlab
+  , readSlab
+  , writeAll
+  , readAll
+  , writeAllAt
+  , readAllAt
+    -- ** Reading using 'SerializeDSet'
+  , SerializeDSet(..)
+  , readDatasetAt
+  , writeDatasetAt
     -- ** Dataspace information
     -- $dataspace
   , Dataspace
@@ -88,8 +90,6 @@ module HDF5.HL
   , IsDataspace(..)
   , Extent(..)
   , Growable(..)
-  , rank
-  , extent
     -- * Attributes
   , Attribute
   -- , openAttr
@@ -383,54 +383,6 @@ withCreateEmptyDataset dir path ty ext props = bracket
   (createEmptyDataset dir path ty ext props)
   close
 
-
-
--- -- | Create new dataset at given location and write provided data to
--- --   it. Shape of data is inferred from data to write.
--- createDataset
---   :: forall a dir m. (Serialize a, IsDirectory dir, MonadIO m, HasCallStack)
---   => dir                -- ^ File (root will be used) or group
---   -> FilePath           -- ^ Path to dataset
---   -> a                  -- ^ Value to write
---   -> [Property Dataset] -- ^ Dataset creation properties
---   -> m ()
--- createDataset dir path a props = liftIO $ evalContT $ do
---   p_err  <- ContT $ alloca
---   c_path <- ContT $ withCString path
---   space  <- ContT $ withCreateDataspaceFromExtent $ getExtent a
---   tid    <- ContT $ withType $ typeH5 @(ElementOf a)
---   plist  <- ContT $ withDatasetProps $ mconcat props
---   dset   <- ContT $ bracket
---     ( withFrozenCallStack
---     $ fmap Dataset
---     $ checkHID p_err ("Unable to create dataset")
---     $ h5d_create (getHID dir) c_path tid (getHID space)
---       H5P_DEFAULT
---       (getHID plist)
---       H5P_DEFAULT
---     )
---     basicClose
---   lift $ basicWrite dset a
-
-
--- -- | Read data from already opened dataset. This function work
--- --   specifically with datasets and can use its attributes. Use 'read'
--- --   to be able to read from attributes as well.
--- readDataset :: (Serialize a, MonadIO m, HasCallStack) => Dataset -> m a
--- readDataset d = liftIO $ withDataspace d $ \spc -> basicRead d spc
-
--- -- | Read value from already opened dataset or attribute.
--- readObject :: (SerializeArr a, HasData d, MonadIO m, HasCallStack) => d -> m a
--- readObject = liftIO . HIO.basicReadObject
-
--- -- | Open dataset and read it using 'readDSet'.
--- readAt
---   :: (Serialize a, IsDirectory dir, MonadIO m, HasCallStack)
---   => dir      -- ^ File (root will be used) or group
---   -> FilePath -- ^ Path to dataset
---   -> m a
--- readAt dir path = liftIO $ withOpenDataset dir path readDataset
-
 -- | Read slab selection from dataset
 readSlab
   :: (ArrayLike a, MonadIO m, HasCallStack)
@@ -443,11 +395,75 @@ readSlab dset off sz = liftIO $ HIO.basicReadSlab dset off sz
 -- | Write provided data into slab selection
 writeSlab
   :: (ArrayLike a, MonadIO m, HasCallStack)
-  => Dataset    -- ^ Dataset to read from
+  => Dataset    -- ^ Dataset to write to
   -> ExtentOf a -- ^ Offset into dataset
   -> a          -- ^ Data to write (will write all)
   -> m ()
 writeSlab dset off xs = liftIO $ HIO.basicWriteSlab dset off xs
+
+-- | Write provided data into slab selection. Dataset should have
+--   enough space int it.
+writeAll
+  :: (ArrayLike a, MonadIO m, HasCallStack)
+  => Dataset    -- ^ Dataset to write to
+  -> a          -- ^ Data to write (will write all)
+  -> m ()
+writeAll dset xs = liftIO $ HIO.basicWriteObject dset xs
+
+-- | Read whole dataset as an haskell array.
+readAll
+  :: (ArrayLike a, MonadIO m, HasCallStack)
+  => Dataset
+  -> m a
+readAll dset = liftIO $ HIO.basicReadObject dset
+
+
+-- | Open and read dataset from either file or group.
+readAllAt
+  :: (ArrayLike a, IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location in HDF5 file
+  -> FilePath -- ^ Dataset name
+  -> m a
+readAllAt dir path
+  = liftIO
+  $ withOpenDataset dir path
+  $ \dset -> HIO.basicReadObject dset
+
+-- | Create dataset and write haskell array into it.
+writeAllAt
+  :: forall a dir m. (ArrayLike a, IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location in HDF5 file
+  -> FilePath -- ^ Name dataset to create
+  -> a        -- ^ Value to write
+  -> m ()
+writeAllAt dir path a
+  = liftIO
+  $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) []
+  $ \dset -> HIO.basicWriteObject dset a
+
+-- | Read dataset from HDF5 using 'SerializeDSet' machinery.
+readDatasetAt
+  :: (SerializeDSet a, IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location in HDF5 file
+  -> FilePath -- ^ Dataset name
+  -> m a
+readDatasetAt dir path
+  = liftIO
+  $ withOpenDataset dir path basicReadDSet
+
+-- | Create dataset from haskell value of type @a@. 
+writeDatasetAt
+  :: forall a dir m. (SerializeDSet a, IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location in HDF5 file
+  -> FilePath -- ^ Name of dataset to create
+  -> a        -- ^ Value to write to HDF5
+  -> m ()
+writeDatasetAt dir path a
+  = liftIO
+  $ basicWriteDSet a
+  $ \ext ty prop action -> 
+    withCreateEmptyDataset dir path ty ext prop action
+
 
 -- | Set new extent of dataspace. This function could be applied to
 --   following datasets:
@@ -476,13 +492,18 @@ setDatasetExtent dset dim = liftIO $ evalContT $ do
 -- Dataspace API
 ----------------------------------------------------------------
 
+-- | Find rank of dataset or attribute. Returns @Nothing@ for null
+--   dataspaces, @Just 0@ for scalars and @Just n@ for rank-N arrays.
 rank :: (HasData a, MonadIO m, HasCallStack) => a -> m (Maybe Int)
 rank a = liftIO $ withDataspace a dataspaceRank
 
--- | Compute extent of an object. Returns nothing when extent has
---   unexpected shape. E.g. if 2D array is expected but object is 1D
---   array.
-extent :: (HasData a, IsDataspace ext, MonadIO m, HasCallStack) => a -> m (Either DataspaceParseError ext)
+-- | Compute extent of an dataset or attribute. Returns nothing when
+--   extent has unexpected shape. E.g. if 2D array is expected but
+--   object is 1D array. Depending on type could be used to obtain
+--   size of size and maximum size for any\/each dimensions.
+extent
+  :: (HasData a, IsDataspace ext, MonadIO m, HasCallStack)
+  => a -> m (Either DataspaceParseError ext)
 extent a = liftIO $ withDataspace a runParseFromDataspace
 
 

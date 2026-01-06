@@ -25,6 +25,7 @@ import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Dataspace
+import HDF5.HL.Unsafe.Encoding
 
 
 ----------------------------------------------------------------
@@ -66,7 +67,7 @@ propDatasetLayout l = Property $ \p_err p -> withFrozenCallStack
 -- | Set chunking for a dataset
 propDatasetChunking :: (HasCallStack, IsExtent dim) => dim -> Property Dataset
 propDatasetChunking dim = Property $ \p_err prop -> withFrozenCallStack $ evalContT $ do
-  (rank,p) <- withEncodedExtent dim
+  (rank,p) <- withEncodedExtent $ encodeExtent dim
   lift $ checkHErr p_err "Unable to set chunk size"
        $ h5p_set_chunk (getHID prop) (fromIntegral rank) p
 

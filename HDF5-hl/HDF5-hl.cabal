@@ -54,6 +54,7 @@ Library
         HDF5.HL.Internal.Types
         HDF5.HL.Internal.Wrappers
         HDF5.HL.Internal.Property
+        HDF5.HL.Unsafe.Encoding
 
 Test-suite HDF5-hl-tests
   type:             exitcode-stdio-1.0

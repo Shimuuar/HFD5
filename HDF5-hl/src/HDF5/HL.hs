@@ -167,6 +167,7 @@ import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.Dataspace
 import HDF5.HL.Internal.Property
+import HDF5.HL.Unsafe.Encoding
 import HDF5.C
 import Prelude hiding (read,readIO)
 
@@ -462,7 +463,7 @@ writeSlab dset off xs = liftIO $ HIO.basicWriteSlab dset off xs
 setDatasetExtent :: (HasCallStack, IsExtent dim, MonadIO m) => Dataset -> dim -> m ()
 setDatasetExtent dset dim = liftIO $ evalContT $ do
   p_err         <- ContT $ alloca
-  (r_ext,p_ext) <- withEncodedExtent dim
+  (r_ext,p_ext) <- withEncodedExtent $ encodeExtent dim
   spc    <- ContT $ withDataspace dset
   r_dset <- lift
           $ checkCInt p_err "Cannot get rank of dataspace's extent"

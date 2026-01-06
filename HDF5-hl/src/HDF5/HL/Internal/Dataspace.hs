@@ -24,8 +24,6 @@ module HDF5.HL.Internal.Dataspace
     -- * Dataspace querying
   , dataspaceRank
   , dataspaceExt
-    -- * Internal
-  , withEncodedExtent
   ) where
 
 import Control.Applicative
@@ -46,6 +44,7 @@ import GHC.Stack
 
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
+import HDF5.HL.Unsafe.Encoding
 import HDF5.C
 
 
@@ -302,78 +301,10 @@ runParseFromDataspace (getHID -> hid) = withFrozenCallStack $ evalContT $ do
 
 
 
-----------------------------------------------------------------
--- Encoder for dataspaces
-----------------------------------------------------------------
-
--- | Monoid which is used to fill buffers for calling HDF5 functions.
-newtype DSpaceWriter = DSpaceWriter
-  (  Ptr HSize -- Pointer to size
-  -> Int       -- Maximum offset
-  -> Int       -- Offset
-  -> IO Int
-  )
-
-instance Semigroup DSpaceWriter where
-  {-# INLINE (<>) #-}
-  DSpaceWriter f <> DSpaceWriter g = DSpaceWriter $ \p_sz i_max ->
-    g p_sz i_max <=< f p_sz i_max
-
-instance Monoid DSpaceWriter where
-  {-# INLINE mempty #-}
-  mempty = DSpaceWriter $ \_ _ -> pure
-
-
-putDimension :: Word64 -> DSpaceWriter
-putDimension sz = DSpaceWriter go where
-  go p_sz i_max i
-    | i >= i_max = throwM $ Error [Left "Internal error: buffer overrun"]
-    | otherwise  = do pokeElemOff p_sz i (coerce sz)
-                      pure $! i + 1
-
-putDimension2 :: Word64 -> Word64 -> DSpaceWriter
-putDimension2 sz max_sz = DSpaceWriter go where
-  go p_sz i_max i
-    | i >= i_max = throwM $ Error [Left "Internal error: buffer overrun"]
-    | otherwise  = do pokeElemOff p_sz i             (coerce sz)
-                      pokeElemOff p_sz (maxRank + i) (coerce max_sz)
-                      pure $! i + 1
-
-
--- Maximum possible rank of an array (as of HDF5 1.8)
-maxRank :: Int
-maxRank = 32
-
 
 ----------------------------------------------------------------
 -- Dataspace creation
 ----------------------------------------------------------------
-
-withEncodedExtent
-  :: (IsExtent dim)
-  => dim -> ContT r IO (Int, Ptr HSize)
-withEncodedExtent dim = do
-  let DSpaceWriter write = encodeExtent dim putDimension
-  ptr  <- ContT $ allocaArray maxRank
-  rank <- lift  $ write ptr maxRank 0
-  pure (rank, ptr)
-
-withEncodedDataspace
-  :: (IsDataspace dim)
-  => dim -> ContT r IO (Maybe (Int, Ptr HSize, Ptr HSize))
-withEncodedDataspace dim =
-  case encodeDataspace dim of
-    Nothing  -> pure Nothing
-    Just enc -> do
-      let DSpaceWriter write = enc putDimension2
-      ptr  <- ContT $ allocaArray (maxRank * 2)
-      rank <- lift  $ write ptr maxRank 0
-      pure $ Just ( rank
-                  , ptr
-                  , ptr `plusPtr` (maxRank * sizeOf (undefined :: HSize)))
-
-
-
 
 -- | Create dataspace for a given extent. This only creates scalar or
 --   simple dataspaces with maximum size same as real size.
@@ -383,7 +314,7 @@ createDataspaceFromExtent
   -> IO Dataspace
 createDataspaceFromExtent dim = withFrozenCallStack $ evalContT $ do
   p_err      <- ContT $ alloca
-  (rank,ptr) <- withEncodedExtent dim
+  (rank,ptr) <- withEncodedExtent $ encodeExtent dim
   lift $ fmap Dataspace
        $ checkHID p_err "Unable to create simple dataspace"
        $ h5s_create_simple (fromIntegral rank) ptr nullPtr
@@ -395,13 +326,14 @@ createDataspaceFromDSpace
   :: (IsDataspace dim, HasCallStack)
   => dim       -- ^ Extent of dataspace
   -> IO Dataspace
-createDataspaceFromDSpace dim = withFrozenCallStack $ evalContT $ do
+createDataspaceFromDSpace dspace = withFrozenCallStack $ evalContT $ do
   p_err <- ContT $ alloca
-  withEncodedDataspace dim >>= \case
+  case encodeDataspace dspace of
     Nothing  -> lift $ fmap Dataspace
                      $ checkHID p_err "Unable to create dataspace with NULL extent"
                      $ h5s_create H5S_NULL
-    Just (rank,p_sz,p_max) -> do
+    Just encoder -> do
+      (rank,p_sz,p_max) <- withEncodedDataspace encoder
       lift $ fmap Dataspace
            $ checkHID p_err "Unable to create simple dataspace"
            $ h5s_create_simple (fromIntegral rank) p_sz p_max
@@ -440,8 +372,8 @@ setSlabSelection (Dataspace hid) off sz = evalContT $ do
              $ checkCInt p_err "Cannot get rank of dataspace's extent"
              $ h5s_get_simple_extent_ndims hid
   --
-  (rank_off, p_off) <- withEncodedExtent off
-  (rank_sz , p_sz)  <- withEncodedExtent sz
+  (rank_off, p_off) <- withEncodedExtent $ encodeExtent off
+  (rank_sz , p_sz)  <- withEncodedExtent $ encodeExtent sz
   when (rank_off /= rank_sz) $ throwM $
     Error [Left "In dataspace selection ranks of an offset and size do not match"]
   when (fromIntegral rank_dset /= rank_sz) $ throwM $

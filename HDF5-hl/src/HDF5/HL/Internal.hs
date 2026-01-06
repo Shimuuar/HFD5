@@ -59,7 +59,7 @@ basicReadObject
   :: forall a d. (ArrayLike a, HasData d, HasCallStack)
   => d -> IO a
 basicReadObject d = withDataspace d $ \spc_file -> do
-  ext <- dataspaceExt @_ @(ExtentOf a) spc_file >>= \case
+  ext <- dataspaceExtent @_ @(ExtentOf a) spc_file >>= \case
     Left  _ -> error "FIXME"
     Right x -> pure x
   basicReadFromSlab ext $ \ptr -> evalContT $ do

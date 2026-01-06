@@ -123,8 +123,9 @@ newtype Attribute = Attribute HID
 --   Datasets in which size and maximum size are different must be chunked.
 --
 --   It's convenient to represent dataspaces using haskell data
---   type. Type class 'IsExtent' is used to convert haskell values to
---   dataspaces and parse dimension data back.
+--   type. Type classs 'HDF5.HL.Dataspace.IsExtent' and
+--   'HDF5.HL.Dataspace.IsDataspace' are used to convert haskell
+--   values to dataspaces and parse dimension data back.
 newtype Dataspace = Dataspace HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject

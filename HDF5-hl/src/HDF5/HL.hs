@@ -120,7 +120,6 @@ module HDF5.HL
   , IsDirectory
   , HasData(..)
   , getType
-  , getDataspace
   , HasAttrs
   , Closable
   , close
@@ -182,9 +181,6 @@ close = liftIO . basicClose
 
 getType :: (HasData a, MonadIO m, HasCallStack) => a -> m Type
 getType = liftIO . getTypeIO
-
-getDataspace :: (HasData a, MonadIO m, HasCallStack) => a -> m Dataspace
-getDataspace = liftIO . getDataspaceIO
 
 ----------------------------------------------------------------
 -- File API

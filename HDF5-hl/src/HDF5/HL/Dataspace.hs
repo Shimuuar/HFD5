@@ -1,9 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- |
--- Description of dataspaces.
+-- Description of dataspaces. They define extents of arrays in HDF
+-- files and their maximum size. They are also used to define
+-- selection of data to read or write.
 module HDF5.HL.Dataspace
-  ( -- * Encoding of extents
-    IsExtent(..)
+  ( -- * Dataspace definition
+    Dataspace
+  , dataspaceRank
+  , dataspaceExtent
+  , setSlabSelection
+    -- ** Creation
+  , getDataspace
+  , createDataspaceFromExtent
+  , createDataspaceFromDSpace
+  , withCreateDataspaceFromExtent
+  , withCreateDataspaceFromDSpace
+    -- * Encoding as haskell data type
+  , IsExtent(..)
   , IsDataspace(..)
   , DimRepr(..)
   , pattern UNLIMITED
@@ -15,15 +28,6 @@ module HDF5.HL.Dataspace
   , parseDim
   , endOfExtent
   , runParseFromDataspace
-    -- * Creation of dataspaces
-  , createDataspaceFromExtent
-  , createDataspaceFromDSpace
-  , withCreateDataspaceFromExtent
-  , withCreateDataspaceFromDSpace
-  , setSlabSelection
-    -- * Dataspace querying
-  , dataspaceRank
-  , dataspaceExt
   ) where
 
 import Control.Applicative
@@ -389,6 +393,12 @@ setSlabSelection (Dataspace hid) off sz = evalContT $ do
 -- Dataspace querying
 ----------------------------------------------------------------
 
+-- | Return dataspace associated with dataset or attribute.
+getDataspace :: (HasData a, MonadIO m, HasCallStack) => a -> m Dataspace
+getDataspace = liftIO . getDataspaceIO
+
+-- | Find rank of dataspace. Returns @Nothing@ for null dataspaces,
+--   @Just 0@ for scalars and @Just n@ for rank-N arrays.
 dataspaceRank
   :: (HasCallStack, MonadIO m)
   => Dataspace
@@ -408,8 +418,8 @@ dataspaceRank (Dataspace hid)
 
 -- | Parse extent of dataspace. Returns @Nothing@ if dataspace doens't
 --   match expected shape.
-dataspaceExt
+dataspaceExtent
   :: (MonadIO m, IsDataspace ext, HasCallStack)
   => Dataspace
   -> m (Either DataspaceParseError ext)
-dataspaceExt spc = liftIO $ runParseFromDataspace spc
+dataspaceExtent spc = liftIO $ runParseFromDataspace spc

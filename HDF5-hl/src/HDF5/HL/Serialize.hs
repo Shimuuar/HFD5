@@ -1,257 +1,336 @@
+{-# LANGUAGE DefaultSignatures    #-}
+{-# LANGUAGE RoleAnnotations      #-}
+{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- |
+-- All modules inside @HDF5.HL.Internal@ constitute internal API.
+-- It considered part of public API but its stability is of little
+-- concert and shouldn't be relied upon.
+--
+-- All operations of internal API are done in 'HIO' monad which is
+-- just a wrapper over @IO@ and used to ensure that call to HDF5 are
+-- protected by mutex.
 module HDF5.HL.Serialize
-  ( -- * Serialization machinery
-    H5Reader
-  , H5Writer
-  , H5Serialize(..)
-  , H5Serialize1(..)
-  , h5Read1
-  , h5Write1
-  , FilePathRepr(..)
+  ( -- * Array serialization
+    ArrayLike(..)
+  , readAll
+  , writeAll
+  , readSlab
+  , writeSlab
+    -- * Dataset serialization
+  , SerializeDSet(..)
     -- * Deriving via
-  , ViaDataset(..)
-  , ViaSerialize1(..)
+  , SerializeAsScalar(..)
+  , SerializeAsArray(..)
   ) where
 
 import Control.Monad
-import Data.Coerce
-import Data.Functor.Compose
+import Control.Monad.Trans.Class
+import Control.Monad.IO.Class
 import Data.Functor.Identity
+import Data.Complex                (Complex)
+import Data.Vector                 qualified as V
+import Data.Vector.Storable        qualified as VS
+import Data.Vector.Unboxed         qualified as VU
+import Data.Vector.Generic         qualified as VG
+import Data.Vector.Strict          qualified as VV
+import Data.Vector.Primitive       qualified as VP
+import Data.Vector.Fixed           qualified as F
+import Data.Vector.Fixed.Unboxed   qualified as FU
+import Data.Vector.Fixed.Boxed     qualified as FB
+import Data.Vector.Fixed.Storable  qualified as FS
+import Data.Vector.Fixed.Primitive qualified as FP
+import Data.Vector.Fixed.Strict    qualified as FV
+import Control.Monad.Trans.Cont
+import Foreign.Ptr
+import Foreign.Storable
+import Foreign.Marshal
+import Foreign.ForeignPtr
 import Data.Int
-import Data.IntMap.Strict           qualified as IntMap
-import Data.Map.Strict              qualified as Map
-import Data.Proxy
-import Data.Text                    qualified as T
-import Data.Text.Lazy               qualified as TL
-import Data.Traversable
-import Data.Vector                  qualified as V
-import Data.Vector.Fixed            qualified as F
-import Data.Vector.Fixed.Boxed      qualified as FB
-import Data.Vector.Fixed.Primitive  qualified as FP
-import Data.Vector.Fixed.Storable   qualified as FS
-import Data.Vector.Fixed.Strict     qualified as FV
-import Data.Vector.Fixed.Unboxed    qualified as FU
-import Data.Vector.Primitive        qualified as VP
-import Data.Vector.Storable         qualified as VS
-import Data.Vector.Strict           qualified as VV
-import Data.Vector.Unboxed          qualified as VU
 import Data.Word
-
-import GHC.Generics
-import GHC.TypeLits
 import GHC.Stack
 
-import HDF5.HL        qualified as H5
-import HDF5.HL.Vector (VecHDF5)
-
-----------------------------------------------------------------
--- Type classes
-----------------------------------------------------------------
-
--- | Function which reads object at location given by @FilePath@
---   parameter relative to @dir@ (could be HDF5 file or group inside it).
-type H5Reader a = forall dir. (HasCallStack, H5.IsDirectory dir) => dir -> FilePath -> IO a
-
--- | Function which writes object at location given by @FilePath@
---   parameter relative to @dir@ (could be HDF5 file or group inside it).
-type H5Writer a = forall dir. (HasCallStack, H5.IsDirectory dir) => dir -> FilePath -> a -> IO ()
-
--- | Type class for value that could be serialized into HDF5 file.
-class H5Serialize a where
-  h5Read  :: H5Reader a
-  h5Write :: H5Writer a
-
--- | Lifted variant of 'H5Serialize'.
-class H5Serialize1 f where
-  liftH5Read  :: H5Reader a -> H5Reader (f a)
-  liftH5Write :: H5Writer a -> H5Writer (f a)
-
-h5Read1 :: (H5Serialize1 f, H5Serialize a) => H5Reader (f a)
-h5Read1 = liftH5Read h5Read
-
-h5Write1 :: (H5Serialize1 f, H5Serialize a) => H5Writer (f a)
-h5Write1 = liftH5Write h5Write
-
-
--- | Type class for values that could be represented as path fragments
-class FilePathRepr a where
-  toFilePath   :: a -> FilePath
-  fromFilePath :: FilePath -> Maybe a
-
-instance FilePathRepr [Char] where
-  toFilePath   = id
-  fromFilePath = Just
-instance FilePathRepr T.Text where
-  toFilePath   = T.unpack
-  fromFilePath = Just . T.pack
-instance FilePathRepr TL.Text where
-  toFilePath   = TL.unpack
-  fromFilePath = Just . TL.pack
-
-deriving via ReprViaShowRead Int    instance FilePathRepr Int
-deriving via ReprViaShowRead Int8   instance FilePathRepr Int8
-deriving via ReprViaShowRead Int16  instance FilePathRepr Int16
-deriving via ReprViaShowRead Int32  instance FilePathRepr Int32
-deriving via ReprViaShowRead Int64  instance FilePathRepr Int64
-deriving via ReprViaShowRead Word   instance FilePathRepr Word
-deriving via ReprViaShowRead Word8  instance FilePathRepr Word8
-deriving via ReprViaShowRead Word16 instance FilePathRepr Word16
-deriving via ReprViaShowRead Word32 instance FilePathRepr Word32
-deriving via ReprViaShowRead Word64 instance FilePathRepr Word64
-
-
--- | Derive 'FilePathRepr' using @Show/Read@ pair.
-newtype ReprViaShowRead a = ReprViaShowRead a
-
-instance (Show a, Read a) => FilePathRepr (ReprViaShowRead a) where
-  toFilePath (ReprViaShowRead a) = show a
-  fromFilePath s = case reads s of
-    [(a,"")] -> Just (ReprViaShowRead a)
-    _        -> Nothing
+import HDF5.HL.Unsafe.Types
+import HDF5.HL.Unsafe.Wrappers
+import HDF5.HL.Unsafe.Error
+import HDF5.HL.Dataspace
+import HDF5.HL.Unsafe.Property
+import HDF5.HL.Vector
+import HDF5.C
+import Prelude hiding (read,readIO)
 
 
 ----------------------------------------------------------------
--- Deriving via
+-- Primitives
 ----------------------------------------------------------------
 
--- | Derive 'H5Serialize' instance for data type which has
---   'H5.SerializeDSet' instance
-newtype ViaDataset a = ViaDataset a
-
-instance H5.Serialize a => H5Serialize (ViaDataset a) where
-  h5Read  dir path
-    = ViaDataset <$> H5.readAt dir path
-  h5Write dir path (ViaDataset a)
-    = H5.createDataset dir path a
-
-
-newtype ViaSerialize1 f a = ViaSerialize1 (f a)
-
-instance (H5Serialize a, H5Serialize1 f) => H5Serialize (ViaSerialize1 f a) where
-  h5Read  dir = coerce (liftH5Read  @f (h5Read  @a) dir)
-  h5Write dir = coerce (liftH5Write @f (h5Write @a) dir)
+-- | Reads full content of dataset\/attribute into haskell data
+--   structure.
+readAll
+  :: forall a d m. (ArrayLike a, HasData d, MonadIO m, HasCallStack)
+  => d -> m a
+readAll dset = liftIO $ withDataspace dset $ \spc_file -> do
+  ext <- dataspaceExtent @_ @(ExtentOf a) spc_file >>= \case
+    Left  _ -> error "FIXME"
+    Right x -> pure x
+  basicReadFromSlab ext $ \ptr -> evalContT $ do
+    p_err   <- ContT alloca
+    lift $ unsafeReadAll p_err dset (typeH5 @(ElementOf a)) ptr
 
 
-instance (Generic a, GSerializeLoc (Rep a)) => H5Serialize (Generically a) where
-  h5Read dir path
-    = H5.withOpenGroup dir path $ fmap (Generically . to) . gH5Read
-  h5Write dir path (Generically a)
-    = H5.withCreateGroup dir path $ \g -> gH5Write g (from a)
+-- | Writing into dataset\/attributes without offset. It's assumed
+--   that dataset was created with correct size.
+writeAll
+  :: forall a d m. (ArrayLike a, HasData d, MonadIO m, HasCallStack)
+  => d -- ^ Dataset or attribute
+  -> a -- ^ Value to write
+  -> m ()
+writeAll dset a = liftIO $
+  basicWriteToSlab a $ \ptr -> evalContT $ do
+    p_err <- ContT alloca
+    lift $ unsafeWriteAll p_err dset (typeH5 @(ElementOf a)) ptr
 
-class GSerializeLoc f where
-  gH5Read  :: (HasCallStack) => H5.Group -> IO (f p)
-  gH5Write :: (HasCallStack) => H5.Group -> f p -> IO ()
+-- | Read data from dataset using slab selection
+readSlab
+  :: forall a m. (ArrayLike a, MonadIO m, HasCallStack)
+  => Dataset    -- ^ Dataset to read from
+  -> ExtentOf a -- ^ Offset into array
+  -> ExtentOf a -- ^ Array size
+  -> m a
+readSlab d off sz = liftIO $ withDataspace d $ \spc_file -> do
+  basicReadFromSlab sz $ \ptr -> evalContT $ do
+    p_err   <- ContT alloca
+    lift $ setSlabSelection spc_file off sz
+    spc_mem <- ContT $ withCreateDataspaceFromExtent sz
+    tid     <- ContT $ withType (typeH5 @(ElementOf a))
+    --
+    lift $ checkHErr p_err "Reading dataset data failed"
+         $ h5d_read (getHID d) tid
+             (getHID spc_mem) (getHID spc_file)
+             H5P_DEFAULT (castPtr ptr)
 
-deriving newtype instance GSerializeLoc f => GSerializeLoc (M1 D i f)
-deriving newtype instance GSerializeLoc f => GSerializeLoc (M1 C i f)
-
-instance (GSerializeLoc f, GSerializeLoc g) => GSerializeLoc (f :*: g) where
-  gH5Read  dir = (:*:) <$> gH5Read dir <*> gH5Read dir
-  gH5Write dir (f :*: g) = gH5Write dir f >> gH5Write dir g
-
-instance ( H5Serialize a
-         , KnownSymbol fld
-         ) => GSerializeLoc (M1 S ('MetaSel ('Just fld) su ss ds) (K1 i a)) where
-  gH5Read dir = M1 . K1 <$> h5Read dir path where
-    path = symbolVal $ Proxy @fld
-  gH5Write dir (M1 (K1 a)) = h5Write dir path a where
-    path = symbolVal $ Proxy @fld
-
-instance ( TypeError ('Text "Unable to serialize sum types to HDF5")
-         ) => GSerializeLoc (f :+: g) where
-  gH5Read  = error "UNREACHABLE"
-  gH5Write = error "UNREACHABLE"
-
-instance ( TypeError ('Text "All record fields must be named")
-         ) => GSerializeLoc (M1 S ('MetaSel 'Nothing su ss ds) (K1 i a)) where
-  gH5Read  = error "UNREACHABLE"
-  gH5Write = error "UNREACHABLE"
-
-
-
-----------------------------------------------------------------
--- Instances for H5Serialize
-----------------------------------------------------------------
-
-deriving via ViaDataset Int    instance H5Serialize Int
-deriving via ViaDataset Int8   instance H5Serialize Int8
-deriving via ViaDataset Int16  instance H5Serialize Int16
-deriving via ViaDataset Int32  instance H5Serialize Int32
-deriving via ViaDataset Int64  instance H5Serialize Int64
-deriving via ViaDataset Word   instance H5Serialize Word
-deriving via ViaDataset Word8  instance H5Serialize Word8
-deriving via ViaDataset Word16 instance H5Serialize Word16
-deriving via ViaDataset Word32 instance H5Serialize Word32
-deriving via ViaDataset Word64 instance H5Serialize Word64
-
-deriving via ViaDataset [a]           instance H5.Element a                  => H5Serialize [a]
-deriving via ViaDataset (V.Vector  a) instance H5.Element a                  => H5Serialize (V.Vector  a)
-deriving via ViaDataset (VS.Vector a) instance (H5.Element a, VS.Storable a) => H5Serialize (VS.Vector a)
-deriving via ViaDataset (VU.Vector a) instance (H5.Element a, VU.Unbox a)    => H5Serialize (VU.Vector a)
-deriving via ViaDataset (VP.Vector a) instance (H5.Element a, VP.Prim a)     => H5Serialize (VP.Vector a)
-deriving via ViaDataset (VV.Vector a) instance (H5.Element a)                => H5Serialize (VV.Vector a)
-deriving via ViaDataset (VecHDF5   a) instance (H5.Element a)                => H5Serialize (VecHDF5 a)
-
-deriving via ViaDataset (FU.Vec n a)
-    instance (H5.Element a, FU.Unbox n a) => H5Serialize (FU.Vec n a)
-deriving via ViaDataset (FB.Vec n a)
-    instance (H5.Element a, F.Arity n) => H5Serialize (FB.Vec n a)
-deriving via ViaDataset (FV.Vec n a)
-    instance (H5.Element a, F.Arity n) => H5Serialize (FV.Vec n a)
-deriving via ViaDataset (FS.Vec n a)
-    instance (H5.Element a, F.Arity n, FS.Storable a) => H5Serialize (FS.Vec n a)
-deriving via ViaDataset (FP.Vec n a)
-    instance (H5.Element a, F.Arity n, FP.Prim a) => H5Serialize (FP.Vec n a)
-
-deriving newtype instance H5Serialize a => H5Serialize (Identity a)
-deriving via ViaSerialize1 IntMap.IntMap a
-    instance H5Serialize a => H5Serialize (IntMap.IntMap a)
-deriving via ViaSerialize1 (Map.Map k) a
-    instance (H5Serialize a, FilePathRepr k, Ord k) => H5Serialize (Map.Map k a)
+-- | Write provided data at given offset.
+writeSlab
+  :: forall a m. (ArrayLike a, MonadIO m, HasCallStack)
+  => Dataset
+  -> ExtentOf a -- ^ Offset into array
+  -> a
+  -> m ()
+writeSlab dset off a = liftIO $ do
+  basicWriteToSlab a $ \ptr -> evalContT $ do
+    p_err    <- ContT alloca
+    spc_file <- lift  $ getDataspaceIO dset
+    lift $ setSlabSelection spc_file off (getExtent a)
+    spc_mem  <- ContT $ withCreateDataspaceFromExtent $ getExtent a
+    tid      <- ContT $ withType (typeH5 @(ElementOf a))
+    lift $ checkHErr p_err "Writing dataset data failed"
+         $ h5d_write (getHID dset) tid
+             (getHID spc_mem) (getHID spc_file) H5P_DEFAULT ptr
 
 
 ----------------------------------------------------------------
--- Instances for H5Serialize1
+-- Type classes for reading/writing
 ----------------------------------------------------------------
 
-instance H5Serialize1 Identity where
-  liftH5Read  reader dir path = Identity <$> reader dir path
-  liftH5Write writer dir path = writer dir path . runIdentity
+-- | Data types which directly represent HDF5 N-dimensional arrays.
+--   Usually operations are not zero-copy. Reading usually needs to
+--   allocate buffer first, read from HDF file into it and reconstruct
+--   haskell value from it. Similarly writing needs to create buffer
+--   fill and then pass to HDF.
+class (Element (ElementOf a), IsExtent (ExtentOf a)) => ArrayLike a where
+  type ElementOf a
+  type ExtentOf  a
+  -- | Primitive for writing of HDF5 arrays (and scalars)
+  basicWriteToSlab
+    :: a                            -- ^ Value to pass
+    -> (Ptr (ElementOf a) -> IO ()) -- ^ Callback consuming buffer
+    -> IO ()
+  -- | Primitive for reading HDF5 arrays. 
+  basicReadFromSlab
+    :: ExtentOf a                   -- ^ Size of an array
+    -> (Ptr (ElementOf a) -> IO ()) -- ^ Callback which will read into elements
+    -> IO a
+  -- | Compute extent of data
+  getExtent :: a -> ExtentOf a
 
-instance (H5Serialize1 f, H5Serialize1 g) => H5Serialize1 (f `Compose` g) where
-  liftH5Read reader dir path
-    = Compose <$> liftH5Read (liftH5Read reader) dir path
-  liftH5Write writer dir path (Compose a)
-    = liftH5Write (liftH5Write writer) dir path a
 
 
-instance H5Serialize1 IntMap.IntMap where
-  liftH5Write writer dir path xs =
-    H5.withCreateGroup dir path $ \d -> do
-      forM_ (IntMap.toList xs) $ \(k,v) ->
-        writer d (toFilePath k) v
-  liftH5Read reader dir path =
-    H5.withOpenGroup dir path $ \d -> do
-      entries <- H5.listGroup d
-      names   <- for entries $ \s -> case fromFilePath s of
-        Just k  -> pure (s,k)
-        Nothing -> error $ "H5Serialize1 for IntMap: can't decode " ++ s
-      fmap IntMap.fromList $ for names $ \(s,k) -> do
-        a <- reader d s
-        pure (k,a)
 
-instance (Ord k, FilePathRepr k) => H5Serialize1 (Map.Map k) where
-  liftH5Write writer dir path xs =
-    H5.withCreateGroup dir path $ \d -> do
-      forM_ (Map.toList xs) $ \(k,v) ->
-        writer d (toFilePath k) v
-  liftH5Read reader dir path =
-    H5.withOpenGroup dir path $ \d -> do
-      entries <- H5.listGroup d
-      names   <- for entries $ \s -> case fromFilePath s of
-        Just k  -> pure (s,k)
-        Nothing -> error $ "H5Serialize1 for Map: can't decode " ++ s
-      fmap Map.fromList $ for names $ \(s,k) -> do
-        a <- reader d s
-        pure (k,a)
+-- | Data type which could be serialized as single HDF5 dataset.
+--   Instance can do anything they like as long instance
+--   roundtrips. Notable it allows use of dataset attributes.
+class SerializeDSet a where
+  basicReadDSet :: Dataset -> IO a
+  basicWriteDSet
+    :: a
+    -> (forall ext. IsDataspace ext
+        => ext -> Type -> [Property Dataset] -> (Dataset -> IO ()) -> IO ())
+    -> IO ()
+
+
+----------------------------------------------------------------
+-- Deriving instances
+----------------------------------------------------------------
+
+type role SerializeAsScalar representational
+type role SerializeAsArray  representational
+
+-- | Newtype wrapper for derivation of serialization instances as
+--   scalars.
+newtype SerializeAsScalar a = SerializeAsScalar a
+  deriving newtype (Storable, Element)
+
+instance Element a => ArrayLike (SerializeAsScalar a) where
+  type ElementOf (SerializeAsScalar a) = a
+  type ExtentOf  (SerializeAsScalar a) = ()
+  getExtent _ = ()
+  basicReadFromSlab () action = allocaElement $ \p -> do
+    action p
+    SerializeAsScalar <$> peekH5 p
+  basicWriteToSlab (SerializeAsScalar a) action = allocaElement $ \p -> do
+    pokeH5 p a
+    action p
+
+deriving via SerializeAsArray (SerializeAsScalar a)
+   instance Element a => SerializeDSet (SerializeAsScalar a)
+
+
+-- | Default implementation of 'SerializeDSet' in terms of 'ArrayLike'.
+newtype SerializeAsArray a = SerializeAsArray a
+
+instance ArrayLike a => SerializeDSet (SerializeAsArray a) where
+  basicReadDSet d = SerializeAsArray <$> readAll d
+  basicWriteDSet (SerializeAsArray a) make
+    = make (getExtent a) (typeH5 @(ElementOf a)) []
+    $ \d -> writeAll d a
+
+
+----------------------------------------------------------------
+-- Instance boilerplate
+----------------------------------------------------------------
+
+instance (Element a) => ArrayLike (VecHDF5 a) where
+  type ElementOf (VecHDF5 a) = a
+  type ExtentOf  (VecHDF5 a) = Int
+  getExtent = VG.length
+  basicWriteToSlab  v = unsafeWithH5 v
+  basicReadFromSlab sz action = do
+    buf <- mallocVectorH5 sz
+    withForeignPtr buf action
+    pure $! unsafeFromForeignPtr buf sz
+
+
+instance (Element a) => ArrayLike [a] where
+  type ElementOf [a] = a
+  type ExtentOf  [a] = Int
+  getExtent = length
+  basicWriteToSlab v = basicWriteToSlab (VG.fromList v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.toList . basicReadFromSlab @(VecHDF5 a) n
+
+instance (Element a) => ArrayLike (V.Vector a) where
+  type ElementOf (V.Vector a) = a
+  type ExtentOf  (V.Vector a) = Int
+  getExtent = V.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+instance (Element a) => ArrayLike (VV.Vector a) where
+  type ElementOf (VV.Vector a) = a
+  type ExtentOf  (VV.Vector a) = Int
+  getExtent = VV.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+instance (Storable a, Element a) => ArrayLike (VS.Vector a) where
+  type ElementOf (VS.Vector a) = a
+  type ExtentOf  (VS.Vector a) = Int
+  getExtent = VS.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+instance (VP.Prim a, Element a) => ArrayLike (VP.Vector a) where
+  type ElementOf (VP.Vector a) = a
+  type ExtentOf  (VP.Vector a) = Int
+  getExtent = VP.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+instance (VU.Unbox a, Element a) => ArrayLike (VU.Vector a) where
+  type ElementOf (VU.Vector a) = a
+  type ExtentOf  (VU.Vector a) = Int
+  getExtent = VU.length
+  basicWriteToSlab v = basicWriteToSlab (VG.convert v :: VecHDF5 a)
+  basicReadFromSlab n = fmap VG.convert . basicReadFromSlab @(VecHDF5 a) n
+
+
+deriving via SerializeAsArray [a]
+    instance (Element a) => SerializeDSet [a]
+deriving via SerializeAsArray (VecHDF5 a)
+    instance (Element a) => SerializeDSet (VecHDF5 a)
+deriving via SerializeAsArray (V.Vector a)
+    instance (Element a) => SerializeDSet (V.Vector a)
+deriving via SerializeAsArray (VV.Vector a)
+    instance (Element a) => SerializeDSet (VV.Vector a)
+deriving via SerializeAsArray (VS.Vector a)
+    instance (Element a, VS.Storable a) => SerializeDSet (VS.Vector a)
+deriving via SerializeAsArray (VP.Vector a)
+    instance (Element a, VP.Prim a) => SerializeDSet (VP.Vector a)
+deriving via SerializeAsArray (VU.Vector a)
+    instance (Element a, VU.Unbox a) => SerializeDSet (VU.Vector a)
+
+
+deriving via SerializeAsScalar Int    instance ArrayLike     Int
+deriving via SerializeAsScalar Int    instance SerializeDSet Int
+deriving via SerializeAsScalar Int8   instance ArrayLike     Int8
+deriving via SerializeAsScalar Int8   instance SerializeDSet Int8
+deriving via SerializeAsScalar Int16  instance ArrayLike     Int16
+deriving via SerializeAsScalar Int16  instance SerializeDSet Int16
+deriving via SerializeAsScalar Int32  instance ArrayLike     Int32
+deriving via SerializeAsScalar Int32  instance SerializeDSet Int32
+deriving via SerializeAsScalar Int64  instance ArrayLike     Int64
+deriving via SerializeAsScalar Int64  instance SerializeDSet Int64
+deriving via SerializeAsScalar Word   instance ArrayLike     Word
+deriving via SerializeAsScalar Word   instance SerializeDSet Word
+deriving via SerializeAsScalar Word8  instance ArrayLike     Word8
+deriving via SerializeAsScalar Word8  instance SerializeDSet Word8
+deriving via SerializeAsScalar Word16 instance ArrayLike     Word16
+deriving via SerializeAsScalar Word16 instance SerializeDSet Word16
+deriving via SerializeAsScalar Word32 instance ArrayLike     Word32
+deriving via SerializeAsScalar Word32 instance SerializeDSet Word32
+deriving via SerializeAsScalar Word64 instance ArrayLike     Word64
+deriving via SerializeAsScalar Word64 instance SerializeDSet Word64
+
+deriving via SerializeAsScalar Float  instance ArrayLike     Float
+deriving via SerializeAsScalar Float  instance SerializeDSet Float
+deriving via SerializeAsScalar Double instance ArrayLike     Double
+deriving via SerializeAsScalar Double instance SerializeDSet Double
+
+deriving via SerializeAsScalar (Complex a)
+    instance Element a => ArrayLike (Complex a)
+deriving via SerializeAsScalar (Complex a)
+    instance Element a => SerializeDSet (Complex a)
+
+deriving via SerializeAsScalar (FB.Vec n a)
+    instance (F.Arity n, Element a) => ArrayLike (FB.Vec n a)
+deriving via SerializeAsScalar (FU.Vec n a)
+    instance (F.Arity n, Element a, FU.Unbox n a) => ArrayLike (FU.Vec n a)
+deriving via SerializeAsScalar (FS.Vec n a)
+    instance (F.Arity n, Element a, Storable a) => ArrayLike (FS.Vec n a)
+deriving via SerializeAsScalar (FP.Vec n a)
+    instance (F.Arity n, Element a, FP.Prim a) => ArrayLike (FP.Vec n a)
+deriving via SerializeAsScalar (FV.Vec n a)
+    instance (F.Arity n, Element a) => ArrayLike (FV.Vec n a)
+
+deriving via SerializeAsScalar (FB.Vec n a)
+    instance (F.Arity n, Element a) => SerializeDSet (FB.Vec n a)
+deriving via SerializeAsScalar (FU.Vec n a)
+    instance (F.Arity n, Element a, FU.Unbox n a) => SerializeDSet (FU.Vec n a)
+deriving via SerializeAsScalar (FS.Vec n a)
+    instance (F.Arity n, Element a, Storable a) => SerializeDSet (FS.Vec n a)
+deriving via SerializeAsScalar (FP.Vec n a)
+    instance (F.Arity n, Element a, FP.Prim a) => SerializeDSet (FP.Vec n a)
+deriving via SerializeAsScalar (FV.Vec n a)
+    instance (F.Arity n, Element a) => SerializeDSet (FV.Vec n a)
+
+deriving newtype instance ArrayLike     a => ArrayLike     (Identity a)
+deriving newtype instance SerializeDSet a => SerializeDSet (Identity a)

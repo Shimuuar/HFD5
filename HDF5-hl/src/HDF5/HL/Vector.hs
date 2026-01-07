@@ -31,7 +31,7 @@ import Data.Vector.Generic         qualified as VG
 import Data.Vector.Generic.Mutable qualified as MVG
 import Text.Read
 
-import HDF5.HL.Internal.Types
+import HDF5.HL.Unsafe.Types
 
 
 type role MVecHDF5 nominal nominal

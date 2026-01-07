@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 -- |
-module HDF5.HL.Internal.Property
+module HDF5.HL.Unsafe.Property
   ( -- * Property lists
     Property(..)
     -- * Dataset properties
@@ -21,10 +21,11 @@ import Foreign.Marshal
 import GHC.Stack
 
 import HDF5.C
-import HDF5.HL.Internal.Enum
-import HDF5.HL.Internal.Error
-import HDF5.HL.Internal.Wrappers
-import HDF5.HL.Internal.Dataspace
+import HDF5.HL.Unsafe.Enum
+import HDF5.HL.Unsafe.Error
+import HDF5.HL.Unsafe.Wrappers
+import HDF5.HL.Dataspace
+import HDF5.HL.Unsafe.Encoding
 
 
 ----------------------------------------------------------------
@@ -66,11 +67,9 @@ propDatasetLayout l = Property $ \p_err p -> withFrozenCallStack
 -- | Set chunking for a dataset
 propDatasetChunking :: (HasCallStack, IsExtent dim) => dim -> Property Dataset
 propDatasetChunking dim = Property $ \p_err prop -> withFrozenCallStack $ evalContT $ do
-  withEncodedExtent dim >>= \case
-    Nothing       -> throwM $ Error [Left "Extent must be non-null"]
-    Just (rank,p) -> lift
-      $ checkHErr p_err "Unable to set chunk size"
-      $ h5p_set_chunk (getHID prop) (fromIntegral rank) p
+  (rank,p) <- withEncodedExtent $ encodeExtent dim
+  lift $ checkHErr p_err "Unable to set chunk size"
+       $ h5p_set_chunk (getHID prop) (fromIntegral rank) p
 
 -- | Use gzip compression for dataset. Compression level is specified
 --   by number. 0 is no compression (but compression filter is still

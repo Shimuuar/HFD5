@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 -- |
 -- Mapping of C enums from HDF to haskell data types
-module HDF5.HL.Internal.Enum
+module HDF5.HL.Unsafe.Enum
   ( -- * Type classes
     HDF5Enum(..)
   , HDF5Param(..)
@@ -31,7 +31,7 @@ class HDF5Param a where
 
 
 
--- | Mode for opening files
+-- | Mode for opening existing files
 data OpenMode
   = OpenRO -- ^ Open file in read-only mode.
   | OpenRW -- ^ Open file in read-write mode.
@@ -42,7 +42,7 @@ instance HDF5Param OpenMode where
   toCParam OpenRO = h5f_ACC_RDONLY
   toCParam OpenRW = h5f_ACC_RDWR
 
--- | Mode for opening files
+-- | Mode for creating new files
 data CreateMode
   = CreateTrunc -- ^ Truncate file, if it already exists, erasing all
                 --   data previously stored in the file

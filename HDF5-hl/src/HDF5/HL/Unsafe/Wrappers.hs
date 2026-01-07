@@ -1,7 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 -- |
 -- Data types for working with HDF5 files
-module HDF5.HL.Internal.Wrappers
+module HDF5.HL.Unsafe.Wrappers
   ( -- * Files and groups
     File(..)
   , OpenMode(..)
@@ -29,9 +29,9 @@ import Foreign.Marshal
 import GHC.Stack
 
 import HDF5.C
-import HDF5.HL.Internal.Enum
-import HDF5.HL.Internal.Error
-import HDF5.HL.Internal.Types
+import HDF5.HL.Unsafe.Enum
+import HDF5.HL.Unsafe.Error
+import HDF5.HL.Unsafe.Types
 
 
 ----------------------------------------------------------------
@@ -70,15 +70,17 @@ class IsObject a => HasData a where
   getDataspaceIO :: HasCallStack => a -> IO Dataspace
   -- | Read all content of object
   unsafeReadAll  :: HasCallStack
-                 => a      -- ^ Object handle
-                 -> Type   -- ^ Type of in-memory elements
-                 -> Ptr x  -- ^ Buffer to read to
+                 => Ptr HID -- ^ Error pointer
+                 -> a       -- ^ Object handle
+                 -> Type    -- ^ Type of in-memory elements
+                 -> Ptr x   -- ^ Buffer to read to
                  -> IO ()
   -- | Write full dataset at once
   unsafeWriteAll :: HasCallStack
-                 => a      -- ^ Object handle
-                 -> Type   -- ^ Type of in-memory elements
-                 -> Ptr x  -- ^ Buffer with data
+                 => Ptr HID -- ^ Error pointer
+                 -> a       -- ^ Object handle
+                 -> Type    -- ^ Type of in-memory elements
+                 -> Ptr x   -- ^ Buffer with data
                  -> IO ()
 
 
@@ -90,7 +92,8 @@ withDataspace a = bracket (getDataspaceIO a) basicClose
 -- Files, groups, datasets
 ----------------------------------------------------------------
 
--- | Handle for working with HDF5 file.
+-- | Handle for working with HDF5 file. It also serves as root
+--   directory of a file when group is expected. See 'IsDirectory'.
 newtype File = File HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
@@ -100,7 +103,12 @@ newtype Group = Group HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
--- | Handle for dataset.
+-- | Handle for dataset. It's dense N-dimensional array of
+--   elements. Dimensions of array are called 'Dataspace' in HDF5
+--   terminology. Extent of already existing dataset could be
+--   changed. Wide range of 'Type's are supported: fixed width
+--   integers, IEEE754 floating point, fixed size arrays, structures,
+--   enumerations.
 newtype Dataset = Dataset HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
@@ -110,7 +118,16 @@ newtype Attribute = Attribute HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
 
--- | Handle for dataspace.
+-- | Handle for dataspace. It defines number of dimensions and size of
+--   each dimension for datasets and attributes. Each dataspace has
+--   size and maximum size which could be larger. Special value
+--   'UNLIMITED' is used to denote that particular dimension is unbounded.
+--   Datasets in which size and maximum size are different must be chunked.
+--
+--   It's convenient to represent dataspaces using haskell data
+--   type. Type classs 'HDF5.HL.Dataspace.IsExtent' and
+--   'HDF5.HL.Dataspace.IsDataspace' are used to convert haskell
+--   values to dataspaces and parse dimension data back.
 newtype Dataspace = Dataspace HID
   deriving stock (Show,Eq,Ord)
   deriving newtype IsObject
@@ -141,14 +158,12 @@ instance HasData Dataset where
       fmap Dataspace
     $ checkHID p_err "Cannot read dataset's dataspace"
     $ h5d_get_space hid
-  unsafeReadAll (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
+  unsafeReadAll p_err (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Reading dataset data failed"
          $ h5d_read hid tid
              h5s_ALL h5s_ALL H5P_DEFAULT (castPtr buf)
-  unsafeWriteAll (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
+  unsafeWriteAll p_err (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Writing dataset data failed"
          $ h5d_write hid tid
@@ -167,13 +182,11 @@ instance HasData Attribute where
     $ fmap Dataspace
     $ checkHID p_err "Cannot get attribute's dataspace"
     $ h5a_get_space hid
-  unsafeReadAll (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
+  unsafeReadAll p_err (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Reading attribute data failed"
          $ h5a_read hid tid (castPtr buf)
-  unsafeWriteAll (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
+  unsafeWriteAll p_err (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Writing Attribute data failed"
          $ h5a_write hid tid (castPtr buf)

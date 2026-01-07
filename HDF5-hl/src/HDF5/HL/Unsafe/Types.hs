@@ -5,8 +5,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 -- |
 -- API for working with HDF5 data types. We treat them as immutable
--- while they're mutable in HDF5.
-module HDF5.HL.Internal.Types
+-- while they're mutable in HDF5. This module contains unsafe functions.
+module HDF5.HL.Unsafe.Types
   ( -- * Operations on types
     Type(..)
   , unsafeNewType
@@ -68,14 +68,16 @@ import GHC.TypeLits
 import GHC.ForeignPtr  (mallocPlainForeignPtrAlignedBytes)
 import GHC.IO          (IO(..))
 
-import HDF5.HL.Internal.Error
+import HDF5.HL.Unsafe.Error
 import HDF5.C
 
 ----------------------------------------------------------------
 -- Type definition
 ----------------------------------------------------------------
 
--- | HDF5 data type.
+-- | HDF5 data type. It's used to describe how data is laid out both
+--   in memory and on disc. Type class 'Element' is used to associate
+--   HDF5 type to haskell values.
 data Type
   = Type   HID  {-# UNPACK #-} !(IORef ())
     -- ^ Type which should be closed
@@ -115,6 +117,7 @@ instance Show Type where
       peekCString p_str
 
 
+-- | Compute size of HDF5 type.
 sizeOfH5 :: HasCallStack => Type -> Int
 sizeOfH5 ty = withFrozenCallStack $ unsafePerformIO $
   withType ty $ \tid -> do
@@ -169,6 +172,8 @@ tyU16BE = Native h5t_STD_U16BE
 tyU32BE = Native h5t_STD_U32BE
 tyU64BE = Native h5t_STD_U64BE
 
+-- | @Array ty dim@ is an array of HDF5 values of type @ty@ and
+--   dimensions @dim@.
 pattern Array :: Type -> [Int] -> Type
 pattern Array ty dim <- (matchArray -> Just (ty, dim))
   where
@@ -209,6 +214,7 @@ matchArray ty = unsafePerformIO $ evalContT $ do
     _ -> pure Nothing
 
 
+-- | Create record with named fields.
 makePackedRecord :: HasCallStack => [(String,Type)] -> Type
 makePackedRecord fields = unsafePerformIO $ withFrozenCallStack $ unsafeNewType $ do
   alloca $ \p_err -> do

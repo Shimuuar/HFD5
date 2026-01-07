@@ -1,9 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
 -- |
-module HDF5.HL.Internal.Error
+module HDF5.HL.Unsafe.Error
   ( -- * Exception data type
     Error(..)
   , Message(..)
+  , DataspaceParseError(..)
     -- * API
   , decodeError
   , checkHID
@@ -17,6 +18,7 @@ import Control.Monad.Catch
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
 import Data.IORef
+import Data.Word
 import Foreign.Marshal
 import Foreign.Ptr
 import Foreign.Storable
@@ -65,6 +67,16 @@ data Message = Message
   deriving stock Show
 
 instance Exception Error
+
+-- | Error during conversion of dataspace's size to haskell data type.
+data DataspaceParseError
+  = BadRank ![(Word64,Word64)]  -- ^ Has invalid shape
+  | UnexpectedNull              -- ^ Cannot convert NULL dataspace to haskell type
+  | BadIndex ![(Word64,Word64)] -- ^ Cannot convert index to haskell data type
+  deriving stock Show
+
+instance Exception DataspaceParseError
+
 
 -- | Decode error from HDF5 error stack
 decodeError :: HasCallStack => Ptr HID -> String -> IO Error

@@ -1,7 +1,64 @@
--- |
--- High level API for working with HDF5 files
+{-|
+High level API for working with HDF5 files. HDF5 stands for
+Hierarchical Data Format v5 and geared for working with large scale
+array data. C has very large API surface and not everything is
+supported.
+
+= Overview
+
+Each HDF5 file is organized as hierarchical namespace (file system
+like) and contains named 'Dataset's and 'Group's (directories) which
+could contain @Group@s and @Dataset@s. In turn @Dataset@ is dense
+N-dimensional (up to 32) array of elements of some type. HDF5 supports
+wide range of types: primitives like fixed width ints, IEEE754
+floating points, records, enumerations. @Dataset@s could be read and
+written to using slices. Currently support for that is only partial.
+Both @Group@s and @Dataset@s support 'Attribute's, named values:
+scalars or small arrays.
+
+
+== HDF5 entities
+
+HDF5 define number of entities with lifetimes that should be managed
+by programmer:
+
+- 'File' — handle to HDF5 file.
+
+- 'Group' — handle to group in some file. Note that in places which
+  expect group @File@ represents root directory of a file. (See 'IsDirectory')
+
+- 'Dataset' — handle to dataset in the file. It could be used to both
+  read from and write to dataset.
+
+- 'Attribute' — named values which could be attached to group or dataset.
+
+- 'Dataspace' — it encodes dimensions of dataset. Usually one doesn't
+   to deal with it directly.
+
+All of them could be closed in the same way by calling
+'close'. Functions that open\/create such entities have bracket-like
+companion named @with...@
+
+
+== Reading/writing of datasets
+
+Datasets are arrays and each of them has size described by
+`Dataspaces` and element type (which could be quite complicated)
+described by `Type`. All operations on datasets are heavily based on
+type classes.
+
+- `ArrayLike` is for types which could be directly mapped to arrays
+  and scalars (0-dimensional arrays) and is used for datasets and
+  attributes alike.
+
+- `SerializeDSet` is for values that could be serialized as dataset.
+  It allows to use attributes in serialization as well.
+
+- `HDF5.HL.SerializeH5.SerializeH5` type class which allows to
+  serialize haskell values as arbitrary trees of HDF values.
+-}
 module HDF5.HL
-  ( -- * Data types and common operations
+  ( -- * Files and groups
     -- ** File operations
     File
   , OpenMode(..)
@@ -17,83 +74,68 @@ module HDF5.HL
   , withOpenGroup
   , withCreateGroup
   , listGroup
-    -- ** Datasets
+    -- * Datasets
   , Dataset
-  , openDataset
-  , createEmptyDataset
-  , createDataset
-  , withOpenDataset
-  , withCreateEmptyDataset
-  , withCreateDataset
-  , setDatasetExtent
-    -- ** Reading and writing
-  , readDataset
-  , readObject
-  , readAt
-  , readSlab
-  , writeSlab
-    -- ** Dataspace information
-  , Dataspace
-  , pattern UNLIMITED
-  , Extent(..)
   , rank
   , extent
-  , dataspaceRank
-  , dataspaceExt
-    -- ** Attributes
+    -- ** Opening & creation
+  , openDataset
+  , createEmptyDataset
+  , withOpenDataset
+  , withCreateEmptyDataset
+  , setDatasetExtent
+    -- ** Reading & writing of arrays
+  , ArrayLike(..)
+  , writeSlab
+  , readSlab
+  , writeAll
+  , readAll
+  , writeAllAt
+  , readAllAt
+    -- ** Reading using 'SerializeDSet'
+  , SerializeDSet(..)
+  , readDatasetAt
+  , writeDatasetAt
+    -- **  Deriving via
+  , SerializeAsScalar(..)
+  , SerializeAsArray(..)
+    -- * Dataspace information
+    -- $dataspace
+  , Dataspace
+  , pattern UNLIMITED
+  , IsExtent(..)
+  , IsDataspace(..)
+  , Extent(..)
+  , Growable(..)
+    -- * Attributes
   , Attribute
-  , openAttr
-  , withAttr
-  , createAttr
-  , readAttr
-    -- ** Data types
+  , openAttrMay
+  , withAttrMay
+  , readAttrMay
+  , writeAttr
+    -- * Data types
+    -- $type_hdf
   , Type
   , sizeOfH5
-  , tyI8, tyI16, tyI32, tyI64
-  , tyU8, tyU16, tyU32, tyU64
-  , tyF32, tyF64
-  , tyI8LE, tyI16LE, tyI32LE, tyI64LE
-  , tyU8LE, tyU16LE, tyU32LE, tyU64LE
-  , tyI8BE, tyI16BE, tyI32BE, tyI64BE
-  , tyU8BE, tyU16BE, tyU32BE, tyU64BE
-  , pattern Array
-  , makePackedRecord
-  , makeEnumeration
-    -- ** Property lists
+  , Element(..)
+    -- * Property lists
   , Property
   , Layout(..)
   , propDatasetLayout
   , propDatasetChunking
   , propDatasetDeflate
-    -- ** Type classes
+    -- * Type classes
   , IsObject
   , IsDirectory
   , HasData(..)
   , getType
-  , getDataspace
   , HasAttrs
   , Closable
   , close
     -- * Error handling
   , Error(..)
-    -- * Serialization of haskell value
-    -- ** Type classes
-  , Element(..)
-  , Serialize(..)
-  , SerializeArr(..)
-  , SerializeSlab(..)
-    -- ** Primitives
-  , basicReadBuffer
-  , basicReadScalar
-  , HIO.basicReadAttr
-  , HIO.basicCreateAttr
-    -- * Attributes
-  , SerializeAttr(..)
-  , HIO.AttributeM(..)
-  , HIO.runAttributeM
-  , HIO.basicAttrSubset
-  , HIO.basicEncodeAttr
-  , HIO.basicDecodeAttr
+  , Message(..)
+  , DataspaceParseError(..)
   ) where
 
 import Control.Monad
@@ -108,18 +150,23 @@ import Foreign.Ptr
 import Foreign.Storable
 import GHC.Stack
 
-import HDF5.HL.Internal            qualified as HIO
-import HDF5.HL.Internal            ( SerializeAttr(..), Serialize(..), SerializeArr(..), SerializeSlab(..)
-                                   , basicReadBuffer, basicReadScalar)
-import HDF5.HL.Internal.Types
-import HDF5.HL.Internal.Wrappers
-import HDF5.HL.Internal.Error
-import HDF5.HL.Internal.Enum
-import HDF5.HL.Internal.Dataspace
-import HDF5.HL.Internal.Property
+import HDF5.HL.Serialize
+import HDF5.HL.Unsafe.Types
+import HDF5.HL.Unsafe.Wrappers
+import HDF5.HL.Unsafe.Error
+import HDF5.HL.Unsafe.Enum
+import HDF5.HL.Dataspace
+import HDF5.HL.Unsafe.Property
+import HDF5.HL.Unsafe.Encoding
+import HDF5.HL.Attribute
 import HDF5.C
 import Prelude hiding (read,readIO)
 
+
+-- $type_hdf
+--
+-- See module "HDF5.HL.Types" for full API for defining and matching
+-- HDF5 types.
 
 ----------------------------------------------------------------
 -- Lifted function from other modules
@@ -131,9 +178,6 @@ close = liftIO . basicClose
 
 getType :: (HasData a, MonadIO m, HasCallStack) => a -> m Type
 getType = liftIO . getTypeIO
-
-getDataspace :: (HasData a, MonadIO m, HasCallStack) => a -> m Dataspace
-getDataspace = liftIO . getDataspaceIO
 
 ----------------------------------------------------------------
 -- File API
@@ -194,7 +238,7 @@ openGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
        $ checkHID p_err ("Cannot open group " ++ path)
        $ h5g_open (getHID dir) c_path H5P_DEFAULT
 
--- | @bracket-style wrapper for 'openGroup'
+-- | @bracket@-style wrapper for 'openGroup'
 withOpenGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
   => dir              -- ^ Location. Either 'File' or 'Group'
@@ -216,7 +260,7 @@ createGroup dir path = liftIO $ withFrozenCallStack $ evalContT $ do
        $ checkHID p_err ("Cannot create group " ++ path)
        $ h5g_create (getHID dir) c_path H5P_DEFAULT H5P_DEFAULT H5P_DEFAULT
 
--- | @bracket-style wrapper for 'createGroup'
+-- | @bracket@-style wrapper for 'createGroup'
 withCreateGroup
   :: (IsDirectory dir, MonadIO m, MonadMask m, HasCallStack)
   => dir              -- ^ Location. Either 'File' or 'Group'
@@ -250,8 +294,29 @@ listGroup dir = liftIO $ withFrozenCallStack $ evalContT $ do
 -- Dataset API
 ----------------------------------------------------------------
 
+-- $dataspace
+--
+-- In HDF5 terminology 'Dataspace' is object that encode dimensions of
+-- an dataset or attribute array. It's also used to select parts of an
+-- array for reading\/writing.
+--
+--  * Null dataspace it corresponds to empty dataset
+--  * Scalar dataspace which corresponds to dataset containing single value
+--  * Simple dataspace which corresponds to N-dimensional array. Up to
+--  32-dimensional arrays are supported
+--
+-- 'Dataspace' is part of public API but it's expected that usually
+-- dataset operations do not need to deal with it explicitly. Instead
+-- we encode data dimensions and offsets using haskell values: fixnums
+-- and tuples mostly. Type class 'IsExtent' encodes N-dimensional
+-- products of @Word64@ and could be used as size or
+-- offset. 'IsDataspace' is used for specifying dataset's dataspace
+-- when creating it and for querying.
+
+
+
 -- | Open existing dataset in given location. Returned 'Dataset' must
---   be closed by call to close.
+--   be closed by call to 'close'.
 openDataset
   :: (MonadIO m, IsDirectory dir, HasCallStack)
   => dir      -- ^ Location
@@ -267,19 +332,17 @@ openDataset dir path = liftIO $ withFrozenCallStack $ evalContT $ do
 -- | Create new dataset at given location without writing any data to
 --   it. Returned 'Dataset' must be closed by call to 'close'.
 createEmptyDataset
-  :: (MonadIO m, IsDirectory dir, IsExtent ext, HasCallStack)
-  => dir       -- ^ Location
-  -> FilePath  -- ^ Path relative to location
-  -> Type      -- ^ Element type
-  -> ext       -- ^ Extent of dataset
-  -> Maybe ext -- ^ Maximum extent of dataset. If @Nothing@ it's same as extent
-  -> [Property Dataset]
-  -- ^ Dataset creation properties
+  :: (MonadIO m, IsDirectory dir, IsDataspace ext, HasCallStack)
+  => dir                -- ^ Location
+  -> FilePath           -- ^ Path relative to location
+  -> Type               -- ^ Element type
+  -> ext                -- ^ Extent of dataset
+  -> [Property Dataset] -- ^ Dataset creation properties
   -> m Dataset
-createEmptyDataset dir path ty ext ext_max props = liftIO $ evalContT $ do
+createEmptyDataset dir path ty ext props = liftIO $ evalContT $ do
   p_err  <- ContT $ alloca
   c_path <- ContT $ withCString path
-  space  <- ContT $ withCreateDataspace ext ext_max
+  space  <- ContT $ withCreateDataspaceFromDSpace ext
   tid    <- ContT $ withType ty
   plist  <- ContT $ withDatasetProps $ mconcat props
   lift $ withFrozenCallStack
@@ -289,19 +352,6 @@ createEmptyDataset dir path ty ext ext_max props = liftIO $ evalContT $ do
          H5P_DEFAULT
          (getHID plist)
          H5P_DEFAULT
-
-
--- | Create new dataset at given location and write provided data to
---   it. Shape of data is inferred from data to write.
-createDataset
-  :: forall a dir m. (Serialize a, IsDirectory dir, MonadIO m, HasCallStack)
-  => dir      -- ^ File (root will be used) or group
-  -> FilePath -- ^ Path to dataset
-  -> a        -- ^ Value to write
-  -> m ()
-createDataset dir path a = liftIO $ evalContT $ do
-  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) Nothing []
-  lift $ basicWrite dset a
 
 
 -- | Open dataset and pass handle to continuation. Dataset will be
@@ -318,69 +368,64 @@ withOpenDataset dir path = bracket (openDataset dir path) close
 -- | Create new dataset at given location. Returned 'Dataset' must be
 --   closed by call to 'close'.
 withCreateEmptyDataset
-  :: (MonadIO m, MonadMask m, IsDirectory dir, IsExtent ext, HasCallStack)
+  :: (MonadIO m, MonadMask m, IsDirectory dir, IsDataspace ext, HasCallStack)
   => dir       -- ^ Location
   -> FilePath  -- ^ Path relative to location
   -> Type      -- ^ Element type
   -> ext       -- ^ Dataspace, that is size of dataset
-  -> Maybe ext -- ^ Maximum extent of dataset. If @Nothing@ it's same as extent
-  -> [Property Dataset]
-  -- ^ Dataset creation properties
+  -> [Property Dataset] -- ^ Dataset creation properties
   -> (Dataset -> m a)
   -> m a
-withCreateEmptyDataset dir path ty ext ext_max props = bracket
-  (createEmptyDataset dir path ty ext ext_max props)
+withCreateEmptyDataset dir path ty ext props = bracket
+  (createEmptyDataset dir path ty ext props)
   close
 
--- | Create new dataset at given location and populate it using data
---   from provided data structure.
-withCreateDataset
-  :: forall a m r dir. (MonadIO m, MonadMask m, IsDirectory dir, Serialize a, HasCallStack)
-  => dir      -- ^ Location
-  -> FilePath -- ^ Path relative to location
-  -> a        -- ^ Data to write
-  -> (Dataset -> m r)
-  -> m r
-withCreateDataset dir path a action = evalContT $ do
-  dset <- ContT $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) Nothing []
-  liftIO $ basicWrite dset a
-  lift   $ action dset
-
--- | Read data from already opened dataset. This function work
---   specifically with datasets and can use its attributes. Use 'read'
---   to be able to read from attributes as well.
-readDataset :: (Serialize a, MonadIO m, HasCallStack) => Dataset -> m a
-readDataset d = liftIO $ withDataspace d $ \spc -> basicRead d spc
-
--- | Read value from already opened dataset or attribute.
-readObject :: (SerializeArr a, HasData d, MonadIO m, HasCallStack) => d -> m a
-readObject = liftIO . HIO.basicReadObject
-
--- | Open dataset and read it using 'readDSet'.
-readAt
-  :: (Serialize a, IsDirectory dir, MonadIO m, HasCallStack)
-  => dir      -- ^ File (root will be used) or group
-  -> FilePath -- ^ Path to dataset
+-- | Open and read dataset from either file or group.
+readAllAt
+  :: (ArrayLike a, IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location in HDF5 file
+  -> FilePath -- ^ Dataset name
   -> m a
-readAt dir path = liftIO $ withOpenDataset dir path readDataset
+readAllAt dir path
+  = liftIO
+  $ withOpenDataset dir path
+  $ \dset -> readAll dset
 
--- | Read slab selection from dataset
-readSlab
-  :: (SerializeSlab a, MonadIO m, HasCallStack)
-  => Dataset    -- ^ Dataset to read from
-  -> ExtentOf a -- ^ Offset into dataset
-  -> ExtentOf a -- ^ Size to read
-  -> m a
-readSlab dset off sz = liftIO $ basicReadSlab dset off sz
-
--- | Write provided data into slab selection
-writeSlab
-  :: (SerializeSlab a, MonadIO m, HasCallStack)
-  => Dataset    -- ^ Dataset to read from
-  -> ExtentOf a -- ^ Offset into dataset
-  -> a          -- ^ Data to write (will write all)
+-- | Create dataset and write haskell array into it.
+writeAllAt
+  :: forall a dir m. (ArrayLike a, IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location in HDF5 file
+  -> FilePath -- ^ Name dataset to create
+  -> a        -- ^ Value to write
   -> m ()
-writeSlab dset off xs = liftIO $ basicWriteSlab dset off xs
+writeAllAt dir path a
+  = liftIO
+  $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) []
+  $ \dset -> writeAll dset a
+
+-- | Read dataset from HDF5 using 'SerializeDSet' machinery.
+readDatasetAt
+  :: (SerializeDSet a, IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location in HDF5 file
+  -> FilePath -- ^ Dataset name
+  -> m a
+readDatasetAt dir path
+  = liftIO
+  $ withOpenDataset dir path basicReadDSet
+
+-- | Create dataset from haskell value of type @a@. 
+writeDatasetAt
+  :: forall a dir m. (SerializeDSet a, IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location in HDF5 file
+  -> FilePath -- ^ Name of dataset to create
+  -> a        -- ^ Value to write to HDF5
+  -> m ()
+writeDatasetAt dir path a
+  = liftIO
+  $ basicWriteDSet a
+  $ \ext ty prop action -> 
+    withCreateEmptyDataset dir path ty ext prop action
+
 
 -- | Set new extent of dataspace. This function could be applied to
 --   following datasets:
@@ -392,9 +437,7 @@ writeSlab dset off xs = liftIO $ basicWriteSlab dset off xs
 setDatasetExtent :: (HasCallStack, IsExtent dim, MonadIO m) => Dataset -> dim -> m ()
 setDatasetExtent dset dim = liftIO $ evalContT $ do
   p_err         <- ContT $ alloca
-  (r_ext,p_ext) <- withEncodedExtent dim >>= \case
-    Nothing -> throwM $ Error [Left "Extent must be non-null"]
-    Just x  -> pure x
+  (r_ext,p_ext) <- withEncodedExtent $ encodeExtent dim
   spc    <- ContT $ withDataspace dset
   r_dset <- lift
           $ checkCInt p_err "Cannot get rank of dataspace's extent"
@@ -411,65 +454,16 @@ setDatasetExtent dset dim = liftIO $ evalContT $ do
 -- Dataspace API
 ----------------------------------------------------------------
 
+-- | Find rank of dataset or attribute. Returns @Nothing@ for null
+--   dataspaces, @Just 0@ for scalars and @Just n@ for rank-N arrays.
 rank :: (HasData a, MonadIO m, HasCallStack) => a -> m (Maybe Int)
-rank a = liftIO $ withDataspace a HIO.dataspaceRank
+rank a = liftIO $ withDataspace a dataspaceRank
 
--- | Compute extent of an object. Returns nothing when extent has
---   unexpected shape. E.g. if 2D array is expected but object is 1D
---   array.
-extent :: (HasData a, IsExtent ext, MonadIO m, HasCallStack) => a -> m (Maybe ext)
-extent a = liftIO $ fmap fst <$> withDataspace a runParseFromDataspace
-
-dataspaceRank
-  :: (MonadIO m, HasCallStack)
-  => Dataspace
-  -> m (Maybe Int)
-dataspaceRank spc = liftIO $ HIO.dataspaceRank spc
-
--- | Parse extent of dataspace. Returns @Nothing@ if dataspace doens't
---   match expected shape.
-dataspaceExt
-  :: (MonadIO m, IsExtent ext, HasCallStack)
-  => Dataspace
-  -> m (Maybe ext)
-dataspaceExt spc = liftIO $ fmap fst <$> runParseFromDataspace spc
-
-----------------------------------------------------------------
--- Attributes
-----------------------------------------------------------------
-
--- | Open attribute of object. It could be either dataset or
---   group. Returns @Nothing@ if such attribute does not exists
-openAttr
-  :: (MonadIO m, HasAttrs a, HasCallStack)
-  => a      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> m (Maybe Attribute)
-openAttr a path = liftIO $ HIO.openAttr a path
-
--- | Open attribute of given group or dataset and pass handle to
---   continuation. It'll be closed when continuation finish
---   execution normally or with an exception.
-withAttr
-  :: (MonadMask m, MonadIO m, HasAttrs a, HasCallStack)
-  => a      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> (Maybe Attribute -> m b)
-  -> m b
-withAttr a path = bracket (openAttr a path) (mapM_ close)
-
--- | Create attribute
-createAttr
-  :: forall a dir m. (SerializeArr a, HasAttrs dir, MonadIO m, HasCallStack)
-  => dir    -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> a      -- ^ Value to store in attribute
-  -> m ()
-createAttr dir path a = liftIO $ HIO.basicCreateAttr dir path a
-
-readAttr
-  :: (SerializeArr a, HasAttrs d, MonadIO m, HasCallStack)
-  => d      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> m (Maybe a)
-readAttr a name = liftIO $ HIO.basicReadAttr a name
+-- | Compute extent of an dataset or attribute. Returns nothing when
+--   extent has unexpected shape. E.g. if 2D array is expected but
+--   object is 1D array. Depending on type could be used to obtain
+--   size of size and maximum size for any\/each dimensions.
+extent
+  :: (HasData a, IsDataspace ext, MonadIO m, HasCallStack)
+  => a -> m (Either DataspaceParseError ext)
+extent a = liftIO $ withDataspace a runParseFromDataspace

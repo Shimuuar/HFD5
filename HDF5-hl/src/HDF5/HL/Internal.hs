@@ -128,60 +128,67 @@ basicWriteSlab dset off a = do
 ----------------------------------------------------------------
 
 
--- openAttr
---   :: (HasAttrs a, HasCallStack)
---   => a      -- ^ Dataset or group
---   -> String -- ^ Attribute name
---   -> IO (Maybe Attribute)
--- openAttr (getHID -> hid) path = withFrozenCallStack $ evalContT $ do
---   p_err <- ContT $ alloca
---   c_str <- ContT $ withCString path
---   lift $ do
---     exists <- checkHTri p_err ("Cannot check whether attribute " ++ path ++ " exists")
---             $ h5a_exists hid c_str
---     case exists of
---       False -> pure Nothing
---       True  -> Just . Attribute
---             <$> ( checkHID p_err ("Cannot open attribute " ++ path)
---                 $ h5a_open hid c_str H5P_DEFAULT)
+-- | Open attribute on group or dataset. Returns nothing if dataset
+--   does not exists.
+openAttrMay
+  :: (HasAttrs d, MonadIO m, HasCallStack)
+  => d      -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> m (Maybe Attribute)
+openAttrMay (getHID -> hid) path = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err <- ContT $ alloca
+  c_str <- ContT $ withCString path
+  lift $ do
+    exists <- checkHTri p_err ("Cannot check whether attribute " ++ path ++ " exists")
+            $ h5a_exists hid c_str
+    case exists of
+      False -> pure Nothing
+      True  -> Just . Attribute
+            <$> ( checkHID p_err ("Cannot open attribute " ++ path)
+                $ h5a_open hid c_str H5P_DEFAULT)
 
--- withAttr
---   :: (HasAttrs a, HasCallStack)
---   => a      -- ^ Dataset or group
---   -> String -- ^ Attribute name
---   -> (Maybe Attribute -> IO b)
---   -> IO b
--- withAttr a path = bracket (openAttr a path) (mapM_ basicClose)
+-- | Bracket variant of 'openAttrMay'.
+withAttrMay
+  :: (HasAttrs d, MonadIO m, MonadMask m, HasCallStack)
+  => d      -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> (Maybe Attribute -> m b)
+  -> m b
+withAttrMay a path = bracket (openAttrMay a path) (mapM_ (liftIO . basicClose))
 
--- basicCreateAttr
---   :: forall a dir. (SerializeArr a, HasAttrs dir, HasCallStack)
---   => dir    -- ^ Dataset or group
---   -> String -- ^ Attribute name
---   -> a      -- ^ Value to store in attribute
---   -> IO ()
--- basicCreateAttr dir path a = evalContT $ do
---   p_err  <- ContT $ alloca
---   c_path <- ContT $ withCString path
---   space  <- ContT $ withCreateDataspaceFromExtent (getExtent a)
---   tid    <- ContT $ withType $ typeH5 @(ElementOf a)
---   attr   <- ContT $ bracket
---     ( withFrozenCallStack
---     $ fmap Attribute
---     $ checkHID p_err ("Cannot create attribute " ++ path)
---     $ h5a_create (getHID dir) c_path tid (getHID space)
---           H5P_DEFAULT
---           H5P_DEFAULT)
---     basicClose
---   lift $ basicWriteArr attr a
 
--- basicReadAttr
---   :: (SerializeArr a, HasAttrs d, HasCallStack)
---   => d      -- ^ Dataset or group
---   -> String -- ^ Attribute name
---   -> IO (Maybe a)
--- basicReadAttr a name = withAttr a name $ \case
---   Just x  -> Just <$> basicReadObject x
---   Nothing -> pure Nothing
+-- | Read attribute from. Return @Nothing@ if attribute doesn't
+--   exists, and throws exception if it couldn't be decoded.
+readAttrMay
+  :: (ArrayLike a, HasAttrs d, HasCallStack)
+  => d      -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> IO (Maybe a)
+readAttrMay d name = withAttrMay d name $ \case
+  Just x  -> Just <$> basicReadObject x
+  Nothing -> pure Nothing
+
+-- | Create attribute.
+writeAttr
+  :: forall a d. (ArrayLike a, HasAttrs d, HasCallStack)
+  => d      -- ^ Dataset or group
+  -> String -- ^ Attribute name
+  -> a      -- ^ Value to write
+  -> IO ()
+writeAttr d name a = withFrozenCallStack $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_path <- ContT $ withCString name
+  space  <- ContT $ withCreateDataspaceFromExtent (getExtent a)
+  tid    <- ContT $ withType $ typeH5 @(ElementOf a)
+  attr   <- ContT $ bracket
+    ( fmap Attribute
+    $ checkHID p_err ("Cannot create attribute " ++ name)
+    $ h5a_create (getHID d) c_path tid (getHID space)
+          H5P_DEFAULT
+          H5P_DEFAULT)
+    basicClose
+  lift $ basicWriteObject attr a
+
 
 
 ----------------------------------------------------------------

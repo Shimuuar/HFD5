@@ -92,10 +92,10 @@ module HDF5.HL
   , Growable(..)
     -- * Attributes
   , Attribute
-  -- , openAttr
-  -- , withAttr
-  -- , createAttr
-  -- , readAttr
+  , HIO.openAttrMay
+  , HIO.withAttrMay
+  , HIO.readAttrMay
+  , HIO.writeAttr
     -- ** Data types
   , Type
   , sizeOfH5
@@ -128,20 +128,6 @@ module HDF5.HL
     -- * Serialization of haskell value
     -- ** Type classes
   , Element(..)
-  , ArrayLike(..)
-  , SerializeDSet(..)
-  --   -- ** Primitives
-  -- , basicReadBuffer
-  -- , basicReadScalar
-  -- , HIO.basicReadAttr
-  -- , HIO.basicCreateAttr
-  --   -- * Attributes
-  -- , SerializeAttr(..)
-  -- , HIO.AttributeM(..)
-  -- , HIO.runAttributeM
-  -- , HIO.basicAttrSubset
-  -- , HIO.basicEncodeAttr
-  -- , HIO.basicDecodeAttr
   ) where
 
 import Control.Monad
@@ -505,46 +491,3 @@ extent
   :: (HasData a, IsDataspace ext, MonadIO m, HasCallStack)
   => a -> m (Either DataspaceParseError ext)
 extent a = liftIO $ withDataspace a runParseFromDataspace
-
-
-----------------------------------------------------------------
--- Attributes
-----------------------------------------------------------------
-
-{-
--- | Open attribute of object. It could be either dataset or
---   group. Returns @Nothing@ if such attribute does not exists
-openAttr
-  :: (MonadIO m, HasAttrs a, HasCallStack)
-  => a      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> m (Maybe Attribute)
-openAttr a path = liftIO $ HIO.openAttr a path
-
--- | Open attribute of given group or dataset and pass handle to
---   continuation. It'll be closed when continuation finish
---   execution normally or with an exception.
-withAttr
-  :: (MonadMask m, MonadIO m, HasAttrs a, HasCallStack)
-  => a      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> (Maybe Attribute -> m b)
-  -> m b
-withAttr a path = bracket (openAttr a path) (mapM_ close)
-
--- | Create attribute
-createAttr
-  :: forall a dir m. (SerializeArr a, HasAttrs dir, MonadIO m, HasCallStack)
-  => dir    -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> a      -- ^ Value to store in attribute
-  -> m ()
-createAttr dir path a = liftIO $ HIO.basicCreateAttr dir path a
-
-readAttr
-  :: (SerializeArr a, HasAttrs d, MonadIO m, HasCallStack)
-  => d      -- ^ Dataset or group
-  -> String -- ^ Attribute name
-  -> m (Maybe a)
-readAttr a name = liftIO $ HIO.basicReadAttr a name
--}

@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 -- |
-module HDF5.HL.Serialize
+module HDF5.HL.SerializeH5
   ( -- * Serialization machinery
     H5Reader
   , H5Writer
@@ -119,11 +119,11 @@ instance (Show a, Read a) => FilePathRepr (ReprViaShowRead a) where
 --   'H5.SerializeDSet' instance
 newtype ViaDataset a = ViaDataset a
 
-instance H5.Serialize a => H5Serialize (ViaDataset a) where
+instance H5.SerializeDSet a => H5Serialize (ViaDataset a) where
   h5Read  dir path
-    = ViaDataset <$> H5.readAt dir path
+    = ViaDataset <$> H5.readDatasetAt dir path
   h5Write dir path (ViaDataset a)
-    = H5.createDataset dir path a []
+    = H5.writeDatasetAt dir path a
 
 
 newtype ViaSerialize1 f a = ViaSerialize1 (f a)

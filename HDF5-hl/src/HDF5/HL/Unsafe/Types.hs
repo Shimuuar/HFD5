@@ -5,8 +5,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 -- |
 -- API for working with HDF5 data types. We treat them as immutable
--- while they're mutable in HDF5.
-module HDF5.HL.Internal.Types
+-- while they're mutable in HDF5. This module contains unsafe functions.
+module HDF5.HL.Unsafe.Types
   ( -- * Operations on types
     Type(..)
   , unsafeNewType

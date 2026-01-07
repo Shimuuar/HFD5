@@ -108,19 +108,10 @@ module HDF5.HL
   , HIO.readAttrMay
   , HIO.writeAttr
     -- * Data types
+    -- $type_hdf
   , Type
   , sizeOfH5
   , Element(..)
-  , tyI8, tyI16, tyI32, tyI64
-  , tyU8, tyU16, tyU32, tyU64
-  , tyF32, tyF64
-  , tyI8LE, tyI16LE, tyI32LE, tyI64LE
-  , tyU8LE, tyU16LE, tyU32LE, tyU64LE
-  , tyI8BE, tyI16BE, tyI32BE, tyI64BE
-  , tyU8BE, tyU16BE, tyU32BE, tyU64BE
-  , pattern Array
-  , makePackedRecord
-  , makeEnumeration
     -- * Property lists
   , Property
   , Layout(..)
@@ -155,7 +146,7 @@ import HDF5.HL.Internal            qualified as HIO
 import HDF5.HL.Internal            (ArrayLike(..), SerializeDSet(..))
   -- SerializeAttr(..), Serialize(..), SerializeArr(..), SerializeSlab(..)
                                    -- , basicReadBuffer, basicReadScalar)
-import HDF5.HL.Internal.Types
+import HDF5.HL.Unsafe.Types
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
 import HDF5.HL.Internal.Enum
@@ -165,6 +156,11 @@ import HDF5.HL.Unsafe.Encoding
 import HDF5.C
 import Prelude hiding (read,readIO)
 
+
+-- $type_hdf
+--
+-- See module "HDF5.HL.Types" for full API for defining and matching
+-- HDF5 types.
 
 ----------------------------------------------------------------
 -- Lifted function from other modules

@@ -46,15 +46,18 @@ Library
   Exposed-modules:
         HDF5.HL
         HDF5.HL.Dataspace
+        HDF5.HL.Types
         HDF5.HL.Vector
+        HDF5.HL.Unsafe.Encoding
+        HDF5.HL.Unsafe.Types
+
 --        HDF5.HL.Serialize
         HDF5.HL.Internal
         HDF5.HL.Internal.Enum
         HDF5.HL.Internal.Error
-        HDF5.HL.Internal.Types
         HDF5.HL.Internal.Wrappers
         HDF5.HL.Internal.Property
-        HDF5.HL.Unsafe.Encoding
+
 
 Test-suite HDF5-hl-tests
   type:             exitcode-stdio-1.0

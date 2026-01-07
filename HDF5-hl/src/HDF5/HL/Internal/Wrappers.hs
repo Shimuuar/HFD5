@@ -31,7 +31,7 @@ import GHC.Stack
 import HDF5.C
 import HDF5.HL.Internal.Enum
 import HDF5.HL.Internal.Error
-import HDF5.HL.Internal.Types
+import HDF5.HL.Unsafe.Types
 
 
 ----------------------------------------------------------------

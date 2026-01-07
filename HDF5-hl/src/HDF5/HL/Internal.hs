@@ -39,7 +39,7 @@ import Data.Int
 import Data.Word
 import GHC.Stack
 
-import HDF5.HL.Internal.Types
+import HDF5.HL.Unsafe.Types
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
 import HDF5.HL.Dataspace

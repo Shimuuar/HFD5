@@ -1,7 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 -- |
 -- Data types for working with HDF5 files
-module HDF5.HL.Internal.Wrappers
+module HDF5.HL.Unsafe.Wrappers
   ( -- * Files and groups
     File(..)
   , OpenMode(..)
@@ -29,8 +29,8 @@ import Foreign.Marshal
 import GHC.Stack
 
 import HDF5.C
-import HDF5.HL.Internal.Enum
-import HDF5.HL.Internal.Error
+import HDF5.HL.Unsafe.Enum
+import HDF5.HL.Unsafe.Error
 import HDF5.HL.Unsafe.Types
 
 

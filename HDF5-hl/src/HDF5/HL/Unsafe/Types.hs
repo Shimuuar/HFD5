@@ -68,7 +68,7 @@ import GHC.TypeLits
 import GHC.ForeignPtr  (mallocPlainForeignPtrAlignedBytes)
 import GHC.IO          (IO(..))
 
-import HDF5.HL.Internal.Error
+import HDF5.HL.Unsafe.Error
 import HDF5.C
 
 ----------------------------------------------------------------

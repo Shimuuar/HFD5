@@ -12,8 +12,6 @@
 module HDF5.HL.Internal where
 
 import Control.Monad
-import Control.Monad.IO.Class
-import Control.Monad.Catch
 import Control.Monad.Trans.Class
 import Data.Functor.Identity
 import Data.Complex                (Complex)
@@ -30,7 +28,6 @@ import Data.Vector.Fixed.Storable  qualified as FS
 import Data.Vector.Fixed.Primitive qualified as FP
 import Data.Vector.Fixed.Strict    qualified as FV
 import Control.Monad.Trans.Cont
-import Foreign.C.String
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.Marshal
@@ -40,10 +37,10 @@ import Data.Word
 import GHC.Stack
 
 import HDF5.HL.Unsafe.Types
-import HDF5.HL.Internal.Wrappers
-import HDF5.HL.Internal.Error
+import HDF5.HL.Unsafe.Wrappers
+import HDF5.HL.Unsafe.Error
 import HDF5.HL.Dataspace
-import HDF5.HL.Internal.Property
+import HDF5.HL.Unsafe.Property
 import HDF5.HL.Vector
 import HDF5.C
 import Prelude hiding (read,readIO)

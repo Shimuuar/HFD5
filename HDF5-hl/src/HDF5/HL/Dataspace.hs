@@ -46,8 +46,8 @@ import Foreign.Storable
 import Foreign.Marshal
 import GHC.Stack
 
-import HDF5.HL.Internal.Wrappers
-import HDF5.HL.Internal.Error
+import HDF5.HL.Unsafe.Wrappers
+import HDF5.HL.Unsafe.Error
 import HDF5.HL.Unsafe.Encoding
 import HDF5.C
 

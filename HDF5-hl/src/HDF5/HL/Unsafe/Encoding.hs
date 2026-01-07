@@ -17,7 +17,7 @@ import Foreign.Ptr
 import Foreign.Storable
 
 import HDF5.C
-import HDF5.HL.Internal.Error
+import HDF5.HL.Unsafe.Error
 
 
 

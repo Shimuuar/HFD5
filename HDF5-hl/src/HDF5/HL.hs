@@ -128,6 +128,8 @@ module HDF5.HL
   , close
     -- * Error handling
   , Error(..)
+  , Message(..)
+  , DataspaceParseError(..)
   ) where
 
 import Control.Monad
@@ -145,11 +147,11 @@ import GHC.Stack
 import HDF5.HL.Internal            qualified as HIO
 import HDF5.HL.Internal            (ArrayLike(..), SerializeDSet(..))
 import HDF5.HL.Unsafe.Types
-import HDF5.HL.Internal.Wrappers
-import HDF5.HL.Internal.Error
-import HDF5.HL.Internal.Enum
+import HDF5.HL.Unsafe.Wrappers
+import HDF5.HL.Unsafe.Error
+import HDF5.HL.Unsafe.Enum
 import HDF5.HL.Dataspace
-import HDF5.HL.Internal.Property
+import HDF5.HL.Unsafe.Property
 import HDF5.HL.Unsafe.Encoding
 import HDF5.HL.Attribute
 import HDF5.C

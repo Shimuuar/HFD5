@@ -116,7 +116,7 @@ instance (Show a, Read a) => FilePathRepr (ReprViaShowRead a) where
 ----------------------------------------------------------------
 
 -- | Derive 'H5Serialize' instance for data type which has
---   'H5.SerializeDSet' instance
+--   'HDF5.HL.SerializeDSet' instance.
 newtype ViaDataset a = ViaDataset a
 
 instance H5.SerializeDSet a => H5Serialize (ViaDataset a) where
@@ -125,7 +125,7 @@ instance H5.SerializeDSet a => H5Serialize (ViaDataset a) where
   h5Write dir path (ViaDataset a)
     = H5.writeDatasetAt dir path a
 
-
+-- | Derive 'H5Serialize' for data types which has 'H5Serialize1' instnace
 newtype ViaSerialize1 f a = ViaSerialize1 (f a)
 
 instance (H5Serialize a, H5Serialize1 f) => H5Serialize (ViaSerialize1 f a) where
@@ -133,6 +133,8 @@ instance (H5Serialize a, H5Serialize1 f) => H5Serialize (ViaSerialize1 f a) wher
   h5Write dir = coerce (liftH5Write @f (h5Write @a) dir)
 
 
+-- | Derive representation for records which puts each field into its
+--   own dataset\/group.
 instance (Generic a, GSerializeLoc (Rep a)) => H5Serialize (Generically a) where
   h5Read dir path
     = H5.withOpenGroup dir path $ fmap (Generically . to) . gH5Read

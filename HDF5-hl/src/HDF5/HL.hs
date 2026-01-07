@@ -53,6 +53,9 @@ type classes.
 
 - `SerializeDSet` is for values that could be serialized as dataset.
   It allows to use attributes in serialization as well.
+
+- `HDF5.HL.SerializeH5.SerializeH5` type class which allows to
+  serialize haskell values as arbitrary trees of HDF values.
 -}
 module HDF5.HL
   ( -- * Files and groups

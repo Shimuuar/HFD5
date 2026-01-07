@@ -40,8 +40,19 @@ All of them could be closed in the same way by calling
 companion named @with...@
 
 
-== Reading/writing
+== Reading/writing of datasets
 
+Datasets are arrays and each of them has size described by
+`Dataspaces` and element type (which could be quite complicated)
+described by `Type`. All operations on datasets are heavily based on
+type classes.
+
+- `ArrayLike` is for types which could be directly mapped to arrays
+  and scalars (0-dimensional arrays) and is used for datasets and
+  attributes alike.
+
+- `SerializeDSet` is for values that could be serialized as dataset.
+  It allows to use attributes in serialization as well.
 -}
 module HDF5.HL
   ( -- * Files and groups
@@ -98,8 +109,8 @@ module HDF5.HL
   , HIO.writeAttr
     -- * Data types
   , Type
-  , Element(..)
   , sizeOfH5
+  , Element(..)
   , tyI8, tyI16, tyI32, tyI64
   , tyU8, tyU16, tyU32, tyU64
   , tyF32, tyF64
@@ -397,7 +408,7 @@ writeAll dset xs = liftIO $ HIO.basicWriteObject dset xs
 -- | Read whole dataset as an haskell array.
 readAll
   :: (ArrayLike a, MonadIO m, HasCallStack)
-  => Dataset
+  => Dataset -- ^ Dataset to write to
   -> m a
 readAll dset = liftIO $ HIO.basicReadObject dset
 

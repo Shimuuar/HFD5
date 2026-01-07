@@ -93,7 +93,10 @@ module HDF5.HL
   , SerializeDSet(..)
   , readDatasetAt
   , writeDatasetAt
-    -- ** Dataspace information
+    -- **  Deriving via
+  , HIO.SerializeAsScalar(..)
+  , HIO.SerializeAsArray(..)
+    -- * Dataspace information
     -- $dataspace
   , Dataspace
   , pattern UNLIMITED

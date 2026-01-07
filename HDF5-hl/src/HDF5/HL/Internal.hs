@@ -118,12 +118,6 @@ basicWriteSlab dset off a = do
     lift $ checkHErr p_err "Writing dataset data failed"
          $ h5d_write (getHID dset) tid
              (getHID spc_mem) (getHID spc_file) H5P_DEFAULT ptr
-  
-
-----------------------------------------------------------------
--- Attributes
-----------------------------------------------------------------
-
 
 
 ----------------------------------------------------------------

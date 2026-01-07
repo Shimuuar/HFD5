@@ -47,6 +47,7 @@ Library
         HDF5.HL
         HDF5.HL.Attribute
         HDF5.HL.Dataspace
+        HDF5.HL.Serialize
         HDF5.HL.SerializeH5
         HDF5.HL.Types
         HDF5.HL.Vector
@@ -57,8 +58,6 @@ Library
         HDF5.HL.Unsafe.Property
         HDF5.HL.Unsafe.Types
         HDF5.HL.Unsafe.Wrappers
-        --
-        HDF5.HL.Internal
 
 
 Test-suite HDF5-hl-tests

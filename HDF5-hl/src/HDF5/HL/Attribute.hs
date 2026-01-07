@@ -28,7 +28,7 @@ import GHC.Stack
 import HDF5.HL.Unsafe.Types
 import HDF5.HL.Unsafe.Wrappers
 import HDF5.HL.Unsafe.Error
-import HDF5.HL.Internal (ArrayLike(..), basicReadObject, basicWriteObject)
+import HDF5.HL.Serialize
 import HDF5.HL.Dataspace
 import HDF5.C
 
@@ -73,7 +73,7 @@ readAttrMay
   -> String -- ^ Attribute name
   -> IO (Maybe a)
 readAttrMay d name = withAttrMay d name $ \case
-  Just x  -> Just <$> basicReadObject x
+  Just x  -> Just <$> readAll x
   Nothing -> pure Nothing
 
 -- | Create attribute.
@@ -95,7 +95,7 @@ writeAttr d name a = withFrozenCallStack $ evalContT $ do
           H5P_DEFAULT
           H5P_DEFAULT)
     basicClose
-  lift $ basicWriteObject attr a
+  lift $ writeAll attr a
 
 
 ----------------------------------------------------------------

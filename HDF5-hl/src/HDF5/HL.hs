@@ -97,8 +97,8 @@ module HDF5.HL
   , readDatasetAt
   , writeDatasetAt
     -- **  Deriving via
-  , HIO.SerializeAsScalar(..)
-  , HIO.SerializeAsArray(..)
+  , SerializeAsScalar(..)
+  , SerializeAsArray(..)
     -- * Dataspace information
     -- $dataspace
   , Dataspace
@@ -150,8 +150,7 @@ import Foreign.Ptr
 import Foreign.Storable
 import GHC.Stack
 
-import HDF5.HL.Internal            qualified as HIO
-import HDF5.HL.Internal            (ArrayLike(..), SerializeDSet(..))
+import HDF5.HL.Serialize
 import HDF5.HL.Unsafe.Types
 import HDF5.HL.Unsafe.Wrappers
 import HDF5.HL.Unsafe.Error
@@ -381,41 +380,6 @@ withCreateEmptyDataset dir path ty ext props = bracket
   (createEmptyDataset dir path ty ext props)
   close
 
--- | Read slab selection from dataset
-readSlab
-  :: (ArrayLike a, MonadIO m, HasCallStack)
-  => Dataset    -- ^ Dataset to read from
-  -> ExtentOf a -- ^ Offset into dataset
-  -> ExtentOf a -- ^ Size to read
-  -> m a
-readSlab dset off sz = liftIO $ HIO.basicReadSlab dset off sz
-
--- | Write provided data into slab selection
-writeSlab
-  :: (ArrayLike a, MonadIO m, HasCallStack)
-  => Dataset    -- ^ Dataset to write to
-  -> ExtentOf a -- ^ Offset into dataset
-  -> a          -- ^ Data to write (will write all)
-  -> m ()
-writeSlab dset off xs = liftIO $ HIO.basicWriteSlab dset off xs
-
--- | Write provided data into slab selection. Dataset should have
---   enough space int it.
-writeAll
-  :: (ArrayLike a, MonadIO m, HasCallStack)
-  => Dataset    -- ^ Dataset to write to
-  -> a          -- ^ Data to write (will write all)
-  -> m ()
-writeAll dset xs = liftIO $ HIO.basicWriteObject dset xs
-
--- | Read whole dataset as an haskell array.
-readAll
-  :: (ArrayLike a, MonadIO m, HasCallStack)
-  => Dataset -- ^ Dataset to write to
-  -> m a
-readAll dset = liftIO $ HIO.basicReadObject dset
-
-
 -- | Open and read dataset from either file or group.
 readAllAt
   :: (ArrayLike a, IsDirectory dir, MonadIO m, HasCallStack)
@@ -425,7 +389,7 @@ readAllAt
 readAllAt dir path
   = liftIO
   $ withOpenDataset dir path
-  $ \dset -> HIO.basicReadObject dset
+  $ \dset -> readAll dset
 
 -- | Create dataset and write haskell array into it.
 writeAllAt
@@ -437,7 +401,7 @@ writeAllAt
 writeAllAt dir path a
   = liftIO
   $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) []
-  $ \dset -> HIO.basicWriteObject dset a
+  $ \dset -> writeAll dset a
 
 -- | Read dataset from HDF5 using 'SerializeDSet' machinery.
 readDatasetAt

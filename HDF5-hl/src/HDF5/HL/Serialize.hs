@@ -1,4 +1,5 @@
 {-# LANGUAGE DefaultSignatures    #-}
+{-# LANGUAGE RoleAnnotations      #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- |
@@ -9,10 +10,23 @@
 -- All operations of internal API are done in 'HIO' monad which is
 -- just a wrapper over @IO@ and used to ensure that call to HDF5 are
 -- protected by mutex.
-module HDF5.HL.Internal where
+module HDF5.HL.Serialize
+  ( -- * Array serialization
+    ArrayLike(..)
+  , readAll
+  , writeAll
+  , readSlab
+  , writeSlab
+    -- * Dataset serialization
+  , SerializeDSet(..)
+    -- * Deriving via
+  , SerializeAsScalar(..)
+  , SerializeAsArray(..)
+  ) where
 
 import Control.Monad
 import Control.Monad.Trans.Class
+import Control.Monad.IO.Class
 import Data.Functor.Identity
 import Data.Complex                (Complex)
 import Data.Vector                 qualified as V
@@ -50,12 +64,12 @@ import Prelude hiding (read,readIO)
 -- Primitives
 ----------------------------------------------------------------
 
--- | Basic read primitive. Reads full content of dataset\/attribute
---   into haskell data structure.
-basicReadObject
-  :: forall a d. (ArrayLike a, HasData d, HasCallStack)
-  => d -> IO a
-basicReadObject d = withDataspace d $ \spc_file -> do
+-- | Reads full content of dataset\/attribute into haskell data
+--   structure.
+readAll
+  :: forall a d m. (ArrayLike a, HasData d, MonadIO m, HasCallStack)
+  => d -> m a
+readAll d = liftIO $ withDataspace d $ \spc_file -> do
   ext <- dataspaceExtent @_ @(ExtentOf a) spc_file >>= \case
     Left  _ -> error "FIXME"
     Right x -> pure x
@@ -69,12 +83,14 @@ basicReadObject d = withDataspace d $ \spc_file -> do
              (getHID spc_mem) (getHID spc_file)
              H5P_DEFAULT (castPtr ptr)
 
--- | Basic primitive for writing into dataset\/attributes without
---   offset. It's assumed that dataset was created with correct size
-basicWriteObject
-  :: forall a d. (ArrayLike a, HasData d, HasCallStack)
-  => d -> a -> IO ()
-basicWriteObject dset a = 
+-- | Writing into dataset\/attributes without offset. It's assumed
+--   that dataset was created with correct size.
+writeAll
+  :: forall a d m. (ArrayLike a, HasData d, MonadIO m, HasCallStack)
+  => d -- ^ Dataset or attribute
+  -> a -- ^ Value to write
+  -> m ()
+writeAll dset a = liftIO $
   basicWriteToSlab a $ \ptr -> evalContT $ do
     p_err    <- ContT alloca
     spc_file <- lift  $ getDataspaceIO dset
@@ -84,14 +100,14 @@ basicWriteObject dset a =
          $ h5d_write (getHID dset) tid
              (getHID spc_mem) (getHID spc_file) H5P_DEFAULT ptr
 
--- | Read slab 
-basicReadSlab
-  :: forall a d. (ArrayLike a, HasData d, HasCallStack)
+-- | Read data from dataset or attribute using slab selection
+readSlab
+  :: forall a d m. (ArrayLike a, HasData d, MonadIO m, HasCallStack)
   => d          -- ^ Dataset\/attribute to read from
   -> ExtentOf a -- ^ Offset into array
   -> ExtentOf a -- ^ Array size
-  -> IO a
-basicReadSlab d off sz = withDataspace d $ \spc_file -> do
+  -> m a
+readSlab d off sz = liftIO $ withDataspace d $ \spc_file -> do
   basicReadFromSlab sz $ \ptr -> evalContT $ do
     p_err   <- ContT alloca
     lift $ setSlabSelection spc_file off sz
@@ -102,13 +118,15 @@ basicReadSlab d off sz = withDataspace d $ \spc_file -> do
          $ h5d_read (getHID d) tid
              (getHID spc_mem) (getHID spc_file)
              H5P_DEFAULT (castPtr ptr)
-basicWriteSlab
-  :: forall a d. (ArrayLike a, HasData d, HasCallStack)
+
+-- | Write provided data at given offset.
+writeSlab
+  :: forall a d m. (ArrayLike a, HasData d, MonadIO m, HasCallStack)
   => d
   -> ExtentOf a -- ^ Offset into array
   -> a
-  -> IO ()
-basicWriteSlab dset off a = do
+  -> m ()
+writeSlab dset off a = liftIO $ do
   basicWriteToSlab a $ \ptr -> evalContT $ do
     p_err    <- ContT alloca
     spc_file <- lift  $ getDataspaceIO dset
@@ -164,6 +182,9 @@ class SerializeDSet a where
 -- Deriving instances
 ----------------------------------------------------------------
 
+type role SerializeAsScalar representational
+type role SerializeAsArray  representational
+
 -- | Newtype wrapper for derivation of serialization instances as
 --   scalars.
 newtype SerializeAsScalar a = SerializeAsScalar a
@@ -188,10 +209,10 @@ deriving via SerializeAsArray (SerializeAsScalar a)
 newtype SerializeAsArray a = SerializeAsArray a
 
 instance ArrayLike a => SerializeDSet (SerializeAsArray a) where
-  basicReadDSet d = SerializeAsArray <$> basicReadObject d
+  basicReadDSet d = SerializeAsArray <$> readAll d
   basicWriteDSet (SerializeAsArray a) make
     = make (getExtent a) (typeH5 @(ElementOf a)) []
-    $ \d -> basicWriteObject d a
+    $ \d -> writeAll d a
 
 
 ----------------------------------------------------------------

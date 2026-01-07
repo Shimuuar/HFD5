@@ -45,6 +45,7 @@ Library
                   , text         >=2
   Exposed-modules:
         HDF5.HL
+        HDF5.HL.Attribute
         HDF5.HL.Dataspace
         HDF5.HL.Types
         HDF5.HL.Vector

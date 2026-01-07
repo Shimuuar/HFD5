@@ -103,10 +103,10 @@ module HDF5.HL
   , Growable(..)
     -- * Attributes
   , Attribute
-  , HIO.openAttrMay
-  , HIO.withAttrMay
-  , HIO.readAttrMay
-  , HIO.writeAttr
+  , openAttrMay
+  , withAttrMay
+  , readAttrMay
+  , writeAttr
     -- * Data types
     -- $type_hdf
   , Type
@@ -144,8 +144,6 @@ import GHC.Stack
 
 import HDF5.HL.Internal            qualified as HIO
 import HDF5.HL.Internal            (ArrayLike(..), SerializeDSet(..))
-  -- SerializeAttr(..), Serialize(..), SerializeArr(..), SerializeSlab(..)
-                                   -- , basicReadBuffer, basicReadScalar)
 import HDF5.HL.Unsafe.Types
 import HDF5.HL.Internal.Wrappers
 import HDF5.HL.Internal.Error
@@ -153,6 +151,7 @@ import HDF5.HL.Internal.Enum
 import HDF5.HL.Dataspace
 import HDF5.HL.Internal.Property
 import HDF5.HL.Unsafe.Encoding
+import HDF5.HL.Attribute
 import HDF5.C
 import Prelude hiding (read,readIO)
 

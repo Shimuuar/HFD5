@@ -96,8 +96,9 @@ module HDF5.HL
   , HIO.withAttrMay
   , HIO.readAttrMay
   , HIO.writeAttr
-    -- ** Data types
+    -- * Data types
   , Type
+  , Element(..)
   , sizeOfH5
   , tyI8, tyI16, tyI32, tyI64
   , tyU8, tyU16, tyU32, tyU64
@@ -109,7 +110,7 @@ module HDF5.HL
   , pattern Array
   , makePackedRecord
   , makeEnumeration
-    -- ** Property lists
+    -- * Property lists
   , Property
   , Layout(..)
   , propDatasetLayout
@@ -125,9 +126,6 @@ module HDF5.HL
   , close
     -- * Error handling
   , Error(..)
-    -- * Serialization of haskell value
-    -- ** Type classes
-  , Element(..)
   ) where
 
 import Control.Monad

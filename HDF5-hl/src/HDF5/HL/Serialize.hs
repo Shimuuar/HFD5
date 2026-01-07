@@ -69,19 +69,14 @@ import Prelude hiding (read,readIO)
 readAll
   :: forall a d m. (ArrayLike a, HasData d, MonadIO m, HasCallStack)
   => d -> m a
-readAll d = liftIO $ withDataspace d $ \spc_file -> do
+readAll dset = liftIO $ withDataspace dset $ \spc_file -> do
   ext <- dataspaceExtent @_ @(ExtentOf a) spc_file >>= \case
     Left  _ -> error "FIXME"
     Right x -> pure x
   basicReadFromSlab ext $ \ptr -> evalContT $ do
     p_err   <- ContT alloca
-    spc_mem <- ContT $ withCreateDataspaceFromExtent ext
-    tid     <- ContT $ withType (typeH5 @(ElementOf a))
-    --
-    lift $ checkHErr p_err "Reading dataset data failed"
-         $ h5d_read (getHID d) tid
-             (getHID spc_mem) (getHID spc_file)
-             H5P_DEFAULT (castPtr ptr)
+    lift $ unsafeReadAll p_err dset (typeH5 @(ElementOf a)) ptr
+
 
 -- | Writing into dataset\/attributes without offset. It's assumed
 --   that dataset was created with correct size.
@@ -92,18 +87,13 @@ writeAll
   -> m ()
 writeAll dset a = liftIO $
   basicWriteToSlab a $ \ptr -> evalContT $ do
-    p_err    <- ContT alloca
-    spc_file <- lift  $ getDataspaceIO dset
-    spc_mem  <- ContT $ withCreateDataspaceFromExtent $ getExtent a
-    tid      <- ContT $ withType (typeH5 @(ElementOf a))
-    lift $ checkHErr p_err "Writing dataset data failed"
-         $ h5d_write (getHID dset) tid
-             (getHID spc_mem) (getHID spc_file) H5P_DEFAULT ptr
+    p_err <- ContT alloca
+    lift $ unsafeWriteAll p_err dset (typeH5 @(ElementOf a)) ptr
 
--- | Read data from dataset or attribute using slab selection
+-- | Read data from dataset using slab selection
 readSlab
-  :: forall a d m. (ArrayLike a, HasData d, MonadIO m, HasCallStack)
-  => d          -- ^ Dataset\/attribute to read from
+  :: forall a m. (ArrayLike a, MonadIO m, HasCallStack)
+  => Dataset    -- ^ Dataset to read from
   -> ExtentOf a -- ^ Offset into array
   -> ExtentOf a -- ^ Array size
   -> m a
@@ -121,8 +111,8 @@ readSlab d off sz = liftIO $ withDataspace d $ \spc_file -> do
 
 -- | Write provided data at given offset.
 writeSlab
-  :: forall a d m. (ArrayLike a, HasData d, MonadIO m, HasCallStack)
-  => d
+  :: forall a m. (ArrayLike a, MonadIO m, HasCallStack)
+  => Dataset
   -> ExtentOf a -- ^ Offset into array
   -> a
   -> m ()

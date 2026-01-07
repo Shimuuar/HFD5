@@ -40,14 +40,12 @@ tests = testGroup "Files"
   , testCase "Write/read attribute (root)" $ withDir $ \dir -> do
       let path = dir </> "test.h5"
           val  = 123.25 :: Double
-      return ()
-      -- H5.withCreateFile path H5.CreateTrunc $ \h5 -> do
-      --   H5.writeAttr h5 "attr" val
-      -- H5.withOpenFile   path H5.OpenRO      $ \h5 -> do
-      --   assertEqual "attribute"   (Just val)        =<< H5.readAttrMay h5 "attr"
-      --   assertEqual "attribute"   (Just (123::Int)) =<< H5.readAttrMay h5 "attr"
-      --   assertEqual "Nonexistent" (Nothing @Int)    =<< H5.readAttrMay h5 "attr-X"
-
+      H5.withCreateFile path H5.CreateTrunc $ \h5 -> do
+        H5.writeAttr h5 "attr" val
+      H5.withOpenFile   path H5.OpenRO      $ \h5 -> do
+        assertEqual "attribute"   (Just val)        =<< H5.readAttrMay h5 "attr"
+        assertEqual "attribute"   (Just (123::Int)) =<< H5.readAttrMay h5 "attr"
+        assertEqual "Nonexistent" (Nothing @Int)    =<< H5.readAttrMay h5 "attr-X"
     --
   , testCase "Resize/chunking" $ withDir $ \dir -> do
       let path = dir </> "test.h5"

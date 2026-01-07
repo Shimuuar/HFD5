@@ -70,15 +70,17 @@ class IsObject a => HasData a where
   getDataspaceIO :: HasCallStack => a -> IO Dataspace
   -- | Read all content of object
   unsafeReadAll  :: HasCallStack
-                 => a      -- ^ Object handle
-                 -> Type   -- ^ Type of in-memory elements
-                 -> Ptr x  -- ^ Buffer to read to
+                 => Ptr HID -- ^ Error pointer
+                 -> a       -- ^ Object handle
+                 -> Type    -- ^ Type of in-memory elements
+                 -> Ptr x   -- ^ Buffer to read to
                  -> IO ()
   -- | Write full dataset at once
   unsafeWriteAll :: HasCallStack
-                 => a      -- ^ Object handle
-                 -> Type   -- ^ Type of in-memory elements
-                 -> Ptr x  -- ^ Buffer with data
+                 => Ptr HID -- ^ Error pointer
+                 -> a       -- ^ Object handle
+                 -> Type    -- ^ Type of in-memory elements
+                 -> Ptr x   -- ^ Buffer with data
                  -> IO ()
 
 
@@ -156,14 +158,12 @@ instance HasData Dataset where
       fmap Dataspace
     $ checkHID p_err "Cannot read dataset's dataspace"
     $ h5d_get_space hid
-  unsafeReadAll (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
+  unsafeReadAll p_err (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Reading dataset data failed"
          $ h5d_read hid tid
              h5s_ALL h5s_ALL H5P_DEFAULT (castPtr buf)
-  unsafeWriteAll (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
+  unsafeWriteAll p_err (Dataset hid) ty buf = evalContT $ withFrozenCallStack $ do
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Writing dataset data failed"
          $ h5d_write hid tid
@@ -182,13 +182,11 @@ instance HasData Attribute where
     $ fmap Dataspace
     $ checkHID p_err "Cannot get attribute's dataspace"
     $ h5a_get_space hid
-  unsafeReadAll (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
+  unsafeReadAll p_err (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Reading attribute data failed"
          $ h5a_read hid tid (castPtr buf)
-  unsafeWriteAll (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
-    p_err <- ContT $ alloca
+  unsafeWriteAll p_err (Attribute hid) ty buf = evalContT $ withFrozenCallStack $ do
     tid   <- ContT $ withType ty
     lift $ checkHErr p_err "Writing Attribute data failed"
          $ h5a_write hid tid (castPtr buf)

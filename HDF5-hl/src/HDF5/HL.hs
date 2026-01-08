@@ -394,13 +394,14 @@ readAllAt dir path
 -- | Create dataset and write haskell array into it.
 writeAllAt
   :: forall a dir m. (ArrayLike a, IsDirectory dir, MonadIO m, HasCallStack)
-  => dir      -- ^ Location in HDF5 file
-  -> FilePath -- ^ Name dataset to create
-  -> a        -- ^ Value to write
+  => dir                -- ^ Location in HDF5 file
+  -> FilePath           -- ^ Name dataset to create
+  -> [Property Dataset] -- ^ Dataset properties
+  -> a                  -- ^ Value to write  
   -> m ()
-writeAllAt dir path a
+writeAllAt dir path prop a
   = liftIO
-  $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) []
+  $ withCreateEmptyDataset dir path (typeH5 @(ElementOf a)) (getExtent a) prop
   $ \dset -> writeAll dset a
 
 -- | Read dataset from HDF5 using 'SerializeDSet' machinery.

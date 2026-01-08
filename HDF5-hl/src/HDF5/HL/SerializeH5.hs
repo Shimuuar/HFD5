@@ -12,6 +12,7 @@ module HDF5.HL.SerializeH5
     -- * Deriving via
   , ViaDataset(..)
   , ViaSerialize1(..)
+  , ReprViaShowRead(..)
   ) where
 
 import Control.Monad

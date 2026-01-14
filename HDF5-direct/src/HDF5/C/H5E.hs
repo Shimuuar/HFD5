@@ -303,6 +303,12 @@ h5e_error_desc p = castPtr $ plusPtr p (fromIntegral off_desc)
 -- Error codes
 ----------------------------------------------------------------
 
+-- HDF5 over time adds more error. We define missing ones as
+-- H5I_INVALID_HID in compat header. This should not cause problems
+-- since we only use error codes to extract data from HDF5
+-- error. H5I_INVALID_HID should not appear there.
+
+
 foreign import capi "hdf5-hs.h value H5E_ARGS"       c_H5E_ARGS       :: HID
 foreign import capi "hdf5-hs.h value H5E_ATTR"       c_H5E_ATTR       :: HID
 foreign import capi "hdf5-hs.h value H5E_BTREE"      c_H5E_BTREE      :: HID

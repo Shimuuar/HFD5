@@ -20,6 +20,57 @@
 #define hs_hdf5_off_error2_desc      (offsetof(H5E_error2_t, desc))
 
 
+// Compatibility with older HDF versions
+#ifndef H5E_CANTCANCEL
+#define H5E_CANTCANCEL H5I_INVALID_HID
+#endif
+
+#ifndef H5E_CANTWAIT
+#define H5E_CANTWAIT H5I_INVALID_HID
+#endif
+
+#ifndef H5E_CANTPUT
+#define H5E_CANTPUT H5I_INVALID_HID
+#endif
+
+#ifndef H5E_CANTFIND
+#define H5E_CANTFIND H5I_INVALID_HID
+#endif
+
+#ifndef H5E_BADID
+#define H5E_BADID H5I_INVALID_HID
+#endif
+
+#ifndef H5E_CANTDELETEFILE
+#define H5E_CANTDELETEFILE H5I_INVALID_HID
+#endif
+
+#ifndef H5E_UNMOUNT
+#define H5E_UNMOUNT H5I_INVALID_HID
+#endif
+
+#ifndef H5E_VOL
+#define H5E_VOL H5I_INVALID_HID
+#endif
+
+#ifndef H5E_MAP
+#define H5E_MAP H5I_INVALID_HID
+#endif
+
+#ifndef H5E_LIB
+#define H5E_LIB H5I_INVALID_HID
+#endif
+
+#ifndef H5E_ID
+#define H5E_ID H5I_INVALID_HID
+#endif
+
+#ifndef H5E_EVENTSET
+#define H5E_EVENTSET H5I_INVALID_HID
+#endif
+
+
+
 // Wrapper prototypes
 hid_t hs_H5Aopen(hid_t obj_id, const char *attr_name, hid_t aapl_id, hid_t *error);
 herr_t hs_H5Aclose(hid_t attr_id, hid_t *error);

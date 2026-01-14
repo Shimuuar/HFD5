@@ -25,6 +25,7 @@ import Foreign.Storable
 import Foreign.C
 import Text.Printf
 import GHC.Stack
+import GHC.Generics (Generic)
 
 import HDF5.C
 
@@ -55,6 +56,98 @@ instance Show Error where
         , printf "  Minor: %s" msgMinor
         ]
       displayMsgHS msg = [msg]
+
+-- | Major error codes for HDF5 error. Here we follow naming
+--   conventions used by HDF5
+data MajError
+  = MAJ_ARGS       -- ^ Invalid arguments to routine
+  | MAJ_RESOURCE   -- ^ Resource unavailable
+  | MAJ_INTERNAL   -- ^ Internal error (too specific to document in detail)
+  | MAJ_LIB        -- ^ General library infrastructure
+  | MAJ_FILE       -- ^ File accessibility
+  | MAJ_IO         -- ^ Low-level I/O
+  | MAJ_FUNC       -- ^ Function entry/exit
+  | MAJ_ID         -- ^ Object ID
+  | MAJ_CACHE      -- ^ Object cache
+  | MAJ_LINK       -- ^ Links
+  | MAJ_BTREE      -- ^ B-Tree node
+  | MAJ_SYM        -- ^ Symbol table
+  | MAJ_HEAP       -- ^ Heap
+  | MAJ_OHDR       -- ^ Object header
+  | MAJ_DATATYPE   -- ^ Datatype
+  | MAJ_DATASPACE  -- ^ Dataspace
+  | MAJ_DATASET    -- ^ Dataset
+  | MAJ_STORAGE    -- ^ Data storage
+  | MAJ_PLIST      -- ^ Property lists
+  | MAJ_ATTR       -- ^ Attribute
+  | MAJ_PLINE      -- ^ Data filters
+  | MAJ_EFL        -- ^ External file list
+  | MAJ_REFERENCE  -- ^ References
+  | MAJ_VFL        -- ^ Virtual File Layer
+  | MAJ_VOL        -- ^ Virtual Object Layer
+  | MAJ_TST        -- ^ Ternary Search Trees
+  | MAJ_RS         -- ^ Reference Counted Strings
+  | MAJ_ERROR      -- ^ Error API
+  | MAJ_SLIST      -- ^ Skip Lists
+  | MAJ_FSPACE     -- ^ Free Space Manager
+  | MAJ_SOHM       -- ^ Shared Object Header Messages
+  | MAJ_EARRAY     -- ^ Extensible Array
+  | MAJ_FARRAY     -- ^ Fixed Array
+  | MAJ_PLUGIN     -- ^ Plugin for dynamically loaded library
+  | MAJ_PAGEBUF    -- ^ Page Buffering
+  | MAJ_CONTEXT    -- ^ API Context
+  | MAJ_MAP        -- ^ Map
+  | MAJ_EVENTSET   -- ^ Event Set
+  | MAJ_NONE_MAJOR -- ^ No error
+  | MAJ_UNKNOWN    -- ^ We failed to map error code from HDF5 to
+                   --   haskell type. If it appears in error this means
+                   --   there's bug in bindings.
+  deriving stock (Show,Generic)
+
+
+decodeMajError :: HID -> MajError
+decodeMajError h
+  | h == c_H5E_ARGS       = MAJ_ARGS
+  | h == c_H5E_RESOURCE   = MAJ_RESOURCE
+  | h == c_H5E_INTERNAL   = MAJ_INTERNAL
+  | h == c_H5E_LIB        = MAJ_LIB
+  | h == c_H5E_FILE       = MAJ_FILE
+  | h == c_H5E_IO         = MAJ_IO
+  | h == c_H5E_FUNC       = MAJ_FUNC
+  | h == c_H5E_ID         = MAJ_ID
+  | h == c_H5E_CACHE      = MAJ_CACHE
+  | h == c_H5E_LINK       = MAJ_LINK
+  | h == c_H5E_BTREE      = MAJ_BTREE
+  | h == c_H5E_SYM        = MAJ_SYM
+  | h == c_H5E_HEAP       = MAJ_HEAP
+  | h == c_H5E_OHDR       = MAJ_OHDR
+  | h == c_H5E_DATATYPE   = MAJ_DATATYPE
+  | h == c_H5E_DATASPACE  = MAJ_DATASPACE
+  | h == c_H5E_DATASET    = MAJ_DATASET
+  | h == c_H5E_STORAGE    = MAJ_STORAGE
+  | h == c_H5E_PLIST      = MAJ_PLIST
+  | h == c_H5E_ATTR       = MAJ_ATTR
+  | h == c_H5E_PLINE      = MAJ_PLINE
+  | h == c_H5E_EFL        = MAJ_EFL
+  | h == c_H5E_REFERENCE  = MAJ_REFERENCE
+  | h == c_H5E_VFL        = MAJ_VFL
+  | h == c_H5E_VOL        = MAJ_VOL
+  | h == c_H5E_TST        = MAJ_TST
+  | h == c_H5E_RS         = MAJ_RS
+  | h == c_H5E_ERROR      = MAJ_ERROR
+  | h == c_H5E_SLIST      = MAJ_SLIST
+  | h == c_H5E_FSPACE     = MAJ_FSPACE
+  | h == c_H5E_SOHM       = MAJ_SOHM
+  | h == c_H5E_EARRAY     = MAJ_EARRAY
+  | h == c_H5E_FARRAY     = MAJ_FARRAY
+  | h == c_H5E_PLUGIN     = MAJ_PLUGIN
+  | h == c_H5E_PAGEBUF    = MAJ_PAGEBUF
+  | h == c_H5E_CONTEXT    = MAJ_CONTEXT
+  | h == c_H5E_MAP        = MAJ_MAP
+  | h == c_H5E_EVENTSET   = MAJ_EVENTSET
+  | h == c_H5E_NONE_MAJOR = MAJ_NONE_MAJOR
+  | otherwise        = MAJ_UNKNOWN
+
 
 data Message = Message
   { msgDescr :: String

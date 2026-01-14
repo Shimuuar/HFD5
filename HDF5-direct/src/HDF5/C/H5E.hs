@@ -35,6 +35,47 @@ module HDF5.C.H5E
   , h5e_set_auto
   , h5e_walk
   , h5e_get_msg
+    -- * Error codes
+    -- ** Major
+  , c_H5E_ARGS
+  , c_H5E_ATTR
+  , c_H5E_BTREE
+  , c_H5E_CACHE
+  , c_H5E_CONTEXT
+  , c_H5E_DATASET
+  , c_H5E_DATASPACE
+  , c_H5E_DATATYPE
+  , c_H5E_EARRAY
+  , c_H5E_EFL
+  , c_H5E_ERROR
+  , c_H5E_EVENTSET
+  , c_H5E_FARRAY
+  , c_H5E_FILE
+  , c_H5E_FSPACE
+  , c_H5E_FUNC
+  , c_H5E_HEAP
+  , c_H5E_ID
+  , c_H5E_INTERNAL
+  , c_H5E_IO
+  , c_H5E_LIB
+  , c_H5E_LINK
+  , c_H5E_MAP
+  , c_H5E_NONE_MAJOR
+  , c_H5E_OHDR
+  , c_H5E_PAGEBUF
+  , c_H5E_PLINE
+  , c_H5E_PLIST
+  , c_H5E_PLUGIN
+  , c_H5E_REFERENCE
+  , c_H5E_RESOURCE
+  , c_H5E_RS
+  , c_H5E_SLIST
+  , c_H5E_SOHM
+  , c_H5E_STORAGE
+  , c_H5E_SYM
+  , c_H5E_TST
+  , c_H5E_VFL
+  , c_H5E_VOL
   ) where
 
 import Foreign.C
@@ -116,7 +157,52 @@ h5e_error_file_name p = castPtr $ plusPtr p (fromIntegral off_file_name)
 
 h5e_error_desc :: Ptr H5EError -> Ptr CString
 h5e_error_desc p = castPtr $ plusPtr p (fromIntegral off_desc)
- 
+
+----------------------------------------------------------------
+-- Error codes
+----------------------------------------------------------------
+
+foreign import capi "hdf5-hs.h value H5E_ARGS"       c_H5E_ARGS       :: HID
+foreign import capi "hdf5-hs.h value H5E_ATTR"       c_H5E_ATTR       :: HID
+foreign import capi "hdf5-hs.h value H5E_BTREE"      c_H5E_BTREE      :: HID
+foreign import capi "hdf5-hs.h value H5E_CACHE"      c_H5E_CACHE      :: HID
+foreign import capi "hdf5-hs.h value H5E_CONTEXT"    c_H5E_CONTEXT    :: HID
+foreign import capi "hdf5-hs.h value H5E_DATASET"    c_H5E_DATASET    :: HID
+foreign import capi "hdf5-hs.h value H5E_DATASPACE"  c_H5E_DATASPACE  :: HID
+foreign import capi "hdf5-hs.h value H5E_DATATYPE"   c_H5E_DATATYPE   :: HID
+foreign import capi "hdf5-hs.h value H5E_EARRAY"     c_H5E_EARRAY     :: HID
+foreign import capi "hdf5-hs.h value H5E_EFL"        c_H5E_EFL        :: HID
+foreign import capi "hdf5-hs.h value H5E_ERROR"      c_H5E_ERROR      :: HID
+foreign import capi "hdf5-hs.h value H5E_EVENTSET"   c_H5E_EVENTSET   :: HID
+foreign import capi "hdf5-hs.h value H5E_FARRAY"     c_H5E_FARRAY     :: HID
+foreign import capi "hdf5-hs.h value H5E_FILE"       c_H5E_FILE       :: HID
+foreign import capi "hdf5-hs.h value H5E_FSPACE"     c_H5E_FSPACE     :: HID
+foreign import capi "hdf5-hs.h value H5E_FUNC"       c_H5E_FUNC       :: HID
+foreign import capi "hdf5-hs.h value H5E_HEAP"       c_H5E_HEAP       :: HID
+foreign import capi "hdf5-hs.h value H5E_ID"         c_H5E_ID         :: HID
+foreign import capi "hdf5-hs.h value H5E_INTERNAL"   c_H5E_INTERNAL   :: HID
+foreign import capi "hdf5-hs.h value H5E_IO"         c_H5E_IO         :: HID
+foreign import capi "hdf5-hs.h value H5E_LIB"        c_H5E_LIB        :: HID
+foreign import capi "hdf5-hs.h value H5E_LINK"       c_H5E_LINK       :: HID
+foreign import capi "hdf5-hs.h value H5E_MAP"        c_H5E_MAP        :: HID
+foreign import capi "hdf5-hs.h value H5E_NONE_MAJOR" c_H5E_NONE_MAJOR :: HID
+foreign import capi "hdf5-hs.h value H5E_OHDR"       c_H5E_OHDR       :: HID
+foreign import capi "hdf5-hs.h value H5E_PAGEBUF"    c_H5E_PAGEBUF    :: HID
+foreign import capi "hdf5-hs.h value H5E_PLINE"      c_H5E_PLINE      :: HID
+foreign import capi "hdf5-hs.h value H5E_PLIST"      c_H5E_PLIST      :: HID
+foreign import capi "hdf5-hs.h value H5E_PLUGIN"     c_H5E_PLUGIN     :: HID
+foreign import capi "hdf5-hs.h value H5E_REFERENCE"  c_H5E_REFERENCE  :: HID
+foreign import capi "hdf5-hs.h value H5E_RESOURCE"   c_H5E_RESOURCE   :: HID
+foreign import capi "hdf5-hs.h value H5E_RS"         c_H5E_RS         :: HID
+foreign import capi "hdf5-hs.h value H5E_SLIST"      c_H5E_SLIST      :: HID
+foreign import capi "hdf5-hs.h value H5E_SOHM"       c_H5E_SOHM       :: HID
+foreign import capi "hdf5-hs.h value H5E_STORAGE"    c_H5E_STORAGE    :: HID
+foreign import capi "hdf5-hs.h value H5E_SYM"        c_H5E_SYM        :: HID
+foreign import capi "hdf5-hs.h value H5E_TST"        c_H5E_TST        :: HID
+foreign import capi "hdf5-hs.h value H5E_VFL"        c_H5E_VFL        :: HID
+foreign import capi "hdf5-hs.h value H5E_VOL"        c_H5E_VOL        :: HID
+
+
 ----------------------------------------------------------------
 -- Function pointers
 ----------------------------------------------------------------

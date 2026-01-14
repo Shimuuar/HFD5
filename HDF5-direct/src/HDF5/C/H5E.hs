@@ -76,6 +76,147 @@ module HDF5.C.H5E
   , c_H5E_TST
   , c_H5E_VFL
   , c_H5E_VOL
+    -- ** Minor
+  , c_H5E_UNINITIALIZED
+  , c_H5E_UNSUPPORTED
+  , c_H5E_BADTYPE
+  , c_H5E_BADRANGE
+  , c_H5E_BADVALUE
+  , c_H5E_NOSPACE
+  , c_H5E_CANTALLOC
+  , c_H5E_CANTCOPY
+  , c_H5E_CANTFREE
+  , c_H5E_ALREADYEXISTS
+  , c_H5E_CANTLOCK
+  , c_H5E_CANTUNLOCK
+  , c_H5E_CANTGC
+  , c_H5E_CANTGETSIZE
+  , c_H5E_OBJOPEN
+  , c_H5E_FILEEXISTS
+  , c_H5E_FILEOPEN
+  , c_H5E_CANTCREATE
+  , c_H5E_CANTOPENFILE
+  , c_H5E_CANTCLOSEFILE
+  , c_H5E_NOTHDF5
+  , c_H5E_BADFILE
+  , c_H5E_TRUNCATED
+  , c_H5E_MOUNT
+  , c_H5E_UNMOUNT
+  , c_H5E_CANTDELETEFILE
+  , c_H5E_CANTLOCKFILE
+  , c_H5E_CANTUNLOCKFILE
+  , c_H5E_SEEKERROR
+  , c_H5E_READERROR
+  , c_H5E_WRITEERROR
+  , c_H5E_CLOSEERROR
+  , c_H5E_OVERFLOW
+  , c_H5E_FCNTL
+  , c_H5E_CANTINIT
+  , c_H5E_ALREADYINIT
+  , c_H5E_CANTRELEASE
+  , c_H5E_BADID
+  , c_H5E_BADGROUP
+  , c_H5E_CANTREGISTER
+  , c_H5E_CANTINC
+  , c_H5E_CANTDEC
+  , c_H5E_NOIDS
+  , c_H5E_CANTFLUSH
+  , c_H5E_CANTUNSERIALIZE
+  , c_H5E_CANTSERIALIZE
+  , c_H5E_CANTTAG
+  , c_H5E_CANTLOAD
+  , c_H5E_PROTECT
+  , c_H5E_NOTCACHED
+  , c_H5E_SYSTEM
+  , c_H5E_CANTINS
+  , c_H5E_CANTPROTECT
+  , c_H5E_CANTUNPROTECT
+  , c_H5E_CANTPIN
+  , c_H5E_CANTUNPIN
+  , c_H5E_CANTMARKDIRTY
+  , c_H5E_CANTMARKCLEAN
+  , c_H5E_CANTMARKUNSERIALIZED
+  , c_H5E_CANTMARKSERIALIZED
+  , c_H5E_CANTDIRTY
+  , c_H5E_CANTCLEAN
+  , c_H5E_CANTEXPUNGE
+  , c_H5E_CANTRESIZE
+  , c_H5E_CANTDEPEND
+  , c_H5E_CANTUNDEPEND
+  , c_H5E_CANTNOTIFY
+  , c_H5E_LOGGING
+  , c_H5E_CANTCORK
+  , c_H5E_CANTUNCORK
+  , c_H5E_NOTFOUND
+  , c_H5E_EXISTS
+  , c_H5E_CANTENCODE
+  , c_H5E_CANTDECODE
+  , c_H5E_CANTSPLIT
+  , c_H5E_CANTREDISTRIBUTE
+  , c_H5E_CANTSWAP
+  , c_H5E_CANTINSERT
+  , c_H5E_CANTLIST
+  , c_H5E_CANTMODIFY
+  , c_H5E_CANTREMOVE
+  , c_H5E_CANTFIND
+  , c_H5E_LINKCOUNT
+  , c_H5E_VERSION
+  , c_H5E_ALIGNMENT
+  , c_H5E_BADMESG
+  , c_H5E_CANTDELETE
+  , c_H5E_BADITER
+  , c_H5E_CANTPACK
+  , c_H5E_CANTRESET
+  , c_H5E_CANTRENAME
+  , c_H5E_CANTOPENOBJ
+  , c_H5E_CANTCLOSEOBJ
+  , c_H5E_COMPLEN
+  , c_H5E_PATH
+  , c_H5E_CANTCONVERT
+  , c_H5E_BADSIZE
+  , c_H5E_CANTCLIP
+  , c_H5E_CANTCOUNT
+  , c_H5E_CANTSELECT
+  , c_H5E_CANTNEXT
+  , c_H5E_BADSELECT
+  , c_H5E_CANTCOMPARE
+  , c_H5E_INCONSISTENTSTATE
+  , c_H5E_CANTAPPEND
+  , c_H5E_CANTGET
+  , c_H5E_CANTSET
+  , c_H5E_DUPCLASS
+  , c_H5E_SETDISALLOWED
+  , c_H5E_TRAVERSE
+  , c_H5E_NLINKS
+  , c_H5E_NOTREGISTERED
+  , c_H5E_CANTMOVE
+  , c_H5E_CANTSORT
+  , c_H5E_MPI
+  , c_H5E_MPIERRSTR
+  , c_H5E_CANTRECV
+  , c_H5E_CANTGATHER
+  , c_H5E_NO_INDEPENDENT
+  , c_H5E_CANTRESTORE
+  , c_H5E_CANTCOMPUTE
+  , c_H5E_CANTEXTEND
+  , c_H5E_CANTATTACH
+  , c_H5E_CANTUPDATE
+  , c_H5E_CANTOPERATE
+  , c_H5E_CANTMERGE
+  , c_H5E_CANTREVIVE
+  , c_H5E_CANTSHRINK
+  , c_H5E_NOFILTER
+  , c_H5E_CALLBACK
+  , c_H5E_CANAPPLY
+  , c_H5E_SETLOCAL
+  , c_H5E_NOENCODER
+  , c_H5E_CANTFILTER
+  , c_H5E_SYSERRSTR
+  , c_H5E_OPENERROR
+  , c_H5E_CANTPUT
+  , c_H5E_CANTWAIT
+  , c_H5E_CANTCANCEL
+  , c_H5E_NONE_MINOR
   ) where
 
 import Foreign.C
@@ -201,6 +342,148 @@ foreign import capi "hdf5-hs.h value H5E_SYM"        c_H5E_SYM        :: HID
 foreign import capi "hdf5-hs.h value H5E_TST"        c_H5E_TST        :: HID
 foreign import capi "hdf5-hs.h value H5E_VFL"        c_H5E_VFL        :: HID
 foreign import capi "hdf5-hs.h value H5E_VOL"        c_H5E_VOL        :: HID
+
+
+foreign import capi "hdf5-hs.h value H5E_UNINITIALIZED"        c_H5E_UNINITIALIZED        :: HID
+foreign import capi "hdf5-hs.h value H5E_UNSUPPORTED"          c_H5E_UNSUPPORTED          :: HID
+foreign import capi "hdf5-hs.h value H5E_BADTYPE"              c_H5E_BADTYPE              :: HID
+foreign import capi "hdf5-hs.h value H5E_BADRANGE"             c_H5E_BADRANGE             :: HID
+foreign import capi "hdf5-hs.h value H5E_BADVALUE"             c_H5E_BADVALUE             :: HID
+foreign import capi "hdf5-hs.h value H5E_NOSPACE"              c_H5E_NOSPACE              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTALLOC"            c_H5E_CANTALLOC            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCOPY"             c_H5E_CANTCOPY             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTFREE"             c_H5E_CANTFREE             :: HID
+foreign import capi "hdf5-hs.h value H5E_ALREADYEXISTS"        c_H5E_ALREADYEXISTS        :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTLOCK"             c_H5E_CANTLOCK             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTUNLOCK"           c_H5E_CANTUNLOCK           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTGC"               c_H5E_CANTGC               :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTGETSIZE"          c_H5E_CANTGETSIZE          :: HID
+foreign import capi "hdf5-hs.h value H5E_OBJOPEN"              c_H5E_OBJOPEN              :: HID
+foreign import capi "hdf5-hs.h value H5E_FILEEXISTS"           c_H5E_FILEEXISTS           :: HID
+foreign import capi "hdf5-hs.h value H5E_FILEOPEN"             c_H5E_FILEOPEN             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCREATE"           c_H5E_CANTCREATE           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTOPENFILE"         c_H5E_CANTOPENFILE         :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCLOSEFILE"        c_H5E_CANTCLOSEFILE        :: HID
+foreign import capi "hdf5-hs.h value H5E_NOTHDF5"              c_H5E_NOTHDF5              :: HID
+foreign import capi "hdf5-hs.h value H5E_BADFILE"              c_H5E_BADFILE              :: HID
+foreign import capi "hdf5-hs.h value H5E_TRUNCATED"            c_H5E_TRUNCATED            :: HID
+foreign import capi "hdf5-hs.h value H5E_MOUNT"                c_H5E_MOUNT                :: HID
+foreign import capi "hdf5-hs.h value H5E_UNMOUNT"              c_H5E_UNMOUNT              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTDELETEFILE"       c_H5E_CANTDELETEFILE       :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTLOCKFILE"         c_H5E_CANTLOCKFILE         :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTUNLOCKFILE"       c_H5E_CANTUNLOCKFILE       :: HID
+foreign import capi "hdf5-hs.h value H5E_SEEKERROR"            c_H5E_SEEKERROR            :: HID
+foreign import capi "hdf5-hs.h value H5E_READERROR"            c_H5E_READERROR            :: HID
+foreign import capi "hdf5-hs.h value H5E_WRITEERROR"           c_H5E_WRITEERROR           :: HID
+foreign import capi "hdf5-hs.h value H5E_CLOSEERROR"           c_H5E_CLOSEERROR           :: HID
+foreign import capi "hdf5-hs.h value H5E_OVERFLOW"             c_H5E_OVERFLOW             :: HID
+foreign import capi "hdf5-hs.h value H5E_FCNTL"                c_H5E_FCNTL                :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTINIT"             c_H5E_CANTINIT             :: HID
+foreign import capi "hdf5-hs.h value H5E_ALREADYINIT"          c_H5E_ALREADYINIT          :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTRELEASE"          c_H5E_CANTRELEASE          :: HID
+foreign import capi "hdf5-hs.h value H5E_BADID"                c_H5E_BADID                :: HID
+foreign import capi "hdf5-hs.h value H5E_BADGROUP"             c_H5E_BADGROUP             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTREGISTER"         c_H5E_CANTREGISTER         :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTINC"              c_H5E_CANTINC              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTDEC"              c_H5E_CANTDEC              :: HID
+foreign import capi "hdf5-hs.h value H5E_NOIDS"                c_H5E_NOIDS                :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTFLUSH"            c_H5E_CANTFLUSH            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTUNSERIALIZE"      c_H5E_CANTUNSERIALIZE      :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTSERIALIZE"        c_H5E_CANTSERIALIZE        :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTTAG"              c_H5E_CANTTAG              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTLOAD"             c_H5E_CANTLOAD             :: HID
+foreign import capi "hdf5-hs.h value H5E_PROTECT"              c_H5E_PROTECT              :: HID
+foreign import capi "hdf5-hs.h value H5E_NOTCACHED"            c_H5E_NOTCACHED            :: HID
+foreign import capi "hdf5-hs.h value H5E_SYSTEM"               c_H5E_SYSTEM               :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTINS"              c_H5E_CANTINS              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTPROTECT"          c_H5E_CANTPROTECT          :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTUNPROTECT"        c_H5E_CANTUNPROTECT        :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTPIN"              c_H5E_CANTPIN              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTUNPIN"            c_H5E_CANTUNPIN            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTMARKDIRTY"        c_H5E_CANTMARKDIRTY        :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTMARKCLEAN"        c_H5E_CANTMARKCLEAN        :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTMARKUNSERIALIZED" c_H5E_CANTMARKUNSERIALIZED :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTMARKSERIALIZED"   c_H5E_CANTMARKSERIALIZED   :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTDIRTY"            c_H5E_CANTDIRTY            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCLEAN"            c_H5E_CANTCLEAN            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTEXPUNGE"          c_H5E_CANTEXPUNGE          :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTRESIZE"           c_H5E_CANTRESIZE           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTDEPEND"           c_H5E_CANTDEPEND           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTUNDEPEND"         c_H5E_CANTUNDEPEND         :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTNOTIFY"           c_H5E_CANTNOTIFY           :: HID
+foreign import capi "hdf5-hs.h value H5E_LOGGING"              c_H5E_LOGGING              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCORK"             c_H5E_CANTCORK             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTUNCORK"           c_H5E_CANTUNCORK           :: HID
+foreign import capi "hdf5-hs.h value H5E_NOTFOUND"             c_H5E_NOTFOUND             :: HID
+foreign import capi "hdf5-hs.h value H5E_EXISTS"               c_H5E_EXISTS               :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTENCODE"           c_H5E_CANTENCODE           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTDECODE"           c_H5E_CANTDECODE           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTSPLIT"            c_H5E_CANTSPLIT            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTREDISTRIBUTE"     c_H5E_CANTREDISTRIBUTE     :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTSWAP"             c_H5E_CANTSWAP             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTINSERT"           c_H5E_CANTINSERT           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTLIST"             c_H5E_CANTLIST             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTMODIFY"           c_H5E_CANTMODIFY           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTREMOVE"           c_H5E_CANTREMOVE           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTFIND"             c_H5E_CANTFIND             :: HID
+foreign import capi "hdf5-hs.h value H5E_LINKCOUNT"            c_H5E_LINKCOUNT            :: HID
+foreign import capi "hdf5-hs.h value H5E_VERSION"              c_H5E_VERSION              :: HID
+foreign import capi "hdf5-hs.h value H5E_ALIGNMENT"            c_H5E_ALIGNMENT            :: HID
+foreign import capi "hdf5-hs.h value H5E_BADMESG"              c_H5E_BADMESG              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTDELETE"           c_H5E_CANTDELETE           :: HID
+foreign import capi "hdf5-hs.h value H5E_BADITER"              c_H5E_BADITER              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTPACK"             c_H5E_CANTPACK             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTRESET"            c_H5E_CANTRESET            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTRENAME"           c_H5E_CANTRENAME           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTOPENOBJ"          c_H5E_CANTOPENOBJ          :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCLOSEOBJ"         c_H5E_CANTCLOSEOBJ         :: HID
+foreign import capi "hdf5-hs.h value H5E_COMPLEN"              c_H5E_COMPLEN              :: HID
+foreign import capi "hdf5-hs.h value H5E_PATH"                 c_H5E_PATH                 :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCONVERT"          c_H5E_CANTCONVERT          :: HID
+foreign import capi "hdf5-hs.h value H5E_BADSIZE"              c_H5E_BADSIZE              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCLIP"             c_H5E_CANTCLIP             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCOUNT"            c_H5E_CANTCOUNT            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTSELECT"           c_H5E_CANTSELECT           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTNEXT"             c_H5E_CANTNEXT             :: HID
+foreign import capi "hdf5-hs.h value H5E_BADSELECT"            c_H5E_BADSELECT            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCOMPARE"          c_H5E_CANTCOMPARE          :: HID
+foreign import capi "hdf5-hs.h value H5E_INCONSISTENTSTATE"    c_H5E_INCONSISTENTSTATE    :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTAPPEND"           c_H5E_CANTAPPEND           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTGET"              c_H5E_CANTGET              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTSET"              c_H5E_CANTSET              :: HID
+foreign import capi "hdf5-hs.h value H5E_DUPCLASS"             c_H5E_DUPCLASS             :: HID
+foreign import capi "hdf5-hs.h value H5E_SETDISALLOWED"        c_H5E_SETDISALLOWED        :: HID
+foreign import capi "hdf5-hs.h value H5E_TRAVERSE"             c_H5E_TRAVERSE             :: HID
+foreign import capi "hdf5-hs.h value H5E_NLINKS"               c_H5E_NLINKS               :: HID
+foreign import capi "hdf5-hs.h value H5E_NOTREGISTERED"        c_H5E_NOTREGISTERED        :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTMOVE"             c_H5E_CANTMOVE             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTSORT"             c_H5E_CANTSORT             :: HID
+foreign import capi "hdf5-hs.h value H5E_MPI"                  c_H5E_MPI                  :: HID
+foreign import capi "hdf5-hs.h value H5E_MPIERRSTR"            c_H5E_MPIERRSTR            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTRECV"             c_H5E_CANTRECV             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTGATHER"           c_H5E_CANTGATHER           :: HID
+foreign import capi "hdf5-hs.h value H5E_NO_INDEPENDENT"       c_H5E_NO_INDEPENDENT       :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTRESTORE"          c_H5E_CANTRESTORE          :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCOMPUTE"          c_H5E_CANTCOMPUTE          :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTEXTEND"           c_H5E_CANTEXTEND           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTATTACH"           c_H5E_CANTATTACH           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTUPDATE"           c_H5E_CANTUPDATE           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTOPERATE"          c_H5E_CANTOPERATE          :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTMERGE"            c_H5E_CANTMERGE            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTREVIVE"           c_H5E_CANTREVIVE           :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTSHRINK"           c_H5E_CANTSHRINK           :: HID
+foreign import capi "hdf5-hs.h value H5E_NOFILTER"             c_H5E_NOFILTER             :: HID
+foreign import capi "hdf5-hs.h value H5E_CALLBACK"             c_H5E_CALLBACK             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANAPPLY"             c_H5E_CANAPPLY             :: HID
+foreign import capi "hdf5-hs.h value H5E_SETLOCAL"             c_H5E_SETLOCAL             :: HID
+foreign import capi "hdf5-hs.h value H5E_NOENCODER"            c_H5E_NOENCODER            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTFILTER"           c_H5E_CANTFILTER           :: HID
+foreign import capi "hdf5-hs.h value H5E_SYSERRSTR"            c_H5E_SYSERRSTR            :: HID
+foreign import capi "hdf5-hs.h value H5E_OPENERROR"            c_H5E_OPENERROR            :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTPUT"              c_H5E_CANTPUT              :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTWAIT"             c_H5E_CANTWAIT             :: HID
+foreign import capi "hdf5-hs.h value H5E_CANTCANCEL"           c_H5E_CANTCANCEL           :: HID
+foreign import capi "hdf5-hs.h value H5E_NONE_MINOR"           c_H5E_NONE_MINOR           :: HID
 
 
 ----------------------------------------------------------------

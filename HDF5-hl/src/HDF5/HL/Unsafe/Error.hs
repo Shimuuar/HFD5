@@ -52,7 +52,7 @@ instance Show Error where
       prettyCallSite (f, loc) = f ++ ", called at " ++ prettySrcLoc loc
       displayMsg Message{..} =
         [ printf "%s (%s:%i): %s" msgFunc msgFile msgLine msgDescr
-        , printf "  Major: %s" msgMajor
+        , printf "  Major: [%s] %s" (show msgMajorN) msgMajor
         , printf "  Minor: %s" msgMinor
         ]
       displayMsgHS msg = [msg]
@@ -150,12 +150,13 @@ decodeMajError h
 
 
 data Message = Message
-  { msgDescr :: String
-  , msgMajor :: String
-  , msgMinor :: String
-  , msgLine  :: Int
-  , msgFunc  :: String
-  , msgFile  :: String
+  { msgDescr  :: String
+  , msgMajor  :: String
+  , msgMajorN :: MajError
+  , msgMinor  :: String
+  , msgLine   :: Int
+  , msgFunc   :: String
+  , msgFile   :: String
   }
   deriving stock Show
 
@@ -178,14 +179,15 @@ decodeError p_err msg = evalContT $ do
   v_stack  <- lift  $ newIORef []
   buf      <- ContT $ allocaArray $ fromIntegral $ msg_size + 1
   let step _ p _ = do
-        msgMajor <- do m_maj <- peek $ h5e_error_maj_num p
-                       n     <- h5e_get_msg m_maj nullPtr buf msg_size p_err
+        m_maj    <- peek $ h5e_error_maj_num p
+        msgMajor <- do n     <- h5e_get_msg m_maj nullPtr buf msg_size p_err
                        if | n > 0     -> peekCString buf
                           | otherwise -> pure ""
-        msgMinor <- do m_min <- peek $ h5e_error_min_num p
-                       n     <- h5e_get_msg m_min nullPtr buf msg_size p_err
+        m_min    <- peek $ h5e_error_min_num p
+        msgMinor <- do n     <- h5e_get_msg m_min nullPtr buf msg_size p_err
                        if | n > 0     -> peekCString buf
                           | otherwise -> pure ""
+        let msgMajorN = decodeMajError m_maj
         msgFunc  <- peekCString  =<< peek (h5e_error_func_name p)
         msgFile  <- peekCString  =<< peek (h5e_error_file_name p)
         msgDescr <- peekCString  =<< peek (h5e_error_desc      p)

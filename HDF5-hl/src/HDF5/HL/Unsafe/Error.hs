@@ -44,7 +44,7 @@ data Error where
 instance Show Error where
   show (Error msgs) = unlines $ concat
     [ [ "HDF5 error" ]
-    , [ ' ':' ':prettyCallSite s | s <- reverse $ getCallStack callStack]
+    , [ ' ':' ':prettyCallSite s | s <- getCallStack callStack]
     , either displayMsgHS displayMsg =<< msgs
     ]
     where

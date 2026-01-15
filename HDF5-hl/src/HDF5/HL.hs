@@ -201,7 +201,7 @@ openFile path = liftIO . \case
            $ checkHID p_err ("Cannot open file " ++ path)
            $ h5f_open c_path mode H5P_DEFAULT
     --
-    onOpenFail (Error _ [Message{msgMajorN=MAJ_FILE,msgMinorN=MIN_CANTOPENFILE}])
+    onOpenFail (Error _ (Message{msgMajorN=MAJ_FILE,msgMinorN=MIN_CANTOPENFILE}:_))
       = createFile path CreateExcl
     onOpenFail e
       = throwM e

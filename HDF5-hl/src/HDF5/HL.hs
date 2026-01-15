@@ -446,7 +446,7 @@ setDatasetExtent dset dim = liftIO $ evalContT $ do
           $ checkCInt p_err "Cannot get rank of dataspace's extent"
           $ h5s_get_simple_extent_ndims (getHID spc)
   when (fromIntegral r_ext /= r_dset) $ throwM $
-    Error [Left "Rank of dataset and rank of new extent do not match"]
+    Error "Rank of dataset and rank of new extent do not match" []
   lift $ checkHErr p_err "Failed to set new extent for a dataset"
        $ h5d_set_extent (getHID dset) p_ext
 

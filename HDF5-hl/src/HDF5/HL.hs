@@ -189,12 +189,22 @@ getType = liftIO . getTypeIO
 --   doesn't exists even if it's open for writing. Use 'createFile' to
 --   create new file. Returned handle must be closed using 'close'.
 openFile :: (MonadIO m, HasCallStack) => FilePath -> OpenMode -> m File
-openFile path mode = liftIO $ withFrozenCallStack $ evalContT $ do
-  p_err  <- ContT $ alloca
-  c_path <- ContT $ withCString path
-  lift $ fmap File
-       $ checkHID p_err ("Cannot open file " ++ path)
-       $ h5f_open c_path (toCParam mode) H5P_DEFAULT
+openFile path = liftIO . \case
+  OpenRO     -> native h5f_ACC_RDONLY
+  OpenRW     -> native h5f_ACC_RDWR
+  OpenAppend -> native h5f_ACC_RDWR `catch` onOpenFail
+  where
+    native mode = withFrozenCallStack $ evalContT $ do
+      p_err  <- ContT $ alloca
+      c_path <- ContT $ withCString path
+      lift $ fmap File
+           $ checkHID p_err ("Cannot open file " ++ path)
+           $ h5f_open c_path mode H5P_DEFAULT
+    --
+    onOpenFail (Error _ [Message{msgMajorN=MAJ_FILE,msgMinorN=MIN_CANTOPENFILE}])
+      = createFile path CreateExcl
+    onOpenFail e
+      = throwM e
 
 -- | Open file using 'openFile' and pass handle to continuation. It
 --   will be closed when continuation finish execution normally or

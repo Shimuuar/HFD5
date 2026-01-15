@@ -70,14 +70,14 @@ instance Monoid DSpaceWriter where
 putDimension :: Word64 -> DSpaceWriter
 putDimension sz = DSpaceWriter go where
   go p_sz i_max i
-    | i >= i_max = throwM $ Error [Left "Internal error: buffer overrun"]
+    | i >= i_max = throwM $ Error "Internal error: buffer overrun" []
     | otherwise  = do pokeElemOff p_sz i (coerce sz)
                       pure $! i + 1
 
 putDimension2 :: Word64 -> Word64 -> DSpaceWriter
 putDimension2 sz max_sz = DSpaceWriter go where
   go p_sz i_max i
-    | i >= i_max = throwM $ Error [Left "Internal error: buffer overrun"]
+    | i >= i_max = throwM $ Error "Internal error: buffer overrun" []
     | otherwise  = do pokeElemOff p_sz i             (coerce sz)
                       pokeElemOff p_sz (maxRank + i) (coerce max_sz)
                       pure $! i + 1

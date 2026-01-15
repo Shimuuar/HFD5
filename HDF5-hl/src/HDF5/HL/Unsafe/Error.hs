@@ -37,7 +37,7 @@ import HDF5.C
 
 -- | Error during HDF5 call
 data Error where
-  Error :: HasCallStack => [Either String Message] -> Error
+  Error :: HasCallStack => String -> [Message] -> Error
 
 -- GHC display exception using show instead of displayException. No
 -- way around this. We have to override Show
@@ -45,10 +45,12 @@ data Error where
 -- See https://mail.haskell.org/pipermail/libraries/2018-May/028813.html
 -- for a bit of history
 instance Show Error where
-  show (Error msgs) = unlines $ concat
-    [ [ "HDF5 error" ]
+  show (Error hs_msg msgs) = unlines $ concat
+    [ [ "HDF5 error"
+      , hs_msg
+      ]    
     , [ ' ':' ':prettyCallSite s | s <- getCallStack callStack]
-    , either displayMsgHS displayMsg =<< msgs
+    , displayMsg =<< msgs
     ]
     where
       prettyCallSite (f, loc) = f ++ ", called at " ++ prettySrcLoc loc
@@ -57,7 +59,6 @@ instance Show Error where
         , printf "  Major: [%s] %s" (show msgMajorN) msgMajor
         , printf "  Minor: [%s] %s" (show msgMinorN) msgMinor
         ]
-      displayMsgHS msg = [msg]
 
 -- | Major error codes for HDF5 error. Here we follow naming
 --   conventions used by HDF5
@@ -485,18 +486,18 @@ decodeError p_err msg = evalContT $ do
         msgFile  <- peekCString  =<< peek (h5e_error_file_name p)
         msgDescr <- peekCString  =<< peek (h5e_error_desc      p)
         msgLine  <- fromIntegral <$> peek (h5e_error_line      p)
-        modifyIORef' v_stack (Right Message{..}:)
+        modifyIORef' v_stack (Message{..}:)
         pure $ HErr 0
   callback <- ContT $ bracket (makeWalker step) freeHaskellFunPtr
   res      <- lift  $ h5e_walk hid_err H5E_WALK_UPWARD callback nullPtr p_err
   case res of
-    HOK      -> lift $ Error . (Left msg:) <$> readIORef v_stack
-    HErrored -> pure $ Error [Left internal, Left msg]
+    HOK      -> lift $ Error msg <$> readIORef v_stack
+    HErrored -> pure $ Error (msg ++ internal) []
   where
     -- Error message from major/minor labels are usually short so we
     -- don't need to bother with size discovery
     msg_size = 255
-    internal = "INTERNAL: Failed to decode HDF5 error"
+    internal = "\nINTERNAL ERROR: Failed to decode HDF5 error"
 
 checkHID :: HasCallStack => Ptr HID -> String -> (Ptr HID -> IO HID) -> IO HID
 {-# INLINE checkHID #-}

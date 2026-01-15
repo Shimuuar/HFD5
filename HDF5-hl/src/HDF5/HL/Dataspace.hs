@@ -379,9 +379,9 @@ setSlabSelection (Dataspace hid) off sz = evalContT $ do
   (rank_off, p_off) <- withEncodedExtent $ encodeExtent off
   (rank_sz , p_sz)  <- withEncodedExtent $ encodeExtent sz
   when (rank_off /= rank_sz) $ throwM $
-    Error [Left "In dataspace selection ranks of an offset and size do not match"]
+    Error "In dataspace selection ranks of an offset and size do not match" []
   when (fromIntegral rank_dset /= rank_sz) $ throwM $
-    Error [Left "Rank of size does not match rank of dataset"]
+    Error "Rank of size does not match rank of dataset" []
   lift $ checkHErr p_err "Unable to set simple hyperslab selection"
        $ h5s_select_hyperslab hid H5S_SELECT_SET
             p_off nullPtr

@@ -33,14 +33,10 @@ class HDF5Param a where
 
 -- | Mode for opening existing files
 data OpenMode
-  = OpenRO -- ^ Open file in read-only mode.
-  | OpenRW -- ^ Open file in read-write mode.
+  = OpenRO     -- ^ Open file in read-only mode.
+  | OpenRW     -- ^ Open file in read-write mode.
+  | OpenAppend -- ^ Open file in read-write mode or create it if it doesn't exists.
   deriving stock (Show, Eq)
-
-instance HDF5Param OpenMode where
-  type CParam OpenMode = CUInt
-  toCParam OpenRO = h5f_ACC_RDONLY
-  toCParam OpenRW = h5f_ACC_RDWR
 
 -- | Mode for creating new files
 data CreateMode

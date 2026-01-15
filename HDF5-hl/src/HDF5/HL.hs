@@ -134,6 +134,8 @@ module HDF5.HL
   , close
     -- * Error handling
   , Error(..)
+  , MajError(..)
+  , MinError(..)
   , Message(..)
   , DataspaceParseError(..)
   ) where

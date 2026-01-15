@@ -22,6 +22,9 @@ Library
   Ghc-options:        -Wall -O2
   Default-Language:   Haskell2010
   hs-source-dirs:     src
+  -- It would be nice to use pkg-config but ubuntu has only very old HDF5 (1.10)
+  -- and it seems to be packaged improperly. pkg-config can't find hdf5_hl.
+  -- Setup with extra-libraries seems to work.
   extra-libraries:    hdf5 hdf5_hl
   --
   include-dirs:       ./cbits

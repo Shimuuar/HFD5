@@ -660,6 +660,10 @@ herr_t hs_H5Literate(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, h
     CHECK_ERR(H5Literate(grp_id, idx_type, order, idx, op, op_data));
 }
 
+herr_t hs_H5Ldelete(hid_t loc_id, const char *name, hid_t lapl_id, hid_t *error) {
+    CHECK_ERR(H5Ldelete(loc_id, name, lapl_id));
+}
+
 /*
 herr_t H5Literate_by_name2(hid_t loc_id, const char *group_name, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate2_t op, void *op_data, hid_t lapl_id)
 herr_t H5Lvisit2(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, H5L_iterate2_t op, void *op_data)

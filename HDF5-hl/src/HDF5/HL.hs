@@ -74,6 +74,7 @@ module HDF5.HL
   , withOpenGroup
   , withCreateGroup
   , listGroup
+  , delete
     -- * Datasets
   , Dataset
   , rank
@@ -301,6 +302,17 @@ listGroup dir = liftIO $ withFrozenCallStack $ evalContT $ do
        $ h5l_iterate (getHID dir) H5_INDEX_NAME H5_ITER_DEC p_idx callback nullPtr
     readIORef names
 
+-- | Delete object from group.
+delete
+  :: (IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location to use
+  -> FilePath -- ^ Name to delete
+  -> m ()
+delete dir path = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_name <- ContT $ withCString path
+  lift $ checkHErr p_err ("Unable to delete path: " ++ path)
+       $ h5l_delete (getHID dir) c_name H5P_DEFAULT
 
 ----------------------------------------------------------------
 -- Dataset API

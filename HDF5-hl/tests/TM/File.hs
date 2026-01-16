@@ -1,8 +1,11 @@
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 -- |
 module TM.File (tests) where
 
+import Control.Monad
+import Control.Exception
 import Test.Tasty
 import Test.Tasty.HUnit
 import System.IO.Temp
@@ -64,7 +67,22 @@ tests = testGroup "Files"
             H5.setDatasetExtent dset (20::Int)
             H5.writeSlab dset 10 (take 10 [100::Int ..])
             assertEqual "Zero" ([0..9]++[100..109]) =<< H5.readAll @[Int] dset
+    --
+  , testCase "delete" $ withDir $ \dir -> do
+      let path = dir </> "test.h5"
+      H5.withCreateFile path H5.CreateTrunc $ \h5 -> do
+        let dset = [1..10]::[Int]
+        H5.writeAllAt h5 "foo" [] dset
+        assertEqual "dataset" dset =<< H5.readAllAt @[Int] h5 "foo"
+        H5.delete h5 "foo"
+        shouldThrowH5 "dataset should be deleted" $ void $ H5.readAllAt @[Int] h5 "foo" 
   ]
 
 withDir :: (FilePath -> IO a) -> IO a
 withDir = withSystemTempDirectory "HDF5"
+
+shouldThrowH5 :: String -> IO () -> IO ()
+shouldThrowH5 msg io
+  = (io >> assertFailure ("Show raise exception: "++msg))
+  `catch`
+    (\(_::H5.Error) -> pure ())

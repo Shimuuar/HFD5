@@ -148,6 +148,7 @@ herr_t hs_H5Tenum_valueof(hid_t type, const char *name, void *value, hid_t *erro
 herr_t hs_H5Tget_member_value(hid_t type_id, unsigned membno, void *value, hid_t *error);
 
 // NOTE: compatibility macro for HDF5-1.10
+herr_t hs_H5Ldelete(hid_t loc_id, const char *name, hid_t lapl_id, hid_t *error);
 herr_t hs_H5Literate(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate_t op, void *op_data, hid_t* error);
 
 herr_t hs_H5Pclose (hid_t plist_id, hid_t* error);

@@ -75,7 +75,16 @@ tests = testGroup "Files"
         H5.writeAllAt h5 "foo" [] dset
         assertEqual "dataset" dset =<< H5.readAllAt @[Int] h5 "foo"
         H5.delete h5 "foo"
-        shouldThrowH5 "dataset should be deleted" $ void $ H5.readAllAt @[Int] h5 "foo" 
+        shouldThrowH5 "dataset should be deleted" $ void $ H5.readAllAt @[Int] h5 "foo"
+    --
+  , testCase "pathIsValid" $ withDir $ \dir -> do
+      let path = dir </> "test.h5"
+      H5.withCreateFile path H5.CreateTrunc $ \h5 -> do
+        assertEqual "" False =<< H5.pathIsValid h5 "foo"  True
+        assertEqual "" False =<< H5.pathIsValid h5 "/foo" True
+        H5.writeAllAt h5 "foo" [] ([1..10]::[Int])
+        assertEqual "" True =<< H5.pathIsValid h5 "foo"  True
+        assertEqual "" True =<< H5.pathIsValid h5 "/foo" True
   ]
 
 withDir :: (FilePath -> IO a) -> IO a

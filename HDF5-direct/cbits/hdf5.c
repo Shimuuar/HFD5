@@ -374,6 +374,9 @@ H5G_obj_t	H5Gget_objtype_by_idx(hid_t loc_id, hsize_t idx)
 herr_t hs_H5LTdtype_to_text(hid_t dtype, char *str, H5LT_lang_t lang_type, size_t *len, hid_t *error) {
     CHECK_ERR(H5LTdtype_to_text(dtype, str, lang_type, len));
 }
+htri_t hs_H5LTpath_valid(hid_t loc_id, const char *path, bool check_object_valid, hid_t *error) {
+    CHECK_TRI(H5LTpath_valid(loc_id, path, check_object_valid));
+}
 
 /*
 H5_HLDLL herr_t H5LTmake_dataset (hid_t loc_id, const char *dset_name, int rank, const hsize_t *dims, hid_t type_id, const void *buffer)

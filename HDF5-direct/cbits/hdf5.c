@@ -338,7 +338,7 @@ hid_t hs_H5Gopen2(hid_t loc_id, const char *name, hid_t gapl_id, hid_t *error) {
 }
 
 herr_t hs_H5Gclose(hid_t group_id, hid_t *error) {
-    CHECK_HID(H5Gclose(group_id));
+    CHECK_ERR(H5Gclose(group_id));
 }
 
 /*

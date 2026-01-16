@@ -12,6 +12,7 @@ module HDF5.C.H5LT
   , h5lt_NO_LANG
     -- * Functions
   , h5lt_dtype_to_text
+  , h5lt_path_valid
   ) where
 
 
@@ -51,6 +52,46 @@ foreign import capi "hdf5-hs.h hs_H5LTdtype_to_text" h5lt_dtype_to_text
                --   currently supported language is H5LT_DDL.
   -> Ptr CSize -- ^ The size of buffer needed to store the text description.
   -> HIO HErr
+
+-- | H5LTpath_valid() checks the validity of path relative to the
+--   identifier of an object, loc_id. Optionally, check_object_valid
+--   can be set to determine whether the final component of path
+--   resolves to an HDF5 object; if not, the final component is a
+--   dangling link.
+--
+--   The meaning of the function's return value depends on the value of check_object_valid:
+--
+--   If check_object_valid is set to FALSE, H5LTpath_valid() will
+--   check all links in path to verify that they exist. If all the
+--   links in path exist, the function will return TRUE; otherwise the
+--   function will return FALSE.
+--
+--   If check_object_valid is set to TRUE, H5LTpath_valid() will first
+--   check the links in path, as described above. If all the links
+--   exist, check_object_valid will then determine whether the final
+--   component of path resolves to an actual HDF5
+--   object. H5LTpath_valid() will return TRUE if all the links in
+--   path exist and the final component resolves to an actual object;
+--   otherwise, it will return FALSE.
+--
+--   path can be any one of the following:
+--
+--   * An absolute path, which starts with a slash (/) indicating the
+--     file's root group, followed by the members A relative path with
+--   * respect to loc_id A dot (.), if loc_id is the object identifier
+--   * for the object itself.
+--
+-- If path is an absolute path, then loc_id can be an identifier for
+-- any object in the file as it is used only to identify the file. If
+-- path is a relative path, then loc_id must be a file or a group
+-- identifier.
+foreign import capi "hdf5-hs.h hs_H5LTpath_valid" h5lt_path_valid
+  :: HID      -- ^ [in] loc_id Identifier of an object in the file
+  -> CString  -- ^ [in] path The path to the object to check; links in path may be of any type
+  -> CBool    -- ^ [in] check_object_valid If TRUE, determine whether
+              --   the final component of path resolves to an object;
+              --   if FALSE, do not check.
+  -> HIO HTri
 
 {-
 H5_HLDLL herr_t H5LTmake_dataset (hid_t loc_id, const char *dset_name, int rank, const hsize_t *dims, hid_t type_id, const void *buffer)

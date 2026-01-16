@@ -338,7 +338,7 @@ hid_t hs_H5Gopen2(hid_t loc_id, const char *name, hid_t gapl_id, hid_t *error) {
 }
 
 herr_t hs_H5Gclose(hid_t group_id, hid_t *error) {
-    CHECK_HID(H5Gclose(group_id));
+    CHECK_ERR(H5Gclose(group_id));
 }
 
 /*
@@ -373,6 +373,9 @@ H5G_obj_t	H5Gget_objtype_by_idx(hid_t loc_id, hsize_t idx)
 
 herr_t hs_H5LTdtype_to_text(hid_t dtype, char *str, H5LT_lang_t lang_type, size_t *len, hid_t *error) {
     CHECK_ERR(H5LTdtype_to_text(dtype, str, lang_type, len));
+}
+htri_t hs_H5LTpath_valid(hid_t loc_id, const char *path, bool check_object_valid, hid_t *error) {
+    CHECK_TRI(H5LTpath_valid(loc_id, path, check_object_valid));
 }
 
 /*
@@ -658,6 +661,10 @@ H5T_class_t H5Tget_member_class(hid_t type_id, unsigned membno)
 // 1.12 introduced H5_iterate2_t
 herr_t hs_H5Literate(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate_t op, void *op_data, hid_t* error) {
     CHECK_ERR(H5Literate(grp_id, idx_type, order, idx, op, op_data));
+}
+
+herr_t hs_H5Ldelete(hid_t loc_id, const char *name, hid_t lapl_id, hid_t *error) {
+    CHECK_ERR(H5Ldelete(loc_id, name, lapl_id));
 }
 
 /*

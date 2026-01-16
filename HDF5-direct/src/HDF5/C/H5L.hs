@@ -20,6 +20,7 @@ module HDF5.C.H5L
   , makeH5LIterate2
     -- * Functions
   , h5l_iterate
+  , h5l_delete
   ) where
 
 
@@ -154,3 +155,29 @@ foreign import capi "hdf5-hs.h hs_H5Literate" h5l_iterate
      --
      --   *Failure*: Negative if an error occurs in the library, or
      --   the negative value returned by one of the operators.
+
+
+-- | Returns a non-negative value if successful; otherwise, returns a negative value.
+--
+--   H5Ldelete() removes the link specified by name from the location
+--   loc_id.
+--
+--   If the link being removed is a hard link, H5Ldelete() also
+--   decrements the link count for the object to which name
+--   points. Unless there is a duplicate hard link in that group, this
+--   action removes the object to which name points from the group
+--   that previously contained it.
+--
+--   Object headers keep track of how many hard links refer to an
+--   object; when the hard link count, also referred to as the
+--   reference count, reaches zero, the object can be removed from the
+--   file. The file space associated will then be released, i.e.,
+--   identified in memory as freespace. Objects which are open are not
+--   removed until all identifiers to the object are closed.
+foreign import capi "hdf5-hs.h hs_H5Ldelete" h5l_delete
+  :: HID     -- ^ [in] loc_id Location identifier. The identifier may
+             -- be that of a file, group, dataset, named datatype, or
+             -- attribute.
+  -> CString -- ^ [in] name Name of the link to delete 
+  -> HID     -- ^ [in] lapl_id	Link access property list identifier
+  -> HIO HErr

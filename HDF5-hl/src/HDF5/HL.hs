@@ -74,6 +74,8 @@ module HDF5.HL
   , withOpenGroup
   , withCreateGroup
   , listGroup
+  , delete
+  , pathIsValid
     -- * Datasets
   , Dataset
   , rank
@@ -300,6 +302,41 @@ listGroup dir = liftIO $ withFrozenCallStack $ evalContT $ do
     checkHErr p_err "Unable to iterate over group"
        $ h5l_iterate (getHID dir) H5_INDEX_NAME H5_ITER_DEC p_idx callback nullPtr
     readIORef names
+
+-- | Delete object from group.
+delete
+  :: (IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location to use
+  -> FilePath -- ^ Name to delete
+  -> m ()
+delete dir path = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_name <- ContT $ withCString path
+  lift $ checkHErr p_err ("Unable to delete path: " ++ path)
+       $ h5l_delete (getHID dir) c_name H5P_DEFAULT
+
+-- | Check whether path in HDF5 file is valid.
+--
+--   If @check@ is @False@ only existence of links in path will be
+--   checked. But it could point non nonexistent object (think
+--   dangling symlink). If @check@ is @True@ function will verify that
+--   path points to existing object in file.
+--
+--   Path could be relative in which case path to provided object is
+--   checked or absolute (starts from @/@). In latter case parameter
+--   is only used to find file in which do lookup any group\/file
+--   handle will work.
+pathIsValid
+  :: (IsDirectory dir, MonadIO m, HasCallStack)
+  => dir      -- ^ Location to use
+  -> FilePath -- ^ Path to check
+  -> Bool     -- ^ @check@ Whether to check that object pointed to path exists.
+  -> m Bool
+pathIsValid dir path check = liftIO $ withFrozenCallStack $ evalContT $ do
+  p_err  <- ContT $ alloca
+  c_name <- ContT $ withCString path
+  lift $ checkHTri p_err "pathIsValid"
+       $ h5lt_path_valid (getHID dir) c_name (if check then 1 else 0)
 
 
 ----------------------------------------------------------------

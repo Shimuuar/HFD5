@@ -111,6 +111,7 @@ hid_t hs_H5Gopen2(hid_t loc_id, const char *name, hid_t gapl_id, hid_t *error);
 herr_t hs_H5Gclose(hid_t group_id, hid_t *error);
 
 herr_t hs_H5LTdtype_to_text(hid_t dtype, char *str, H5LT_lang_t lang_type, size_t *len, hid_t *error);
+htri_t hs_H5LTpath_valid(hid_t loc_id, const char *path, bool check_object_valid, hid_t *error);
 
 herr_t hs_H5Sclose(hid_t space_id, hid_t *error);
 hid_t hs_H5Screate(H5S_class_t type, hid_t *error);
@@ -148,6 +149,7 @@ herr_t hs_H5Tenum_valueof(hid_t type, const char *name, void *value, hid_t *erro
 herr_t hs_H5Tget_member_value(hid_t type_id, unsigned membno, void *value, hid_t *error);
 
 // NOTE: compatibility macro for HDF5-1.10
+herr_t hs_H5Ldelete(hid_t loc_id, const char *name, hid_t lapl_id, hid_t *error);
 herr_t hs_H5Literate(hid_t grp_id, H5_index_t idx_type, H5_iter_order_t order, hsize_t *idx, H5L_iterate_t op, void *op_data, hid_t* error);
 
 herr_t hs_H5Pclose (hid_t plist_id, hid_t* error);

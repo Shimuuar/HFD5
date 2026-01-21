@@ -53,6 +53,7 @@ import Data.Vector.Fixed.Boxed     qualified as FB
 import Data.Vector.Fixed.Storable  qualified as FS
 import Data.Vector.Fixed.Primitive qualified as FP
 import Data.Vector.Fixed.Strict    qualified as FV
+import Data.Vector.Fixed.Mono      qualified as FM
 import Foreign.Marshal             (alloca, allocaArray, allocaArray0, withArray, peekArray,
                                     allocaBytesAligned
                                    )
@@ -401,6 +402,17 @@ instance Element a => Element (Complex a) where
     pokeH5        (castPtr ptr)   re
     pokeElemOffH5 (castPtr ptr) 1 im
 
+
+instance (Element a, FM.Prod a v) => Element (FM.ViaFixed a v) where
+  typeH5       = Array (typeH5 @a) [FM.length (undefined :: FM.ViaFixed a v)]
+  fastSizeOfH5 = fastSizeOfH5 @a *  FM.length (undefined :: FM.ViaFixed a v)
+  alignmentH5  = alignmentH5  @a
+  peekH5 ptr   = FM.generateM (peekElemOffH5 (castPtr ptr))
+  pokeH5 ptr v = FM.imapM_ (pokeElemOffH5 (castPtr ptr)) v
+  {-# INLINE fastSizeOfH5 #-}
+  {-# INLINE alignmentH5  #-}
+  {-# INLINE peekH5       #-}
+  {-# INLINE pokeH5       #-}
 
 instance (Element a, F.Vector v a) => Element (F.ViaFixed v a) where
   typeH5       = Array (typeH5 @a) [F.length (undefined :: F.ViaFixed v a)]

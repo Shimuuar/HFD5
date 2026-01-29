@@ -17,10 +17,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.4.8"   }
-          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.6.6"   }
-          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.8.2"   }
-          - { cabal: "3.12", os: ubuntu-latest,  ghc: "9.10.1"  }
+          - { cabal: "3.16", os: ubuntu-latest,  ghc: "9.4.8"   }
+          - { cabal: "3.16", os: ubuntu-latest,  ghc: "9.6.6"   }
+          - { cabal: "3.16", os: ubuntu-latest,  ghc: "9.8.2"   }
+          - { cabal: "3.16", os: ubuntu-latest,  ghc: "9.10.2"  }
+          - { cabal: "3.16", os: ubuntu-latest,  ghc: "9.12.2"  }
+          - { cabal: "3.16", os: ubuntu-latest,  ghc: "9.14.1"  }
       fail-fast: false
     steps:
     # ----------------
